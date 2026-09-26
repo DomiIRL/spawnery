@@ -359,6 +359,11 @@ type ProxyGroupSpec struct {
 	// no running server; it reaches one on that server's next start.
 	// +optional
 	ExtraFiles *ExtraFiles `json:"extraFiles,omitempty"`
+
+	// Substitution fills placeholders in the files the entrypoint copies from
+	// extraPlugins and extraFiles. See Substitution.
+	// +optional
+	Substitution *Substitution `json:"substitution,omitempty"`
 }
 
 // ProxyGroupStatus is the observed state of a ProxyGroup.

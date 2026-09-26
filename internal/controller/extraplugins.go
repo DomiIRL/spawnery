@@ -49,6 +49,11 @@ func checkExtraPlugins(
 	if ep == nil {
 		return "", "", true
 	}
+	if ep.Image != "" {
+		// An image is pulled, not mounted from a claim, so neither the volume
+		// switch nor the claim check applies.
+		return "", "", true
+	}
 	if !allowed {
 		// Before the claim is read, so an installation with the feature off
 		// never touches a PersistentVolumeClaim -- and so the message sends

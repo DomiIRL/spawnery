@@ -232,6 +232,14 @@ if [ -f "$PAPER_HOME/agent/spawnery-agent.jar" ]; then
 	cp -f "$PAPER_HOME/agent/spawnery-agent.jar" plugins/spawnery-agent.jar
 fi
 
+# spec.substitution: fill the placeholders in what was just copied, and only
+# there. After the agent copy, so the agent jar is never touched; before the
+# JVM, so a missing secret stops this start instead of a plugin later.
+if [ -n "${SPAWNERY_SUBSTITUTION_PREFIX:-}" ]; then
+	spawnery-config --substitute "$SPAWNERY_SUBSTITUTION_PREFIX" \
+		--pair "$PLUGIN_SOURCE=plugins" --pair "$FILE_SOURCE=." || exit 1
+fi
+
 # exec, so the JVM becomes PID 1 and receives SIGTERM directly. With a shell in
 # between, the group's termination grace period would run out empty and every
 # server would lose its last world state on every stop.

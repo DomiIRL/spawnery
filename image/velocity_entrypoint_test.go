@@ -281,3 +281,25 @@ func TestVelocityCopiesAFileFromTheVolume(t *testing.T) {
 		t.Errorf("the file did not reach the working directory: %v", err)
 	}
 }
+
+func TestVelocitySubstituteRunsOnlyWithAPrefix(t *testing.T) {
+	out, err := runVelocityEntrypoint(t, t.TempDir(), 0, "SPAWNERY_SUBSTITUTION_PREFIX=SECRET_")
+	if err != nil {
+		t.Fatalf("entrypoint: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "SPAWNERY_CONFIG_ARGV: --substitute SECRET_ --pair ") ||
+		strings.Index(out, "--substitute") > strings.Index(out, "JAVA_ARGV") {
+		t.Errorf("no substitute call before the JVM:\n%s", out)
+	}
+	out, err = runVelocityEntrypoint(t, t.TempDir(), 0)
+	if err != nil || strings.Contains(out, "--substitute") {
+		t.Errorf("substitute ran without a prefix (err %v):\n%s", err, out)
+	}
+}
+
+func TestVelocityEntrypointStopsIfSubstitutionRefuses(t *testing.T) {
+	out, err := runVelocityEntrypoint(t, t.TempDir(), 0, "SPAWNERY_SUBSTITUTION_PREFIX=SECRET_", "STUB_SUBSTITUTE_EXIT=1")
+	if err == nil || strings.Contains(out, "JAVA_ARGV") {
+		t.Errorf("the JVM started after a refusal:\n%s", out)
+	}
+}

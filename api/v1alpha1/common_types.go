@@ -407,10 +407,13 @@ type Defaults struct {
 // Ephemeral gives /data an emptyDir -- so this costs nothing there and makes
 // the persistent case predictable rather than accumulating.
 //
-// Nothing about the contents reaches podspec.DesiredServerHash: the operator
-// holds a claim name, not a filesystem. So changing a plugin does not roll a
-// fleet, which is the point of this field existing -- and a change therefore
-// takes effect when the group next restarts, which somebody triggers.
+// Nothing about a claim's contents reaches podspec.DesiredServerHash: the
+// operator holds a claim name, not a filesystem. So changing a plugin on a
+// claim does not roll a fleet -- a change takes effect when the group next
+// restarts, which somebody triggers. An image source is the exception: its
+// reference is part of the pod, so a new digest rolls the group.
+// +kubebuilder:validation:XValidation:rule="has(self.claimName) != has(self.image)",message="extraPlugins: exactly one of claimName or image must be set"
+// +kubebuilder:validation:XValidation:rule="!has(self.pullPolicy) || has(self.image)",message="extraPlugins: pullPolicy applies to an image source only"
 type ExtraPlugins struct {
 	// ClaimName is a PersistentVolumeClaim in this object's own namespace.
 	//
@@ -423,7 +426,22 @@ type ExtraPlugins struct {
 	// do with storage, and a group that worked until somebody scaled it is a
 	// worse failure than one that never started.
 	// +kubebuilder:validation:MinLength=1
-	ClaimName string `json:"claimName"`
+	// +optional
+	ClaimName string `json:"claimName,omitempty"`
+
+	// Image names an OCI image whose filesystem root is what the claim's root
+	// would be. It is mounted read-only as an image volume and copied as a
+	// claim is, pulled with the pod's imagePullSecrets. A digest reference
+	// rolls the group whenever it changes; a tag does not.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// PullPolicy for Image. Empty means IfNotPresent. No API default: it
+	// would land on claim sources too, which the rule above refuses.
+	// +kubebuilder:validation:Enum=Always;IfNotPresent;Never
+	// +optional
+	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
 }
 
 // ExtraFiles names a volume whose tree is copied into a server's working
@@ -454,6 +472,8 @@ type ExtraPlugins struct {
 // holds a claim name, not a filesystem, and a filesystem it only names cannot
 // be digested. Changing what the claim holds therefore replaces no running
 // server; a new file reaches one on its next start, which somebody triggers.
+// +kubebuilder:validation:XValidation:rule="has(self.claimName) != has(self.image)",message="extraFiles: exactly one of claimName or image must be set"
+// +kubebuilder:validation:XValidation:rule="!has(self.pullPolicy) || has(self.image)",message="extraFiles: pullPolicy applies to an image source only"
 type ExtraFiles struct {
 	// ClaimName is a PersistentVolumeClaim in this object's own namespace.
 	//
@@ -462,7 +482,22 @@ type ExtraFiles struct {
 	// the second server Pending with a scheduling error naming volume
 	// affinity rather than the cause.
 	// +kubebuilder:validation:MinLength=1
-	ClaimName string `json:"claimName"`
+	// +optional
+	ClaimName string `json:"claimName,omitempty"`
+
+	// Image names an OCI image whose filesystem root is what the claim's root
+	// would be. It is mounted read-only as an image volume and copied as a
+	// claim is, pulled with the pod's imagePullSecrets. A digest reference
+	// rolls the group whenever it changes; a tag does not.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// PullPolicy for Image. Empty means IfNotPresent. No API default: it
+	// would land on claim sources too, which the rule above refuses.
+	// +kubebuilder:validation:Enum=Always;IfNotPresent;Never
+	// +optional
+	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
 }
 
 // GroupAttributes is what whoever runs a network wants every plugin in it to
@@ -620,3 +655,12 @@ type MountClaim struct {
 // interpolate a constant; TestTheReservedEnvPrefixMarkersMatchTheConstant
 // reads the generated CRDs and checks that all of them still agree with this.
 const ReservedEnvPrefix = "SPAWNERY_"
+
+// Substitution fills {{ NAME }} placeholders in the files copied from
+// extraPlugins and extraFiles, at every start, from the container's
+// environment. Only names beginning with Prefix are replaced, and one whose
+// variable is missing stops the start.
+type Substitution struct {
+	// +kubebuilder:validation:Pattern=`^[A-Z][A-Z0-9_]*$`
+	Prefix string `json:"prefix"`
+}

@@ -203,6 +203,14 @@ if [ -f "$VELOCITY_HOME/agent/spawnery-agent.jar" ]; then
 	cp -f "$VELOCITY_HOME/agent/spawnery-agent.jar" plugins/spawnery-agent.jar
 fi
 
+# spec.substitution: fill the placeholders in what was just copied, and only
+# there. After the agent copy, so the agent jar is never touched; before the
+# JVM, so a missing secret stops this start instead of a plugin later.
+if [ -n "${SPAWNERY_SUBSTITUTION_PREFIX:-}" ]; then
+	spawnery-config --substitute "$SPAWNERY_SUBSTITUTION_PREFIX" \
+		--pair "$PLUGIN_SOURCE=plugins" --pair "$FILE_SOURCE=." || exit 1
+fi
+
 # exec, so the JVM becomes PID 1 and receives SIGTERM directly. With a shell in
 # between, a proxy would never get its signal and would drop every player on it
 # instead of draining.

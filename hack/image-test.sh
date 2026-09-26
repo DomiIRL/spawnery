@@ -15,10 +15,13 @@ NAME="spawnery-image-test-$$"
 VOLUME="spawnery-image-test-$$"
 CONFDIR="$(mktemp -d)"
 
+SUBNAME="$NAME-substitute"
+SUBVOLUME="$VOLUME-substitute"
+SUBDIR=""
 cleanup() {
-	"$CONTAINER" rm -f "$NAME" >/dev/null 2>&1 || true
-	"$CONTAINER" volume rm -f "$VOLUME" >/dev/null 2>&1 || true
-	rm -rf "$CONFDIR"
+	"$CONTAINER" rm -f "$NAME" "$SUBNAME" >/dev/null 2>&1 || true
+	"$CONTAINER" volume rm -f "$VOLUME" "$SUBVOLUME" >/dev/null 2>&1 || true
+	rm -rf "$CONFDIR" ${SUBDIR:+"$SUBDIR"}
 }
 trap cleanup EXIT
 
@@ -234,5 +237,41 @@ if ! grep -q 'All dimensions are saved' <<<"$container_logs"; then
 	exit 1
 fi
 echo "clean shutdown on SIGTERM"
+
+# spec.substitution, end to end in the real image: a mounted plugin source
+# with a placeholder, the prefix and the value in the environment. The copy
+# and the substitution run before the JVM, so the filled content is there
+# within seconds of the start. The loop waits for the content, not the file:
+# the file exists from the copy on, a moment before it is filled.
+SUBDIR="$(mktemp -d)"
+mkdir -p "$SUBDIR/Demo"
+printf 'password: {{ SECRET_DEMO }}\n' >"$SUBDIR/Demo/config.yml"
+chmod -R a+rX "$SUBDIR"
+"$CONTAINER" volume create "$SUBVOLUME" >/dev/null
+"$CONTAINER" run -d --name "$SUBNAME" \
+	--network none \
+	--read-only --tmpfs /tmp:rw,exec,size=256m \
+	--cap-drop ALL \
+	--security-opt no-new-privileges \
+	--memory 2g \
+	-v "$SUBVOLUME:/data" \
+	-v "$CONFDIR:/etc/spawnery:ro" \
+	-v "$SUBDIR:/var/run/spawnery/plugins:ro" \
+	-e SPAWNERY_SUBSTITUTION_PREFIX=SECRET_ -e 'SECRET_DEMO=a$b&c' \
+	"$IMAGE" >/dev/null
+got=""
+for _ in $(seq 1 60); do
+	got="$("$CONTAINER" exec "$SUBNAME" cat /data/plugins/Demo/config.yml 2>/dev/null || true)"
+	[ "$got" = 'password: a$b&c' ] && break
+	sleep 1
+done
+"$CONTAINER" rm -f "$SUBNAME" >/dev/null
+"$CONTAINER" volume rm -f "$SUBVOLUME" >/dev/null
+rm -rf "$SUBDIR"
+if [ "$got" != 'password: a$b&c' ]; then
+	echo "substitution: got '$got', want 'password: a\$b&c'" >&2
+	exit 1
+fi
+echo "substitution: a placeholder in a mounted plugin source was filled from the environment"
 
 echo "image-test: ok"

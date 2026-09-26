@@ -364,9 +364,30 @@ spec:
                       affinity rather than the cause.
                     minLength: 1
                     type: string
-                required:
-                - claimName
+                  image:
+                    description: |-
+                      Image names an OCI image whose filesystem root is what the claim's root
+                      would be. It is mounted read-only as an image volume and copied as a
+                      claim is, pulled with the pod's imagePullSecrets. A digest reference
+                      rolls the group whenever it changes; a tag does not.
+                    minLength: 1
+                    type: string
+                  pullPolicy:
+                    description: |-
+                      PullPolicy for Image. Empty means IfNotPresent. No API default: it
+                      would land on claim sources too, which the rule above refuses.
+                    enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
+                    type: string
                 type: object
+                x-kubernetes-validations:
+                - message: 'extraFiles: exactly one of claimName or image must be
+                    set'
+                  rule: has(self.claimName) != has(self.image)
+                - message: 'extraFiles: pullPolicy applies to an image source only'
+                  rule: '!has(self.pullPolicy) || has(self.image)'
               extraPlugins:
                 description: |-
                   ExtraPlugins names a volume whose plugins and their configuration are
@@ -386,9 +407,30 @@ spec:
                       worse failure than one that never started.
                     minLength: 1
                     type: string
-                required:
-                - claimName
+                  image:
+                    description: |-
+                      Image names an OCI image whose filesystem root is what the claim's root
+                      would be. It is mounted read-only as an image volume and copied as a
+                      claim is, pulled with the pod's imagePullSecrets. A digest reference
+                      rolls the group whenever it changes; a tag does not.
+                    minLength: 1
+                    type: string
+                  pullPolicy:
+                    description: |-
+                      PullPolicy for Image. Empty means IfNotPresent. No API default: it
+                      would land on claim sources too, which the rule above refuses.
+                    enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
+                    type: string
                 type: object
+                x-kubernetes-validations:
+                - message: 'extraPlugins: exactly one of claimName or image must be
+                    set'
+                  rule: has(self.claimName) != has(self.image)
+                - message: 'extraPlugins: pullPolicy applies to an image source only'
+                  rule: '!has(self.pullPolicy) || has(self.image)'
               failedRetentionSeconds:
                 default: 3600
                 description: FailedRetentionSeconds is how long a Failed server is
@@ -1771,6 +1813,17 @@ spec:
                     type: string
                 required:
                 - size
+                type: object
+              substitution:
+                description: |-
+                  Substitution fills placeholders in the files the entrypoint copies from
+                  extraPlugins and extraFiles. See Substitution.
+                properties:
+                  prefix:
+                    pattern: ^[A-Z][A-Z0-9_]*$
+                    type: string
+                required:
+                - prefix
                 type: object
               terminationGracePeriodSeconds:
                 default: 60

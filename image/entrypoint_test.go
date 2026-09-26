@@ -51,7 +51,8 @@ func stubTools(t *testing.T, configExit int) string {
 		t.Fatalf("write java stub: %v", err)
 	}
 
-	configScript := fmt.Sprintf("#!/bin/sh\nprintf 'SPAWNERY_CONFIG_ARGV: %%s\\n' \"$*\"\nexit %d\n", configExit)
+	configScript := fmt.Sprintf("#!/bin/sh\nprintf 'SPAWNERY_CONFIG_ARGV: %%s\\n' \"$*\"\n"+
+		"if [ \"$1\" = --substitute ]; then exit \"${STUB_SUBSTITUTE_EXIT:-0}\"; fi\nexit %d\n", configExit)
 	if err := os.WriteFile(filepath.Join(dir, "spawnery-config"), []byte(configScript), 0o755); err != nil {
 		t.Fatalf("write spawnery-config stub: %v", err)
 	}
@@ -838,5 +839,32 @@ func TestNoFileVolumeIsNotAnError(t *testing.T) {
 	if _, err := runEntrypoint(t, dir, 0,
 		"SPAWNERY_FILE_SOURCE="+filepath.Join(dir, "nothing-here")); err != nil {
 		t.Fatalf("a start with no file volume failed: %v", err)
+	}
+}
+
+func TestSubstituteRunsOnlyWithAPrefix(t *testing.T) {
+	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_SUBSTITUTION_PREFIX=SECRET_")
+	if err != nil {
+		t.Fatalf("entrypoint: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "SPAWNERY_CONFIG_ARGV: --substitute SECRET_ --pair ") {
+		t.Errorf("no substitute call:\n%s", out)
+	}
+	if strings.Index(out, "--substitute") > strings.Index(out, "JAVA_ARGV") {
+		t.Error("substitution ran after the JVM started")
+	}
+	out, err = runEntrypoint(t, t.TempDir(), 0)
+	if err != nil {
+		t.Fatalf("entrypoint: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "--substitute") {
+		t.Errorf("substitute ran without a prefix:\n%s", out)
+	}
+}
+
+func TestEntrypointStopsIfSubstitutionRefuses(t *testing.T) {
+	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_SUBSTITUTION_PREFIX=SECRET_", "STUB_SUBSTITUTE_EXIT=1")
+	if err == nil || strings.Contains(out, "JAVA_ARGV") {
+		t.Errorf("the JVM started after a refusal:\n%s", out)
 	}
 }

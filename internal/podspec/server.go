@@ -388,15 +388,8 @@ func BuildServerPod(
 	// entrypoint copies out of it; it is not the plugins directory itself,
 	// which a read-only mount could not be.
 	if group.Spec.ExtraPlugins != nil {
-		volumes = append(volumes, corev1.Volume{
-			Name: PluginSourceVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: group.Spec.ExtraPlugins.ClaimName,
-					ReadOnly:  true,
-				},
-			},
-		})
+		volumes = append(volumes, sourceVolume(PluginSourceVolumeName,
+			group.Spec.ExtraPlugins.ClaimName, group.Spec.ExtraPlugins.Image, group.Spec.ExtraPlugins.PullPolicy))
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      PluginSourceVolumeName,
 			MountPath: PluginSourceMountPath,
@@ -409,15 +402,8 @@ func BuildServerPod(
 	// outside DataMountPath because a read-only mount cannot be the directory
 	// it fills.
 	if group.Spec.ExtraFiles != nil {
-		volumes = append(volumes, corev1.Volume{
-			Name: FileSourceVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: group.Spec.ExtraFiles.ClaimName,
-					ReadOnly:  true,
-				},
-			},
-		})
+		volumes = append(volumes, sourceVolume(FileSourceVolumeName,
+			group.Spec.ExtraFiles.ClaimName, group.Spec.ExtraFiles.Image, group.Spec.ExtraFiles.PullPolicy))
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      FileSourceVolumeName,
 			MountPath: FileSourceMountPath,
@@ -458,12 +444,12 @@ func BuildServerPod(
 		// readability decision -- it keeps the operator's own set at a fixed
 		// position in every pod, so `kubectl describe pod` still reads
 		// straight down for a group that sets twenty of its own.
-		Env: append([]corev1.EnvVar{
+		Env: append(append([]corev1.EnvVar{
 			{Name: "SPAWNERY_NETWORK", Value: net.Name},
 			{Name: "SPAWNERY_GROUP", Value: group.Name},
 			{Name: "SPAWNERY_SERVER", Value: srv.Name},
 			{Name: EnvOperatorEndpoint, Value: agentEndpoint},
-		}, group.Spec.Env...),
+		}, substitutionEnv(group.Spec.Substitution)...), group.Spec.Env...),
 		VolumeMounts: mounts,
 		// Readiness only. A liveness probe would restart the container and
 		// kick every player on it — the state machine handles a red readiness
