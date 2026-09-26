@@ -352,7 +352,7 @@ class CloudCommandTest {
         // "java.util.concurrent.CompletionException: ..." in a chat line tells
         // an admin nothing they can act on.
         assertFalse(line.contains("CompletionException"), "the future's wrapper reached chat: $line")
-        assertTrue(line.startsWith("could not retire"), "a refusal was worded as a success: $line")
+        assertTrue(line.startsWith("✘ could not retire"), "a refusal was worded as a success: $line")
     }
 
     @Test
@@ -830,6 +830,21 @@ class CloudCommandTest {
         assertTrue(sent[0].contains("<bold>lobby</bold>"), sent[0])
         val member = sent.single { it.contains("lobby-r") }
         assertTrue(member.startsWith("   ") && member.contains("node-2") && member.contains("<green>19.5"), member)
+    }
+    @Test
+    fun `one-line answers say at a glance whether it worked`() {
+        run("cloud retire lobby-a")
+        answer { setRetire(RetireResult.newBuilder().setServer("lobby-a")) }
+        assertTrue(sent.single().startsWith("<green>✔</green> "), sent.single())
+        sent.clear(); requested.clear()
+
+        run("cloud retire lobby-a")
+        answer { setError(RequestError.newBuilder().setReason(RequestError.Reason.REFUSED).setMessage("already retiring")) }
+        assertTrue(sent.single().startsWith("<red>✘</red> ") && sent.single().contains("already retiring"), sent.single())
+        sent.clear(); requested.clear()
+
+        run("cloud events off")
+        assertTrue(sent.single().startsWith("<green>✔</green> "), sent.single())
     }
 }
 

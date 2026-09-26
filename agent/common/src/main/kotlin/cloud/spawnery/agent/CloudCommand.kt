@@ -196,7 +196,7 @@ fun <S> cloudCommand(
                                     // has not read the design, and an admin
                                     // who believes they just disconnected
                                     // forty people does something worse next.
-                                    reply(adapter, format, 
+                                    replyOk(adapter, format, 
                                         source,
                                         Style.name(name) + Style.good(" is retiring.") +
                                             Style.quiet(
@@ -210,7 +210,7 @@ fun <S> cloudCommand(
                                     // already retiring, no such server, asked
                                     // too often -- and rewording them here
                                     // would only lose which one it was.
-                                    reply(adapter, format, 
+                                    replyFail(adapter, format, 
                                         source,
                                         Style.bad("could not retire") + " " + Style.name(name) +
                                             Style.quiet(": ") + Style.bad(reason(failure)),
@@ -238,13 +238,13 @@ fun <S> cloudCommand(
                             val source = ctx.source
                             api.unretire(name).whenComplete { _, failure ->
                                 if (failure == null) {
-                                    reply(adapter, format, 
+                                    replyOk(adapter, format, 
                                         source,
                                         Style.name(name) + Style.good(" takes joins again.") +
                                             Style.quiet(" Nothing automatic removes it now; it stays until it ends by itself."),
                                     )
                                 } else {
-                                    reply(adapter, format, 
+                                    replyFail(adapter, format, 
                                         source,
                                         Style.bad("could not unretire") + " " + Style.name(name) +
                                             Style.quiet(": ") + Style.bad(reason(failure)),
@@ -281,7 +281,7 @@ fun <S> cloudCommand(
                                                 val text = StringArgumentType.getString(ctx, "duration")
                                                 val span = parseDuration(text)
                                                 if (span == null) {
-                                                    reply(adapter, format, 
+                                                    replyFail(adapter, format, 
                                                         ctx.source,
                                                         Style.bad("could not read") + " " +
                                                             Style.name(text) +
@@ -311,7 +311,7 @@ fun <S> cloudCommand(
                             api.stopBoosts(name).whenComplete { removed, failure ->
                                 when {
                                     failure != null ->
-                                        reply(adapter, format, 
+                                        replyFail(adapter, format, 
                                             source,
                                             Style.bad("could not stop boosts on") + " " + Style.name(name) +
                                                 Style.quiet(": ") + Style.bad(reason(failure)),
@@ -322,11 +322,11 @@ fun <S> cloudCommand(
                                     // because the next thing they do depends
                                     // on it.
                                     removed == 0 ->
-                                        reply(adapter, format, 
+                                        replyOk(adapter, format, 
                                             source,
                                             Style.name(name) + Style.quiet(" had no boosts running"),
                                         )
-                                    else -> reply(adapter, format, 
+                                    else -> replyOk(adapter, format, 
                                         source,
                                         Style.name(name) + Style.quiet(": removed ") +
                                             Style.number(removed) +
@@ -377,7 +377,7 @@ private fun <S> setFeed(
         // Said rather than silently doing nothing. A console whose command
         // appeared to work and changed nothing is the worst of the three
         // possible behaviours here.
-        reply(adapter, format, 
+        replyFail(adapter, format, 
             source,
             Style.bad("the console cannot turn the cloud feed off") +
                 Style.quiet(": it is not a player, and these lines are already in its log"),
@@ -386,10 +386,10 @@ private fun <S> setFeed(
     }
     if (on) {
         feed.optIn(player)
-        reply(adapter, format, source, Style.good("The cloud feed is on for you."))
+        replyOk(adapter, format, source, Style.good("The cloud feed is on for you."))
     } else {
         feed.optOut(player)
-        reply(adapter, format, 
+        replyOk(adapter, format, 
             source,
             Style.good("The cloud feed is off for you.") +
                 Style.quiet(
@@ -419,6 +419,12 @@ private fun <S> reply(adapter: SourceAdapter<S>, format: () -> String, source: S
     adapter.send(source, format().ifBlank { Feed.DEFAULT_FORMAT }.replace(Feed.MESSAGE_TOKEN, message))
 }
 
+private fun <S> replyOk(adapter: SourceAdapter<S>, format: () -> String, source: S, message: String) =
+    reply(adapter, format, source, Layout.ok(message))
+
+private fun <S> replyFail(adapter: SourceAdapter<S>, format: () -> String, source: S, message: String) =
+    reply(adapter, format, source, Layout.fail(message))
+
 private fun <S> askStatus(
     answer: java.util.concurrent.CompletionStage<NetworkStatus>,
     adapter: SourceAdapter<S>,
@@ -430,7 +436,7 @@ private fun <S> askStatus(
         if (failure == null) {
             for (line in statusLines(status, target)) reply(adapter, format, source, line)
         } else {
-            reply(adapter, format, source, Style.bad("no status") + Style.quiet(": ") + Style.bad(reason(failure)))
+            replyFail(adapter, format, source, Style.bad("no status") + Style.quiet(": ") + Style.bad(reason(failure)))
         }
     }
     return 1
@@ -466,14 +472,14 @@ private fun <S> startBoost(
 ): Int {
     api.boost(group, replicas, forHowLong).whenComplete { result, failure ->
         if (failure != null) {
-            reply(adapter, format, 
+            replyFail(adapter, format, 
                 source,
                 Style.bad("could not boost") + " " + Style.name(group) +
                     Style.quiet(": ") + Style.bad(reason(failure)),
             )
             return@whenComplete
         }
-        reply(adapter, format, 
+        replyOk(adapter, format, 
             source,
             Style.name(group) + Style.quiet(": ") +
                 Style.good("+${result.replicas()} server${if (result.replicas() == 1) "" else "s"}") +
