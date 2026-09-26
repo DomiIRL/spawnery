@@ -128,6 +128,14 @@ running an agent older than 0.9.0.
 Nothing outside the network's namespace is shown. A backend server's answer
 leaves private servers and on-demand groups out, as `/cloud list` does.
 
+`/cloud info` and `/cloud status` name the node a server or proxy runs on, or
+say it is not scheduled yet. Nothing else about the node is shown.
+
+Every answer opens with a heading and sorts what follows into sections; bars
+show players against slots, TPS against 20, and CPU and memory against their
+limit (or their request where a container has no limit). One-line answers
+begin with ✔ or ✘.
+
 **`/cloud start <group> <count> for <duration>`** creates a `ScaleBoost`, which
 is the same object [Scaling and boosts](scaling-and-boosts.md) describes. A
 boost raised this way is created by the operator rather than by you, which
