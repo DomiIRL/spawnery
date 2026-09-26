@@ -57,6 +57,18 @@ private fun aNetworkWithProxies(): NetworkState =
         .addProxies(ProxyState.newBuilder().setName("gateway-b").setGroup("gateway").setReady(true).setDraining(true))
         .build()
 
+private fun aNetworkWithNode(node: String): NetworkState =
+    NetworkState.newBuilder()
+        .addGroups(
+            GroupState.newBuilder().setName("lobby").setKind(GroupState.Kind.EPHEMERAL)
+                .setReplicas(1).setReadyReplicas(1).setOnlinePlayers(12).setFreeSlots(88),
+        )
+        .addServers(
+            ServerState.newBuilder().setName("lobby-a").setGroup("lobby")
+                .setPhase("Ready").setPlayers(12).setSlots(100).setRegistered(true).setNode(node),
+        )
+        .build()
+
 class CloudCommandTest {
     private val sent = mutableListOf<String>()
     private var permissions =
@@ -134,9 +146,9 @@ class CloudCommandTest {
 
         run("cloud list")
 
-        val line = sent.single()
+        val line = sent.first()
         assertTrue(line.startsWith("<gray>PREFIX</gray> "), line)
-        assertTrue(plain(line).contains("lobby"), "the answer itself was lost: ${plain(line)}")
+        assertTrue(sent.any { plain(it).contains("lobby") }, "the answer itself was lost: $sent")
     }
 
     @Test
@@ -169,9 +181,9 @@ class CloudCommandTest {
 
         run("cloud list")
 
-        val line = plain(sent.single())
+        val line = plain(sent.first())
         assertTrue(line.contains("Spawnery"), "the default format was not used: $line")
-        assertTrue(line.contains("lobby"), "the answer itself was lost: $line")
+        assertTrue(sent.any { plain(it).contains("lobby") }, "the answer itself was lost: $sent")
     }
 
     @Test
@@ -180,7 +192,7 @@ class CloudCommandTest {
 
         assertTrue(sent.any { plain(it).contains("lobby") }, "the output named no group: $sent")
         assertTrue(
-            plain(sent.single()).contains("12 players"),
+            sent.any { plain(it).contains("12/100 players") },
             "the output did not say what the group is doing: $sent",
         )
     }
@@ -200,7 +212,7 @@ class CloudCommandTest {
     fun `info about a server names its phase and whether it takes joins`() {
         run("cloud info lobby-a")
 
-        val line = sent.single()
+        val line = sent.first()
         assertTrue(line.contains("lobby-a") && line.contains("READY"), line)
         // Registered and not the phase: the two disagree during a drain, and
         // this is the one that answers "can I send somebody there".
@@ -221,8 +233,8 @@ class CloudCommandTest {
 
         run("cloud info lobby-a", api = api(described))
 
-        val line = plain(sent.single())
-        assertTrue(line.contains("says running"), line)
+        val line = plain(sent.single { plain(it).contains("Says") })
+        assertTrue(line.contains("running"), line)
     }
 
     @Test
@@ -231,7 +243,7 @@ class CloudCommandTest {
         // is a different thing from one that has never spoken.
         run("cloud info lobby-a")
 
-        assertTrue(!plain(sent.single()).contains("says"), plain(sent.single()))
+        assertTrue(sent.none { plain(it).contains("Says") }, "$sent")
     }
 
     @Test
@@ -242,7 +254,7 @@ class CloudCommandTest {
         // so somebody scanning a list needs to see it without reading it.
         run("cloud info lobby-a")
 
-        val line = sent.single()
+        val line = sent.first()
         assertTrue(line.contains("<green>taking joins</green>"), line)
         // And the words still say it, for anyone whose client shows no colour
         // and for the console's log.
@@ -274,7 +286,7 @@ class CloudCommandTest {
     fun `info about a group works through the same argument`() {
         run("cloud info lobby")
 
-        assertTrue(plain(sent.single()).contains("88 free slots"), sent.toString())
+        assertTrue(sent.any { plain(it).contains("88 free") }, sent.toString())
     }
 
     @Test
@@ -608,13 +620,13 @@ class CloudCommandTest {
     @Test
     fun `info answers for a proxy`() {
         run("cloud info gateway-b", api(aNetworkWithProxies()))
-        assertTrue(sent.single().contains("gateway-b") && sent.single().contains("draining"), sent.single())
+        assertTrue(sent.first().contains("gateway-b") && sent.first().contains("draining"), "$sent")
     }
 
     @Test
     fun `info says a held server is held`() {
         run("cloud info lobby-h", api(aNetworkWithProxies()))
-        assertTrue(sent.single().contains("held"), sent.single())
+        assertTrue(sent.any { it.contains("held") }, "$sent")
     }
 
 
@@ -751,6 +763,36 @@ class CloudCommandTest {
         permissions = setOf(PERMISSION_STATUS)
         run("cloud status", api(aNetworkWithProxies()))
         assertEquals("", requested.single().status.target)
+    }
+    @Test
+    fun `list opens with a heading and sorts groups into sections`() {
+        run("cloud list", api(aNetworkWithProxies()))
+        assertTrue(sent[0].contains("<bold>Network</bold>") && sent[0].contains("2 groups"), sent[0])
+        val serverGroups = sent.indexOfFirst { it.contains("Server groups") }
+        val proxyGroups = sent.indexOfFirst { it.contains("Proxy groups") }
+        assertTrue(serverGroups in 1 until proxyGroups, "$sent")
+        assertTrue(sent[serverGroups + 1].startsWith("   ") && sent[serverGroups + 1].contains("lobby"), "$sent")
+        assertTrue(sent.any { it.startsWith("     ") && it.contains("gateway-b") && it.contains("draining") }, "$sent")
+    }
+
+    @Test
+    fun `list of an empty network still says so`() {
+        run("cloud list", api(NetworkState.getDefaultInstance()))
+        assertTrue(sent.any { it.contains("no groups on this network yet") }, "$sent")
+    }
+
+    @Test
+    fun `info of a server shows its node and a players bar`() {
+        run("cloud info lobby-a", api(aNetworkWithNode("node-2")))
+        assertTrue(sent[0].contains("<bold>lobby-a</bold>") && sent[0].contains("lobby"), sent[0])
+        assertTrue(sent.any { it.contains("Node") && it.contains("node-2") }, "$sent")
+        assertTrue(sent.any { it.contains("Players") && it.contains("|") && it.contains("12") }, "$sent")
+    }
+
+    @Test
+    fun `info of an unscheduled server says so`() {
+        run("cloud info lobby-a", api(aNetworkWithNode("")))
+        assertTrue(sent.any { it.contains("Node") && it.contains("not scheduled") }, "$sent")
     }
 }
 
