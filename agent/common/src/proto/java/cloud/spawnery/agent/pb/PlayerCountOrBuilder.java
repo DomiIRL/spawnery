@@ -21,4 +21,22 @@ public interface PlayerCountOrBuilder extends
    * @return The slots.
    */
   int getSlots();
+
+  /**
+   * <pre>
+   * Server agents only: the server's one-minute TPS average and its mean tick
+   * duration in milliseconds. 0 means not reported -- what a proxy and an
+   * agent older than these fields send.
+   * </pre>
+   *
+   * <code>double tps = 3;</code>
+   * @return The tps.
+   */
+  double getTps();
+
+  /**
+   * <code>double mspt = 4;</code>
+   * @return The mspt.
+   */
+  double getMspt();
 }

@@ -79,6 +79,7 @@ private static final long serialVersionUID = 0L;
     START_SERVER(8),
     STOP_SERVER(9),
     UNRETIRE(10),
+    STATUS(11),
     REQUEST_NOT_SET(0);
     private final int value;
     private RequestCase(int value) {
@@ -105,6 +106,7 @@ private static final long serialVersionUID = 0L;
         case 8: return START_SERVER;
         case 9: return STOP_SERVER;
         case 10: return UNRETIRE;
+        case 11: return STATUS;
         case 0: return REQUEST_NOT_SET;
         default: return null;
       }
@@ -410,6 +412,37 @@ private static final long serialVersionUID = 0L;
     return cloud.spawnery.agent.pb.UnretireRequest.getDefaultInstance();
   }
 
+  public static final int STATUS_FIELD_NUMBER = 11;
+  /**
+   * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+   * @return Whether the status field is set.
+   */
+  @java.lang.Override
+  public boolean hasStatus() {
+    return requestCase_ == 11;
+  }
+  /**
+   * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+   * @return The status.
+   */
+  @java.lang.Override
+  public cloud.spawnery.agent.pb.StatusRequest getStatus() {
+    if (requestCase_ == 11) {
+       return (cloud.spawnery.agent.pb.StatusRequest) request_;
+    }
+    return cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+   */
+  @java.lang.Override
+  public cloud.spawnery.agent.pb.StatusRequestOrBuilder getStatusOrBuilder() {
+    if (requestCase_ == 11) {
+       return (cloud.spawnery.agent.pb.StatusRequest) request_;
+    }
+    return cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance();
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -454,6 +487,9 @@ private static final long serialVersionUID = 0L;
     if (requestCase_ == 10) {
       output.writeMessage(10, (cloud.spawnery.agent.pb.UnretireRequest) request_);
     }
+    if (requestCase_ == 11) {
+      output.writeMessage(11, (cloud.spawnery.agent.pb.StatusRequest) request_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -497,6 +533,10 @@ private static final long serialVersionUID = 0L;
     if (requestCase_ == 10) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(10, (cloud.spawnery.agent.pb.UnretireRequest) request_);
+    }
+    if (requestCase_ == 11) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(11, (cloud.spawnery.agent.pb.StatusRequest) request_);
     }
     return size;
   }
@@ -562,6 +602,10 @@ private static final long serialVersionUID = 0L;
         if (!getUnretire()
             .equals(other.getUnretire())) return false;
         break;
+      case 11:
+        if (!getStatus()
+            .equals(other.getStatus())) return false;
+        break;
       case 0:
       default:
     }
@@ -615,6 +659,10 @@ private static final long serialVersionUID = 0L;
       case 10:
         hash = (37 * hash) + UNRETIRE_FIELD_NUMBER;
         hash = (53 * hash) + getUnretire().hashCode();
+        break;
+      case 11:
+        hash = (37 * hash) + STATUS_FIELD_NUMBER;
+        hash = (53 * hash) + getStatus().hashCode();
         break;
       case 0:
       default:
@@ -794,6 +842,9 @@ private static final long serialVersionUID = 0L;
       if (unretireBuilder_ != null) {
         unretireBuilder_.clear();
       }
+      if (statusBuilder_ != null) {
+        statusBuilder_.clear();
+      }
       requestCase_ = 0;
       request_ = null;
       return this;
@@ -874,6 +925,10 @@ private static final long serialVersionUID = 0L;
           unretireBuilder_ != null) {
         result.request_ = unretireBuilder_.build();
       }
+      if (requestCase_ == 11 &&
+          statusBuilder_ != null) {
+        result.request_ = statusBuilder_.build();
+      }
     }
 
     @java.lang.Override
@@ -926,6 +981,10 @@ private static final long serialVersionUID = 0L;
         }
         case UNRETIRE: {
           mergeUnretire(other.getUnretire());
+          break;
+        }
+        case STATUS: {
+          mergeStatus(other.getStatus());
           break;
         }
         case REQUEST_NOT_SET: {
@@ -1026,6 +1085,13 @@ private static final long serialVersionUID = 0L;
               requestCase_ = 10;
               break;
             } // case 82
+            case 90: {
+              input.readMessage(
+                  internalGetStatusFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              requestCase_ = 11;
+              break;
+            } // case 90
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2366,6 +2432,148 @@ private static final long serialVersionUID = 0L;
       requestCase_ = 10;
       onChanged();
       return unretireBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        cloud.spawnery.agent.pb.StatusRequest, cloud.spawnery.agent.pb.StatusRequest.Builder, cloud.spawnery.agent.pb.StatusRequestOrBuilder> statusBuilder_;
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     * @return Whether the status field is set.
+     */
+    @java.lang.Override
+    public boolean hasStatus() {
+      return requestCase_ == 11;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     * @return The status.
+     */
+    @java.lang.Override
+    public cloud.spawnery.agent.pb.StatusRequest getStatus() {
+      if (statusBuilder_ == null) {
+        if (requestCase_ == 11) {
+          return (cloud.spawnery.agent.pb.StatusRequest) request_;
+        }
+        return cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance();
+      } else {
+        if (requestCase_ == 11) {
+          return statusBuilder_.getMessage();
+        }
+        return cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance();
+      }
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    public Builder setStatus(cloud.spawnery.agent.pb.StatusRequest value) {
+      if (statusBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        request_ = value;
+        onChanged();
+      } else {
+        statusBuilder_.setMessage(value);
+      }
+      requestCase_ = 11;
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    public Builder setStatus(
+        cloud.spawnery.agent.pb.StatusRequest.Builder builderForValue) {
+      if (statusBuilder_ == null) {
+        request_ = builderForValue.build();
+        onChanged();
+      } else {
+        statusBuilder_.setMessage(builderForValue.build());
+      }
+      requestCase_ = 11;
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    public Builder mergeStatus(cloud.spawnery.agent.pb.StatusRequest value) {
+      if (statusBuilder_ == null) {
+        if (requestCase_ == 11 &&
+            request_ != cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance()) {
+          request_ = cloud.spawnery.agent.pb.StatusRequest.newBuilder((cloud.spawnery.agent.pb.StatusRequest) request_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          request_ = value;
+        }
+        onChanged();
+      } else {
+        if (requestCase_ == 11) {
+          statusBuilder_.mergeFrom(value);
+        } else {
+          statusBuilder_.setMessage(value);
+        }
+      }
+      requestCase_ = 11;
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    public Builder clearStatus() {
+      if (statusBuilder_ == null) {
+        if (requestCase_ == 11) {
+          requestCase_ = 0;
+          request_ = null;
+          onChanged();
+        }
+      } else {
+        if (requestCase_ == 11) {
+          requestCase_ = 0;
+          request_ = null;
+        }
+        statusBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    public cloud.spawnery.agent.pb.StatusRequest.Builder getStatusBuilder() {
+      return internalGetStatusFieldBuilder().getBuilder();
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    @java.lang.Override
+    public cloud.spawnery.agent.pb.StatusRequestOrBuilder getStatusOrBuilder() {
+      if ((requestCase_ == 11) && (statusBuilder_ != null)) {
+        return statusBuilder_.getMessageOrBuilder();
+      } else {
+        if (requestCase_ == 11) {
+          return (cloud.spawnery.agent.pb.StatusRequest) request_;
+        }
+        return cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance();
+      }
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.StatusRequest status = 11;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        cloud.spawnery.agent.pb.StatusRequest, cloud.spawnery.agent.pb.StatusRequest.Builder, cloud.spawnery.agent.pb.StatusRequestOrBuilder> 
+        internalGetStatusFieldBuilder() {
+      if (statusBuilder_ == null) {
+        if (!(requestCase_ == 11)) {
+          request_ = cloud.spawnery.agent.pb.StatusRequest.getDefaultInstance();
+        }
+        statusBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            cloud.spawnery.agent.pb.StatusRequest, cloud.spawnery.agent.pb.StatusRequest.Builder, cloud.spawnery.agent.pb.StatusRequestOrBuilder>(
+                (cloud.spawnery.agent.pb.StatusRequest) request_,
+                getParentForChildren(),
+                isClean());
+        request_ = null;
+      }
+      requestCase_ = 11;
+      onChanged();
+      return statusBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:spawnery.agent.v1alpha1.CloudRequest)

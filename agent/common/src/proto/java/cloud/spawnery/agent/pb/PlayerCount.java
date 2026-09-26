@@ -82,6 +82,34 @@ private static final long serialVersionUID = 0L;
     return slots_;
   }
 
+  public static final int TPS_FIELD_NUMBER = 3;
+  private double tps_ = 0D;
+  /**
+   * <pre>
+   * Server agents only: the server's one-minute TPS average and its mean tick
+   * duration in milliseconds. 0 means not reported -- what a proxy and an
+   * agent older than these fields send.
+   * </pre>
+   *
+   * <code>double tps = 3;</code>
+   * @return The tps.
+   */
+  @java.lang.Override
+  public double getTps() {
+    return tps_;
+  }
+
+  public static final int MSPT_FIELD_NUMBER = 4;
+  private double mspt_ = 0D;
+  /**
+   * <code>double mspt = 4;</code>
+   * @return The mspt.
+   */
+  @java.lang.Override
+  public double getMspt() {
+    return mspt_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -102,6 +130,12 @@ private static final long serialVersionUID = 0L;
     if (slots_ != 0) {
       output.writeInt32(2, slots_);
     }
+    if (java.lang.Double.doubleToRawLongBits(tps_) != 0) {
+      output.writeDouble(3, tps_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(mspt_) != 0) {
+      output.writeDouble(4, mspt_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -113,6 +147,14 @@ private static final long serialVersionUID = 0L;
     if (slots_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(2, slots_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(tps_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(3, tps_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(mspt_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(4, mspt_);
     }
     return size;
   }
@@ -142,6 +184,12 @@ private static final long serialVersionUID = 0L;
         != other.getPlayers()) return false;
     if (getSlots()
         != other.getSlots()) return false;
+    if (java.lang.Double.doubleToLongBits(getTps())
+        != java.lang.Double.doubleToLongBits(
+            other.getTps())) return false;
+    if (java.lang.Double.doubleToLongBits(getMspt())
+        != java.lang.Double.doubleToLongBits(
+            other.getMspt())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -157,6 +205,12 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getPlayers();
     hash = (37 * hash) + SLOTS_FIELD_NUMBER;
     hash = (53 * hash) + getSlots();
+    hash = (37 * hash) + TPS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getTps()));
+    hash = (37 * hash) + MSPT_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getMspt()));
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -302,6 +356,8 @@ private static final long serialVersionUID = 0L;
       bitField0_ = 0;
       players_ = 0;
       slots_ = 0;
+      tps_ = 0D;
+      mspt_ = 0D;
       return this;
     }
 
@@ -341,6 +397,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000002) != 0)) {
         result.slots_ = slots_;
       }
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.tps_ = tps_;
+      }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.mspt_ = mspt_;
+      }
     }
 
     @java.lang.Override
@@ -360,6 +422,12 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getSlots() != 0) {
         setSlots(other.getSlots());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getTps()) != 0) {
+        setTps(other.getTps());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getMspt()) != 0) {
+        setMspt(other.getMspt());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -397,6 +465,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000002;
               break;
             } // case 16
+            case 25: {
+              tps_ = input.readDouble();
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 25
+            case 33: {
+              mspt_ = input.readDouble();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 33
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -474,6 +552,88 @@ private static final long serialVersionUID = 0L;
     public Builder clearSlots() {
       bitField0_ = (bitField0_ & ~0x00000002);
       slots_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private double tps_ ;
+    /**
+     * <pre>
+     * Server agents only: the server's one-minute TPS average and its mean tick
+     * duration in milliseconds. 0 means not reported -- what a proxy and an
+     * agent older than these fields send.
+     * </pre>
+     *
+     * <code>double tps = 3;</code>
+     * @return The tps.
+     */
+    @java.lang.Override
+    public double getTps() {
+      return tps_;
+    }
+    /**
+     * <pre>
+     * Server agents only: the server's one-minute TPS average and its mean tick
+     * duration in milliseconds. 0 means not reported -- what a proxy and an
+     * agent older than these fields send.
+     * </pre>
+     *
+     * <code>double tps = 3;</code>
+     * @param value The tps to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTps(double value) {
+
+      tps_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Server agents only: the server's one-minute TPS average and its mean tick
+     * duration in milliseconds. 0 means not reported -- what a proxy and an
+     * agent older than these fields send.
+     * </pre>
+     *
+     * <code>double tps = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTps() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      tps_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private double mspt_ ;
+    /**
+     * <code>double mspt = 4;</code>
+     * @return The mspt.
+     */
+    @java.lang.Override
+    public double getMspt() {
+      return mspt_;
+    }
+    /**
+     * <code>double mspt = 4;</code>
+     * @param value The mspt to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMspt(double value) {
+
+      mspt_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double mspt = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMspt() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      mspt_ = 0D;
       onChanged();
       return this;
     }
