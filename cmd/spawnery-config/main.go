@@ -32,8 +32,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spawnery/spawnery/internal/render"
+	"github.com/spawnery/spawnery/internal/substitute"
 )
 
 func main() {
@@ -43,6 +45,10 @@ func main() {
 // run returns the process exit code: 0 once every rendered file is on disk,
 // 1 when Load or the chosen flavour refuses, 2 on a usage error.
 func run(args []string, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--substitute" {
+		return runSubstitute(args[1:], stderr)
+	}
+
 	fs := flag.NewFlagSet("spawnery-config", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -83,6 +89,42 @@ func run(args []string, stderr io.Writer) int {
 	}
 
 	if err := render.WriteAll(*out, files); err != nil {
+		_, _ = fmt.Fprintf(stderr, "spawnery-config: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// pairs collects repeated --pair FROM=INTO flags.
+type pairs []substitute.Pair
+
+func (p *pairs) String() string { return fmt.Sprint(*p) }
+
+func (p *pairs) Set(v string) error {
+	from, into, ok := strings.Cut(v, "=")
+	if !ok || from == "" || into == "" {
+		return fmt.Errorf("want FROM=INTO, got %q", v)
+	}
+	*p = append(*p, substitute.Pair{From: from, Into: into})
+	return nil
+}
+
+// runSubstitute fills the placeholders of spec.substitution in what the
+// entrypoint copied; see internal/substitute.
+func runSubstitute(args []string, stderr io.Writer) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "spawnery-config: --substitute needs a prefix")
+		return 2
+	}
+	prefix := args[0]
+	fs := flag.NewFlagSet("spawnery-config --substitute", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var ps pairs
+	fs.Var(&ps, "pair", "a source and where it was copied, FROM=INTO; repeatable")
+	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if err := substitute.Trees(ps, prefix, os.LookupEnv); err != nil {
 		_, _ = fmt.Fprintf(stderr, "spawnery-config: %v\n", err)
 		return 1
 	}

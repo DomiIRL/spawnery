@@ -137,3 +137,38 @@ func TestRunRejectsAnUnknownFlag(t *testing.T) {
 		t.Errorf("exit code is %d, want 2 for a usage error", code)
 	}
 }
+
+func TestSubstituteFillsFromTheEnvironment(t *testing.T) {
+	from, into := t.TempDir(), t.TempDir()
+	for _, root := range []string{from, into} {
+		if err := os.WriteFile(filepath.Join(root, "c.yml"), []byte("p: {{ SECRET_P }}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("SECRET_P", "s3cret")
+	var stderr bytes.Buffer
+	if code := run([]string{"--substitute", "SECRET_", "--pair", from + "=" + into}, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	b, _ := os.ReadFile(filepath.Join(into, "c.yml"))
+	if string(b) != "p: s3cret\n" {
+		t.Errorf("got %q", b)
+	}
+}
+
+func TestSubstituteFailsWithoutLeakingAValue(t *testing.T) {
+	from, into := t.TempDir(), t.TempDir()
+	for _, root := range []string{from, into} {
+		if err := os.WriteFile(filepath.Join(root, "c.yml"), []byte("{{ SECRET_A }} {{ SECRET_B }}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("SECRET_A", "hunter2")
+	var stderr bytes.Buffer
+	if code := run([]string{"--substitute", "SECRET_", "--pair", from + "=" + into}, &stderr); code == 0 {
+		t.Fatal("a missing variable exited 0")
+	}
+	if !strings.Contains(stderr.String(), "SECRET_B") || strings.Contains(stderr.String(), "hunter2") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
