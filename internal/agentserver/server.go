@@ -200,6 +200,13 @@ type ProxyFleet interface {
 //
 // A backend joins by namespace and not by group: its mirror is the whole
 // network, where a proxy's FullSync is scoped to what its own group routes to.
+// StatusSource answers /cloud status for one namespace and one audience.
+// netstatus.Source in production; an interface so the request path is
+// testable without a metrics API.
+type StatusSource interface {
+	Status(ctx context.Context, namespace string, audience netstate.Audience, target string) (*agentpb.StatusResult, error)
+}
+
 type ServerFanout interface {
 	// Join is *serverreg.Registry.Join: see its doc comment for the contract.
 	Join(ctx context.Context, namespace, podUID string) (<-chan *agentpb.OperatorToServer, func(), error)
@@ -236,6 +243,8 @@ type Options struct {
 	// ones that only look. Required for the same reason State is, and narrow
 	// on purpose: see ClusterWriter.
 	Writer ClusterWriter
+	// Status answers StatusRequest. Nil refuses it as unavailable.
+	Status StatusSource
 	// ReportInterval is how often an agent should report its player count.
 	ReportInterval time.Duration
 	// RenewAfter is when an agent should open its next stream — before the

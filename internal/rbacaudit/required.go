@@ -145,6 +145,12 @@ var RequiredCluster = []Permission{
 	{Group: "authentication.k8s.io", Resource: "tokenreviews", Verb: "create",
 		Why: "grpcauth.Authenticator.Authenticate checks every agent token"},
 
+	// Pod metrics for /cloud status. metrics.k8s.io is an aggregated API a
+	// cluster may not serve at all; the grant is harmless there and the
+	// answer says usage is unavailable.
+	{Group: "metrics.k8s.io", Resource: "pods", Verb: "list",
+		Why: "netstatus.APIMetrics.PodUsage lists a namespace's pod metrics for /cloud status"},
+
 	// The operator's own resources.
 	{Group: "spawnery.cloud", Resource: "networks", Verb: "get", Why: "resolving networkRef"},
 	{Group: "spawnery.cloud", Resource: "networks", Verb: "list", Why: "NetworkReconciler.namespaceOwner and its siblingNetworks mapper, and Store.namespacesMissingCA, which lists them again to find the namespaces a CA rotation's gate has to wait for"},

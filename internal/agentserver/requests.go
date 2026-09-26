@@ -32,6 +32,7 @@ import (
 	"github.com/spawnery/spawnery/internal/grpcauth"
 	"github.com/spawnery/spawnery/internal/instance"
 	"github.com/spawnery/spawnery/internal/netstate"
+	"github.com/spawnery/spawnery/internal/netstatus"
 )
 
 const (
@@ -202,6 +203,8 @@ func (s *Server) answerCloudRequest(
 		return s.answerStopServer(ctx, logger, id, req.GetId(), req.GetStopServer())
 	case req.GetUnretire() != nil:
 		return s.answerUnretire(ctx, logger, id, req.GetId(), req.GetUnretire())
+	case req.GetStatus() != nil:
+		return s.answerStatus(ctx, logger, id, req.GetId(), req.GetStatus())
 	default:
 		return refuse(req.GetId(), agentpb.RequestError_REASON_UNSPECIFIED,
 			"this operator does not know that request")
@@ -722,6 +725,31 @@ func (s *Server) answerUnretire(
 		Id:     reqID,
 		Result: &agentpb.CloudResponse_Unretire{Unretire: &agentpb.UnretireResult{Server: req.GetServer()}},
 	}
+}
+
+// answerStatus reports the network's usage and tick rates, bound to the
+// token's namespace and to the picture the agent's role is allowed to see.
+func (s *Server) answerStatus(
+	ctx context.Context,
+	logger logr.Logger,
+	id grpcauth.Identity,
+	reqID uint64,
+	req *agentpb.StatusRequest,
+) *agentpb.CloudResponse {
+	if s.opts.Status == nil {
+		return refuse(reqID, agentpb.RequestError_UNAVAILABLE, "this operator cannot report status")
+	}
+	res, err := s.opts.Status.Status(ctx, id.Namespace, netstate.AudienceOf(id.Role), req.GetTarget())
+	switch {
+	case errors.Is(err, netstatus.ErrUnknownTarget):
+		return refuse(reqID, agentpb.RequestError_NOT_FOUND,
+			"no group, server or proxy by that name is on this network")
+	case err != nil:
+		logger.V(1).Info("could not build a status answer", "reason", err.Error())
+		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
+			"the operator could not read the network just now")
+	}
+	return &agentpb.CloudResponse{Id: reqID, Result: &agentpb.CloudResponse_Status{Status: res}}
 }
 
 // retired wraps a successful retire answer.

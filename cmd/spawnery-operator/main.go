@@ -47,6 +47,7 @@ import (
 	"github.com/spawnery/spawnery/internal/controller"
 	"github.com/spawnery/spawnery/internal/grpcauth"
 	"github.com/spawnery/spawnery/internal/netstate"
+	"github.com/spawnery/spawnery/internal/netstatus"
 	"github.com/spawnery/spawnery/internal/phase"
 	"github.com/spawnery/spawnery/internal/podspec"
 	"github.com/spawnery/spawnery/internal/proxyreg"
@@ -482,11 +483,17 @@ func main() {
 			Cache:    grpcauth.NewReviewCache(time.Now),
 			Limiter:  grpcauth.NewPeerLimiter(time.Now),
 		},
-		Agents:         registry,
-		Proxies:        proxies,
-		Servers:        servers,
-		State:          state,
-		Writer:         agentserver.KubeWriter{Client: mgr.GetClient(), Clock: time.Now},
+		Agents:  registry,
+		Proxies: proxies,
+		Servers: servers,
+		State:   state,
+		Writer:  agentserver.KubeWriter{Client: mgr.GetClient(), Clock: time.Now},
+		Status: netstatus.Source{
+			Reader:  mgr.GetClient(),
+			Agents:  registry,
+			Metrics: netstatus.APIMetrics{REST: clientset.Discovery().RESTClient()},
+			Clock:   time.Now,
+		},
 		Fleet:          fleet.Size,
 		ReportInterval: reportInterval,
 		RenewAfter:     renewAfter,

@@ -58,6 +58,8 @@ type podMetricsList struct {
 	} `json:"items"`
 }
 
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=list
+
 func (m APIMetrics) PodUsage(ctx context.Context, namespace string) (map[string]Usage, error) {
 	raw, err := m.REST.Get().
 		AbsPath("/apis/metrics.k8s.io/v1beta1/namespaces", namespace, "pods").
