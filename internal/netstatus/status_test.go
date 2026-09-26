@@ -19,8 +19,11 @@ package netstatus
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-logr/logr/funcr"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -355,5 +358,43 @@ func TestStaleTicksAreDropped(t *testing.T) {
 	}
 	if tps := res.GetInstances()[0].GetTps(); tps != 0 {
 		t.Errorf("TPS = %v from a report a minute old, want 0 (not reported)", tps)
+	}
+}
+
+type hangingMetrics struct{}
+
+func (hangingMetrics) PodUsage(ctx context.Context, _ string) (map[string]Usage, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestStatusDoesNotWaitOnAHangingMetricsAPI(t *testing.T) {
+	c, reg := network(t)
+	start := time.Now()
+	res, err := Source{Reader: c, Agents: reg, Metrics: hangingMetrics{}, Clock: func() time.Time { return t0 },
+		MetricsTimeout: 50 * time.Millisecond}.Status(context.Background(), ns, netstate.ForProxies, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waited := time.Since(start); waited > 2*time.Second {
+		t.Fatalf("waited %v on a metrics API that never answers", waited)
+	}
+	if res.GetMetricsAvailable() {
+		t.Error("metrics_available true after the metrics call timed out")
+	}
+}
+
+func TestStatusLogsWhyMetricsFailed(t *testing.T) {
+	c, reg := network(t)
+	var logged []string
+	log := funcr.New(func(prefix, args string) { logged = append(logged, args) }, funcr.Options{})
+	_, err := Source{Reader: c, Agents: reg, Clock: func() time.Time { return t0 }, Log: log,
+		Metrics: fixedMetrics{err: errors.New("pods.metrics.k8s.io is forbidden")}}.
+		Status(context.Background(), ns, netstate.ForProxies, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logged) != 1 || !strings.Contains(logged[0], "forbidden") {
+		t.Fatalf("logged %q, want one line carrying the metrics error", logged)
 	}
 }

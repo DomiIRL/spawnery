@@ -23,6 +23,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,7 +45,16 @@ type Source struct {
 	Agents  *agent.Registry
 	Metrics MetricsReader
 	Clock   func() time.Time
+	// MetricsTimeout bounds the live metrics call, which runs on the asking
+	// agent's session loop. Zero means DefaultMetricsTimeout.
+	MetricsTimeout time.Duration
+	// Log says why usage was unavailable; the answer itself only says that it was.
+	Log logr.Logger
 }
+
+// DefaultMetricsTimeout is well under the agent's own ten-second request
+// deadline, and metrics-server answers from memory in milliseconds.
+const DefaultMetricsTimeout = 3 * time.Second
 
 type view struct {
 	serverGroups []spawneryv1alpha1.ServerGroup
@@ -128,7 +138,16 @@ func (s Source) read(ctx context.Context, namespace string, audience netstate.Au
 			v.pods[p.Name] = p
 		}
 	}
-	usage, err := s.Metrics.PodUsage(ctx, namespace)
+	timeout := s.MetricsTimeout
+	if timeout == 0 {
+		timeout = DefaultMetricsTimeout
+	}
+	metricsCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	usage, err := s.Metrics.PodUsage(metricsCtx, namespace)
+	if err != nil {
+		s.Log.Info("pod metrics unavailable for /cloud status", "namespace", namespace, "reason", err.Error())
+	}
 	v.usage, v.available = usage, err == nil
 	sort.Slice(v.serverGroups, func(i, j int) bool { return v.serverGroups[i].Name < v.serverGroups[j].Name })
 	sort.Slice(v.proxyGroups, func(i, j int) bool { return v.proxyGroups[i].Name < v.proxyGroups[j].Name })

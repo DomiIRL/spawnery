@@ -493,6 +493,7 @@ func main() {
 			Agents:  registry,
 			Metrics: netstatus.APIMetrics{REST: clientset.Discovery().RESTClient()},
 			Clock:   time.Now,
+			Log:     ctrl.Log.WithName("netstatus"),
 		},
 		Fleet:          fleet.Size,
 		ReportInterval: reportInterval,
