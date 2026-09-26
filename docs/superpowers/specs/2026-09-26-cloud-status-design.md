@@ -60,10 +60,10 @@ pod's requests and limits.
 ### 3.4 Resolving the name
 
 A group name first (server group, then proxy group), then a server, then a
-proxy pod. spawnery never gives a server or proxy its group's bare name, so
-the order only decides which kind a name is looked up as, never which of two
-objects wins. Nothing found: "no group, server or proxy called <name>".
-Suggestions offer all three kinds.
+proxy pod. A server or proxy is named after its group plus a suffix, so a
+clash needs a group named like another group's member; the order settles it
+in the group's favour. Nothing found: "no group, server or proxy called
+<name>". Suggestions offer all three kinds.
 
 ### 3.5 What is missing is shown as missing
 
