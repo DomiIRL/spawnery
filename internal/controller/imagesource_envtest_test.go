@@ -23,6 +23,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
 	"github.com/spawnery/spawnery/internal/testenv"
@@ -93,6 +94,32 @@ func TestTheAPIServerRefusesABadSubstitutionPrefix(t *testing.T) {
 			g.Spec.Substitution = &spawneryv1alpha1.Substitution{Prefix: p}
 		})); err == nil {
 			t.Errorf("prefix %q was admitted", p)
+		}
+	}
+}
+
+func TestTheAPIServerRefusesAnEmptyImage(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+	// Unstructured, because the typed client drops image: "" (omitempty) and
+	// would test "no source" instead: a templated manifest sends the empty
+	// string itself.
+	for i, field := range []string{"extraPlugins", "extraFiles"} {
+		u := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "spawnery.cloud/v1alpha1",
+			"kind":       "ServerGroup",
+			"metadata":   map[string]any{"name": fmt.Sprintf("lobby-%d", i), "namespace": ns},
+			"spec": map[string]any{
+				"networkRef": map[string]any{"name": "production"},
+				"type":       "Ephemeral",
+				"image":      "ghcr.io/spawnery/paper:1.21.4-0.1.0",
+				"maxPlayers": int64(100),
+				"scaling":    map[string]any{"minReplicas": int64(1), "maxReplicas": int64(2), "spareSlots": int64(10)},
+				field:        map[string]any{"image": ""},
+			},
+		}}
+		if err := c.Create(ctx, u); err == nil {
+			t.Errorf("%s.image \"\" was admitted", field)
 		}
 	}
 }

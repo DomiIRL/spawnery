@@ -154,3 +154,18 @@ func TestAMissingSourceIsNoSource(t *testing.T) {
 		t.Fatalf("an absent source failed: %v", err)
 	}
 }
+
+func TestAnUnreadableLostAndFoundIsSkipped(t *testing.T) {
+	from, into := tree(t, map[string]string{"c.yml": "{{ SECRET_A }}"})
+	lf := filepath.Join(from, "lost+found")
+	if err := os.Mkdir(lf, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(lf, 0o700) })
+	if err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
+		t.Fatalf("an ext4 claim's lost+found stopped the start: %v", err)
+	}
+	if read(t, filepath.Join(into, "c.yml")) != "v" {
+		t.Error("the rest of the tree was not filled")
+	}
+}

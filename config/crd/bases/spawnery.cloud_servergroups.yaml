@@ -370,6 +370,7 @@ spec:
                       would be. It is mounted read-only as an image volume and copied as a
                       claim is, pulled with the pod's imagePullSecrets. A digest reference
                       rolls the group whenever it changes; a tag does not.
+                    minLength: 1
                     type: string
                   pullPolicy:
                     description: |-
@@ -412,6 +413,7 @@ spec:
                       would be. It is mounted read-only as an image volume and copied as a
                       claim is, pulled with the pod's imagePullSecrets. A digest reference
                       rolls the group whenever it changes; a tag does not.
+                    minLength: 1
                     type: string
                   pullPolicy:
                     description: |-

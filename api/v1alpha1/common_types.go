@@ -407,10 +407,11 @@ type Defaults struct {
 // Ephemeral gives /data an emptyDir -- so this costs nothing there and makes
 // the persistent case predictable rather than accumulating.
 //
-// Nothing about the contents reaches podspec.DesiredServerHash: the operator
-// holds a claim name, not a filesystem. So changing a plugin does not roll a
-// fleet, which is the point of this field existing -- and a change therefore
-// takes effect when the group next restarts, which somebody triggers.
+// Nothing about a claim's contents reaches podspec.DesiredServerHash: the
+// operator holds a claim name, not a filesystem. So changing a plugin on a
+// claim does not roll a fleet -- a change takes effect when the group next
+// restarts, which somebody triggers. An image source is the exception: its
+// reference is part of the pod, so a new digest rolls the group.
 // +kubebuilder:validation:XValidation:rule="has(self.claimName) != has(self.image)",message="extraPlugins: exactly one of claimName or image must be set"
 // +kubebuilder:validation:XValidation:rule="!has(self.pullPolicy) || has(self.image)",message="extraPlugins: pullPolicy applies to an image source only"
 type ExtraPlugins struct {
@@ -432,6 +433,7 @@ type ExtraPlugins struct {
 	// would be. It is mounted read-only as an image volume and copied as a
 	// claim is, pulled with the pod's imagePullSecrets. A digest reference
 	// rolls the group whenever it changes; a tag does not.
+	// +kubebuilder:validation:MinLength=1
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -487,6 +489,7 @@ type ExtraFiles struct {
 	// would be. It is mounted read-only as an image volume and copied as a
 	// claim is, pulled with the pod's imagePullSecrets. A digest reference
 	// rolls the group whenever it changes; a tag does not.
+	// +kubebuilder:validation:MinLength=1
 	// +optional
 	Image string `json:"image,omitempty"`
 

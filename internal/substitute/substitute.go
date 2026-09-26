@@ -51,6 +51,11 @@ func Trees(pairs []Pair, prefix string, lookup func(string) (string, bool)) erro
 				}
 				return err
 			}
+			if d.IsDir() && d.Name() == "lost+found" && filepath.Dir(path) == filepath.Clean(p.From) {
+				// mkfs's own directory on an ext4 claim, root-owned and 0700;
+				// the entrypoint skips it by name for the same reason.
+				return fs.SkipDir
+			}
 			if d.IsDir() || !d.Type().IsRegular() || !textExtensions[strings.ToLower(filepath.Ext(path))] {
 				return nil
 			}
