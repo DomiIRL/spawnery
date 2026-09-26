@@ -206,3 +206,16 @@ func TestAClaimTheAPIServerDidNotAnswerAboutIsNoVerdict(t *testing.T) {
 		t.Error("a real refusal was rewritten")
 	}
 }
+
+func TestAnImageSourceNeedsNoSwitchAndNoClaim(t *testing.T) {
+	reason, message, ok := checkExtraPlugins(context.Background(), pluginReader(t), "games",
+		&spawneryv1alpha1.ExtraPlugins{Image: "registry.example.net/lobby-plugins:1"}, false)
+	if !ok {
+		t.Fatalf("an image source was refused with the plugin volumes switch off: %s %s", reason, message)
+	}
+	reason, message, ok = checkExtraFiles(context.Background(), pluginReader(t), "games",
+		&spawneryv1alpha1.ExtraFiles{Image: "registry.example.net/lobby-files:1"}, false)
+	if !ok {
+		t.Fatalf("an image file source was refused: %s %s", reason, message)
+	}
+}

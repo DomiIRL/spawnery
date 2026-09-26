@@ -44,6 +44,11 @@ func checkExtraFiles(
 	if ef == nil {
 		return "", "", true
 	}
+	if ef.Image != "" {
+		// An image is pulled, not mounted from a claim, so neither the volume
+		// switch nor the claim check applies.
+		return "", "", true
+	}
 	if !allowed {
 		return spawneryv1alpha1.ReasonFileVolumesDisabled,
 			"spec.extraFiles is set, and this operator was started without " +

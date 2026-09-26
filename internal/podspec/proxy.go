@@ -236,15 +236,8 @@ func renderProxyPod(
 	// entrypoint copies out of it; it is not the plugins directory itself,
 	// which a read-only mount could not be.
 	if group.Spec.ExtraPlugins != nil {
-		volumes = append(volumes, corev1.Volume{
-			Name: PluginSourceVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: group.Spec.ExtraPlugins.ClaimName,
-					ReadOnly:  true,
-				},
-			},
-		})
+		volumes = append(volumes, sourceVolume(PluginSourceVolumeName,
+			group.Spec.ExtraPlugins.ClaimName, group.Spec.ExtraPlugins.Image, group.Spec.ExtraPlugins.PullPolicy))
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      PluginSourceVolumeName,
 			MountPath: PluginSourceMountPath,
@@ -257,15 +250,8 @@ func renderProxyPod(
 	// outside DataMountPath because a read-only mount cannot be the directory
 	// it fills.
 	if group.Spec.ExtraFiles != nil {
-		volumes = append(volumes, corev1.Volume{
-			Name: FileSourceVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: group.Spec.ExtraFiles.ClaimName,
-					ReadOnly:  true,
-				},
-			},
-		})
+		volumes = append(volumes, sourceVolume(FileSourceVolumeName,
+			group.Spec.ExtraFiles.ClaimName, group.Spec.ExtraFiles.Image, group.Spec.ExtraFiles.PullPolicy))
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      FileSourceVolumeName,
 			MountPath: FileSourceMountPath,
@@ -313,14 +299,14 @@ func renderProxyPod(
 		// The group's own variables come last; see BuildServerPod for why
 		// the position is a readability decision rather than the thing that
 		// keeps the six below intact.
-		Env: append([]corev1.EnvVar{
+		Env: append(append([]corev1.EnvVar{
 			{Name: "SPAWNERY_NETWORK", Value: net.Name},
 			{Name: "SPAWNERY_GROUP", Value: group.Name},
 			{Name: EnvProxy, Value: name},
 			{Name: EnvPlayerLimit, Value: strconv.FormatInt(int64(playerLimit), 10)},
 			{Name: EnvFallbackGroups, Value: strings.Join(group.Spec.Routing.FallbackGroups, ",")},
 			{Name: EnvOperatorEndpoint, Value: agentEndpoint},
-		}, group.Spec.Env...),
+		}, substitutionEnv(group.Spec.Substitution)...), group.Spec.Env...),
 		VolumeMounts: mounts,
 		// Readiness only, for the same reason the server pod has no liveness
 		// probe: a restart would disconnect every player on this proxy, and
