@@ -107,26 +107,10 @@ fun <S> cloudCommand(
             LiteralArgumentBuilder.literal<S>("list")
                 .requires { adapter.hasPermission(it, PERMISSION_READ) }
                 .executes { ctx ->
-                    val groups = api.groups()
-                    if (groups.isEmpty()) {
-                        // Said rather than answered with silence. An empty
-                        // network and an operator this agent has not heard
-                        // from look identical otherwise, and the second is the
-                        // one somebody needs to act on.
-                        reply(adapter, format, ctx.source, Style.quiet("no groups on this network yet"))
+                    listLines(api.groups(), api.servers(), api.proxies()).forEach {
+                        reply(adapter, format, ctx.source, it)
                     }
-                    for (group in groups) {
-                        reply(adapter, format, 
-                            ctx.source,
-                            describeGroup(group),
-                        )
-                        if (group.kind() == Group.Kind.PROXY) {
-                            for (proxy in api.proxies().filter { it.group() == group.name() }.sortedBy { it.name() }) {
-                                reply(adapter, format, ctx.source, describeProxy(proxy))
-                            }
-                        }
-                    }
-                    groups.size
+                    api.groups().size
                 },
         )
         .then(
@@ -145,21 +129,19 @@ fun <S> cloudCommand(
                             val name = StringArgumentType.getString(ctx, "name")
                             val server = api.server(name)
                             if (server.isPresent) {
-                                reply(adapter, format, ctx.source, describe(server.get()))
+                                serverInfoLines(server.get()).forEach { reply(adapter, format, ctx.source, it) }
                                 return@executes 1
                             }
                             val proxy = api.proxy(name)
                             if (proxy.isPresent) {
-                                reply(adapter, format, ctx.source, describeProxy(proxy.get()))
+                                proxyInfoLines(proxy.get()).forEach { reply(adapter, format, ctx.source, it) }
                                 return@executes 1
                             }
                             val group = api.group(name)
                             if (group.isPresent) {
-                                val g = group.get()
-                                reply(adapter, format, 
-                                    ctx.source,
-                                    describeGroup(g),
-                                )
+                                groupInfoLines(group.get(), api.servers(), api.proxies()).forEach {
+                                    reply(adapter, format, ctx.source, it)
+                                }
                                 return@executes 1
                             }
                             // Names what was asked for. A bare "not found"
@@ -168,8 +150,10 @@ fun <S> cloudCommand(
                             // unsure whether the command works at all.
                             reply(adapter, format, 
                                 ctx.source,
-                                Style.bad("no server, proxy or group called") + " " + Style.name(name) +
-                                    Style.quiet(" on this network"),
+                                Layout.fail(
+                                    Style.bad("no server, proxy or group called") + " " + Style.name(name) +
+                                        Style.quiet(" on this network"),
+                                ),
                             )
                             0
                         },
@@ -212,7 +196,7 @@ fun <S> cloudCommand(
                                     // has not read the design, and an admin
                                     // who believes they just disconnected
                                     // forty people does something worse next.
-                                    reply(adapter, format, 
+                                    replyOk(adapter, format, 
                                         source,
                                         Style.name(name) + Style.good(" is retiring.") +
                                             Style.quiet(
@@ -226,7 +210,7 @@ fun <S> cloudCommand(
                                     // already retiring, no such server, asked
                                     // too often -- and rewording them here
                                     // would only lose which one it was.
-                                    reply(adapter, format, 
+                                    replyFail(adapter, format, 
                                         source,
                                         Style.bad("could not retire") + " " + Style.name(name) +
                                             Style.quiet(": ") + Style.bad(reason(failure)),
@@ -254,13 +238,13 @@ fun <S> cloudCommand(
                             val source = ctx.source
                             api.unretire(name).whenComplete { _, failure ->
                                 if (failure == null) {
-                                    reply(adapter, format, 
+                                    replyOk(adapter, format, 
                                         source,
                                         Style.name(name) + Style.good(" takes joins again.") +
                                             Style.quiet(" Nothing automatic removes it now; it stays until it ends by itself."),
                                     )
                                 } else {
-                                    reply(adapter, format, 
+                                    replyFail(adapter, format, 
                                         source,
                                         Style.bad("could not unretire") + " " + Style.name(name) +
                                             Style.quiet(": ") + Style.bad(reason(failure)),
@@ -297,7 +281,7 @@ fun <S> cloudCommand(
                                                 val text = StringArgumentType.getString(ctx, "duration")
                                                 val span = parseDuration(text)
                                                 if (span == null) {
-                                                    reply(adapter, format, 
+                                                    replyFail(adapter, format, 
                                                         ctx.source,
                                                         Style.bad("could not read") + " " +
                                                             Style.name(text) +
@@ -327,7 +311,7 @@ fun <S> cloudCommand(
                             api.stopBoosts(name).whenComplete { removed, failure ->
                                 when {
                                     failure != null ->
-                                        reply(adapter, format, 
+                                        replyFail(adapter, format, 
                                             source,
                                             Style.bad("could not stop boosts on") + " " + Style.name(name) +
                                                 Style.quiet(": ") + Style.bad(reason(failure)),
@@ -338,11 +322,11 @@ fun <S> cloudCommand(
                                     // because the next thing they do depends
                                     // on it.
                                     removed == 0 ->
-                                        reply(adapter, format, 
+                                        replyOk(adapter, format, 
                                             source,
                                             Style.name(name) + Style.quiet(" had no boosts running"),
                                         )
-                                    else -> reply(adapter, format, 
+                                    else -> replyOk(adapter, format, 
                                         source,
                                         Style.name(name) + Style.quiet(": removed ") +
                                             Style.number(removed) +
@@ -393,7 +377,7 @@ private fun <S> setFeed(
         // Said rather than silently doing nothing. A console whose command
         // appeared to work and changed nothing is the worst of the three
         // possible behaviours here.
-        reply(adapter, format, 
+        replyFail(adapter, format, 
             source,
             Style.bad("the console cannot turn the cloud feed off") +
                 Style.quiet(": it is not a player, and these lines are already in its log"),
@@ -402,10 +386,10 @@ private fun <S> setFeed(
     }
     if (on) {
         feed.optIn(player)
-        reply(adapter, format, source, Style.good("The cloud feed is on for you."))
+        replyOk(adapter, format, source, Style.good("The cloud feed is on for you."))
     } else {
         feed.optOut(player)
-        reply(adapter, format, 
+        replyOk(adapter, format, 
             source,
             Style.good("The cloud feed is off for you.") +
                 Style.quiet(
@@ -435,6 +419,12 @@ private fun <S> reply(adapter: SourceAdapter<S>, format: () -> String, source: S
     adapter.send(source, format().ifBlank { Feed.DEFAULT_FORMAT }.replace(Feed.MESSAGE_TOKEN, message))
 }
 
+private fun <S> replyOk(adapter: SourceAdapter<S>, format: () -> String, source: S, message: String) =
+    reply(adapter, format, source, Layout.ok(message))
+
+private fun <S> replyFail(adapter: SourceAdapter<S>, format: () -> String, source: S, message: String) =
+    reply(adapter, format, source, Layout.fail(message))
+
 private fun <S> askStatus(
     answer: java.util.concurrent.CompletionStage<NetworkStatus>,
     adapter: SourceAdapter<S>,
@@ -446,7 +436,7 @@ private fun <S> askStatus(
         if (failure == null) {
             for (line in statusLines(status, target)) reply(adapter, format, source, line)
         } else {
-            reply(adapter, format, source, Style.bad("no status") + Style.quiet(": ") + Style.bad(reason(failure)))
+            replyFail(adapter, format, source, Style.bad("no status") + Style.quiet(": ") + Style.bad(reason(failure)))
         }
     }
     return 1
@@ -482,14 +472,14 @@ private fun <S> startBoost(
 ): Int {
     api.boost(group, replicas, forHowLong).whenComplete { result, failure ->
         if (failure != null) {
-            reply(adapter, format, 
+            replyFail(adapter, format, 
                 source,
                 Style.bad("could not boost") + " " + Style.name(group) +
                     Style.quiet(": ") + Style.bad(reason(failure)),
             )
             return@whenComplete
         }
-        reply(adapter, format, 
+        replyOk(adapter, format, 
             source,
             Style.name(group) + Style.quiet(": ") +
                 Style.good("+${result.replicas()} server${if (result.replicas() == 1) "" else "s"}") +
@@ -565,42 +555,3 @@ private fun <S> suggesting(names: () -> List<String>): SuggestionProvider<S> =
         }
         builder.buildFuture()
     }
-
-private fun describe(server: ServerInfo): String =
-    Style.name(server.name()) + Style.quiet(" in ") + Style.name(server.group()) +
-        Style.quiet(": ") + Style.number(server.phase()) + Style.quiet(", ") +
-        Style.number("${server.players()}/${server.slots()}") + Style.quiet(" players, ") +
-        // Registered and not the phase, because they disagree during a drain
-        // and this is the one that says whether anybody new can reach it.
-        //
-        // The one field in this whole tree where colour earns its place rather
-        // than decorating: "can I send somebody there" is the question being
-        // asked, and green against red answers it before the words are read.
-        (if (server.registered()) Style.good("taking joins") else Style.bad("not taking joins")) +
-        (if (server.held()) Style.quiet(", ") + Style.bad("held") else "") +
-        // What the server says it is doing, and only when it says something.
-        // Last and introduced by "says", because everything before it is the
-        // operator's account and this one is the server's -- an admin reading
-        // a line where the two disagree has to be able to tell which is which.
-        // A server that has announced nothing gets no fragment at all rather
-        // than an empty one, which would read as a server that had gone quiet.
-        (if (server.state().isEmpty()) "" else Style.quiet(", says ") + Style.name(server.state()))
-
-/**
- * One group as a line, written once because `list` and `info` both print it.
- *
- * They were two copies of the same interpolation until colour made each of
- * them four times as long -- at which point two copies would have been two
- * palettes the day somebody improved one.
- */
-private fun describeProxy(proxy: ProxyInfo): String =
-    Style.name(proxy.name()) + Style.quiet(" in ") + Style.name(proxy.group()) + Style.quiet(": ") +
-        (if (proxy.ready()) Style.good("ready") else Style.bad("not ready")) +
-        (if (proxy.draining()) Style.quiet(", ") + Style.bad("draining") else "") +
-        Style.quiet(", ") + Style.number(proxy.players()) + Style.quiet(" players")
-
-private fun describeGroup(group: Group): String =
-    Style.name(group.name()) + Style.quiet(" (") + Style.number(group.kind()) + Style.quiet("): ") +
-        Style.number("${group.readyReplicas()}/${group.replicas()}") + Style.quiet(" ready, ") +
-        Style.number(group.onlinePlayers()) + Style.quiet(" players, ") +
-        Style.number(group.freeSlots()) + Style.quiet(" free slots")

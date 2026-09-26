@@ -61,6 +61,9 @@ members with TPS, MSPT, age and markers (`InstanceStatus`). TPS and MSPT are
 false on a cluster without a metrics API. A target is looked up as a server
 group, a proxy group, a server, then a proxy; an unknown one fails.
 
+`ServerInfo.node()`, `ProxyInfo.node()` and `InstanceStatus.node()` name the
+Kubernetes node the pod runs on, empty while it is not scheduled.
+
 `boost(group, replicas, forHowLong)` adds capacity for a while, as a
 `ScaleBoost` object rather than as an edit to the group. Pass `null` for the
 operator's default of an hour.

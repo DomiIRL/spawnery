@@ -75,7 +75,7 @@ func pod(name, role, group, cpuReq, cpuLim, memReq, memLim string, uid string) *
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: labels, UID: k8stypes.UID(uid),
 			CreationTimestamp: metav1.NewTime(t0.Add(-90 * time.Minute))},
-		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "main", Resources: res}}},
+		Spec:   corev1.PodSpec{NodeName: "node-1", Containers: []corev1.Container{{Name: "main", Resources: res}}},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 }
@@ -118,6 +118,7 @@ func network(t *testing.T) (client.Client, *agent.Registry) {
 
 	gw := pod("gateway-a", podspec.RoleProxy, "gateway", "100m", "500m", "256Mi", "512Mi", "uid-ga")
 	gw.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	gw.Spec.NodeName = "node-3"
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
 		lobby, rooms, gateway, lobbyA, lobbyB, roomsX,
@@ -396,5 +397,24 @@ func TestStatusLogsWhyMetricsFailed(t *testing.T) {
 	}
 	if len(logged) != 1 || !strings.Contains(logged[0], "forbidden") {
 		t.Fatalf("logged %q, want one line carrying the metrics error", logged)
+	}
+}
+
+func TestStatusNamesTheNode(t *testing.T) {
+	res, err := status(t, allMeasured(), netstate.ForProxies, "lobby")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range res.GetInstances() {
+		if in.GetNode() != "node-1" {
+			t.Errorf("%s node = %q, want node-1", in.GetName(), in.GetNode())
+		}
+	}
+	res, err = status(t, allMeasured(), netstate.ForProxies, "gateway-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := res.GetInstances()[0].GetNode(); n != "node-3" {
+		t.Errorf("gateway-a node = %q, want node-3", n)
 	}
 }

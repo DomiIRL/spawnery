@@ -23,10 +23,13 @@ import java.util.OptionalDouble;
  * One server or proxy in a {@link NetworkStatus}. {@code phase} is empty for
  * a proxy, whose state is {@code ready} and {@code draining}. {@code tps} and
  * {@code mspt} are empty for a proxy and for a server that has not reported.
+ * {@code node} is the Kubernetes node the pod runs on, empty while it is not
+ * scheduled.
  */
 public record InstanceStatus(String name, String group, boolean proxy, String phase, boolean ready,
                              int players, int slots, OptionalDouble tps, OptionalDouble mspt, Duration age,
-                             boolean retiring, boolean held, boolean draining, ResourceUsage usage) {
+                             boolean retiring, boolean held, boolean draining, ResourceUsage usage,
+                             String node) {
     public InstanceStatus {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(group, "group");
@@ -35,5 +38,13 @@ public record InstanceStatus(String name, String group, boolean proxy, String ph
         Objects.requireNonNull(mspt, "mspt");
         Objects.requireNonNull(age, "age");
         Objects.requireNonNull(usage, "usage");
+        node = node == null ? "" : node;
+    }
+
+    /** The record as it was before {@code node}, which it reads as not scheduled. */
+    public InstanceStatus(String name, String group, boolean proxy, String phase, boolean ready,
+                          int players, int slots, OptionalDouble tps, OptionalDouble mspt, Duration age,
+                          boolean retiring, boolean held, boolean draining, ResourceUsage usage) {
+        this(name, group, proxy, phase, ready, players, slots, tps, mspt, age, retiring, held, draining, usage, "");
     }
 }

@@ -62,6 +62,8 @@ import java.util.Objects;
  *     rather than a zero.
  * @param held whether an admin took this server's retirement back: nothing
  *     automatic removes it any more; it stays until it ends by itself.
+ * @param node the Kubernetes node the server's pod runs on, empty while it is
+ *     not scheduled.
  */
 public record ServerInfo(
         String name,
@@ -74,7 +76,8 @@ public record ServerInfo(
         Map<String, String> attributes,
         String incarnation,
         int number,
-        boolean held) {
+        boolean held,
+        String node) {
     public ServerInfo {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(group, "group");
@@ -90,6 +93,23 @@ public record ServerInfo(
         // has not placed yet is one a plugin should be able to describe
         // without a null check.
         incarnation = incarnation == null ? "" : incarnation;
+        node = node == null ? "" : node;
+    }
+
+    /** The record as it was before {@code node}, which it reads as not scheduled. */
+    public ServerInfo(
+            String name,
+            String group,
+            ServerPhase phase,
+            int players,
+            int slots,
+            boolean registered,
+            String state,
+            Map<String, String> attributes,
+            String incarnation,
+            int number,
+            boolean held) {
+        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, held, "");
     }
 
     /** The record as it was before {@code held}, which it reads as false. */
@@ -104,7 +124,7 @@ public record ServerInfo(
             Map<String, String> attributes,
             String incarnation,
             int number) {
-        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, false);
+        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, false, "");
     }
 
     /**

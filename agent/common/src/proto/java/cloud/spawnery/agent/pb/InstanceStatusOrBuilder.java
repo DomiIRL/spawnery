@@ -136,4 +136,24 @@ public interface InstanceStatusOrBuilder extends
    * <code>.spawnery.agent.v1alpha1.ResourceUsage usage = 14;</code>
    */
   cloud.spawnery.agent.pb.ResourceUsageOrBuilder getUsageOrBuilder();
+
+  /**
+   * <pre>
+   * as ServerState.node
+   * </pre>
+   *
+   * <code>string node = 15;</code>
+   * @return The node.
+   */
+  java.lang.String getNode();
+  /**
+   * <pre>
+   * as ServerState.node
+   * </pre>
+   *
+   * <code>string node = 15;</code>
+   * @return The bytes for node.
+   */
+  com.google.protobuf.ByteString
+      getNodeBytes();
 }

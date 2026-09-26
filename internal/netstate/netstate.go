@@ -197,6 +197,15 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 	if err := s.Reader.List(ctx, &servers, client.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("list servers in %s: %w", namespace, err)
 	}
+	var serverPods corev1.PodList
+	if err := s.Reader.List(ctx, &serverPods, client.InNamespace(namespace),
+		client.MatchingLabels{podspec.LabelRole: podspec.RoleServer}); err != nil {
+		return nil, fmt.Errorf("list server pods in %s: %w", namespace, err)
+	}
+	nodeOf := make(map[string]string, len(serverPods.Items))
+	for i := range serverPods.Items {
+		nodeOf[serverPods.Items[i].Name] = serverPods.Items[i].Spec.NodeName
+	}
 	// Collected here rather than derived below, because this is the loop that
 	// drops them: the roster is built from a different source and would
 	// otherwise name servers this picture does not contain.
@@ -229,6 +238,7 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			// created the server, and nothing observes it afterwards.
 			Number: srv.Spec.Number,
 			Held:   srv.Spec.Hold,
+			Node:   nodeOf[srv.Status.PodName],
 		})
 	}
 
@@ -273,6 +283,7 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			Ready:    podReady(pod),
 			Draining: pod.Annotations[podspec.AnnotationProxyDrainingSince] != "",
 			Players:  s.Agents.Lookup(string(pod.UID)).Players,
+			Node:     pod.Spec.NodeName,
 		})
 	}
 

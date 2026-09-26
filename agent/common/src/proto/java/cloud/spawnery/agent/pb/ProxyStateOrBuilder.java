@@ -63,4 +63,24 @@ public interface ProxyStateOrBuilder extends
    * @return The players.
    */
   int getPlayers();
+
+  /**
+   * <pre>
+   * as ServerState.node
+   * </pre>
+   *
+   * <code>string node = 6;</code>
+   * @return The node.
+   */
+  java.lang.String getNode();
+  /**
+   * <pre>
+   * as ServerState.node
+   * </pre>
+   *
+   * <code>string node = 6;</code>
+   * @return The bytes for node.
+   */
+  com.google.protobuf.ByteString
+      getNodeBytes();
 }

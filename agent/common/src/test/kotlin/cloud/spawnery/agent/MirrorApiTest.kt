@@ -7,6 +7,7 @@ import cloud.spawnery.agent.api.ServerSelf
 import cloud.spawnery.agent.pb.CloudRequest
 import cloud.spawnery.agent.pb.GroupState
 import cloud.spawnery.agent.pb.NetworkState
+import cloud.spawnery.agent.pb.ProxyState
 import cloud.spawnery.agent.pb.RosterEntry
 import cloud.spawnery.agent.pb.ServerState
 import java.util.UUID
@@ -254,5 +255,18 @@ class MirrorApiTest {
         assertEquals(1, requested.size)
         assertEquals("", requested[0].announce.state)
         assertTrue(requested[0].announce.attributesMap.isEmpty())
+    }
+
+    @Test
+    fun `servers and proxies carry the node they run on`() {
+        val api = api(
+            proxySelf(),
+            NetworkState.newBuilder()
+                .addServers(ServerState.newBuilder().setName("lobby-a").setGroup("lobby").setPhase("Ready").setNode("node-2"))
+                .addProxies(ProxyState.newBuilder().setName("gateway-a").setGroup("gateway").setNode("node-3"))
+                .build(),
+        )
+        assertEquals("node-2", api.server("lobby-a").get().node())
+        assertEquals("node-3", api.proxy("gateway-a").get().node())
     }
 }

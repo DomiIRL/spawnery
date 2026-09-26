@@ -1,0 +1,43 @@
+/*
+Copyright paul_wtf.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package cloud.spawnery.agent.api;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.OptionalDouble;
+import org.junit.jupiter.api.Test;
+
+class RecordCompatibilityTest {
+    private static final ResourceUsage NONE = new ResourceUsage(0, 0, 0, false, 0, 0, 0, false, 0, 0);
+
+    @Test
+    void theZeroNinePreviousConstructorsStillBuildAndReadAsUnscheduled() {
+        ServerInfo server = new ServerInfo("lobby-a", "lobby", ServerPhase.READY, 1, 20, true, "", Map.of(), "", 0, false);
+        assertEquals("", server.node());
+        ProxyInfo proxy = new ProxyInfo("gateway-a", "gateway", true, false, 3);
+        assertEquals("", proxy.node());
+        InstanceStatus instance = new InstanceStatus("lobby-a", "lobby", false, "Ready", true, 1, 20,
+                OptionalDouble.empty(), OptionalDouble.empty(), Duration.ZERO, false, false, false, NONE);
+        assertEquals("", instance.node());
+    }
+
+    @Test
+    void aNullNodeReadsAsEmpty() {
+        assertEquals("", new ProxyInfo("gateway-a", "gateway", true, false, 3, null).node());
+    }
+}

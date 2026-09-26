@@ -57,6 +57,18 @@ private fun aNetworkWithProxies(): NetworkState =
         .addProxies(ProxyState.newBuilder().setName("gateway-b").setGroup("gateway").setReady(true).setDraining(true))
         .build()
 
+private fun aNetworkWithNode(node: String): NetworkState =
+    NetworkState.newBuilder()
+        .addGroups(
+            GroupState.newBuilder().setName("lobby").setKind(GroupState.Kind.EPHEMERAL)
+                .setReplicas(1).setReadyReplicas(1).setOnlinePlayers(12).setFreeSlots(88),
+        )
+        .addServers(
+            ServerState.newBuilder().setName("lobby-a").setGroup("lobby")
+                .setPhase("Ready").setPlayers(12).setSlots(100).setRegistered(true).setNode(node),
+        )
+        .build()
+
 class CloudCommandTest {
     private val sent = mutableListOf<String>()
     private var permissions =
@@ -134,9 +146,9 @@ class CloudCommandTest {
 
         run("cloud list")
 
-        val line = sent.single()
+        val line = sent.first()
         assertTrue(line.startsWith("<gray>PREFIX</gray> "), line)
-        assertTrue(plain(line).contains("lobby"), "the answer itself was lost: ${plain(line)}")
+        assertTrue(sent.any { plain(it).contains("lobby") }, "the answer itself was lost: $sent")
     }
 
     @Test
@@ -169,9 +181,9 @@ class CloudCommandTest {
 
         run("cloud list")
 
-        val line = plain(sent.single())
+        val line = plain(sent.first())
         assertTrue(line.contains("Spawnery"), "the default format was not used: $line")
-        assertTrue(line.contains("lobby"), "the answer itself was lost: $line")
+        assertTrue(sent.any { plain(it).contains("lobby") }, "the answer itself was lost: $sent")
     }
 
     @Test
@@ -180,7 +192,7 @@ class CloudCommandTest {
 
         assertTrue(sent.any { plain(it).contains("lobby") }, "the output named no group: $sent")
         assertTrue(
-            plain(sent.single()).contains("12 players"),
+            sent.any { plain(it).contains("12/100 players") },
             "the output did not say what the group is doing: $sent",
         )
     }
@@ -200,7 +212,7 @@ class CloudCommandTest {
     fun `info about a server names its phase and whether it takes joins`() {
         run("cloud info lobby-a")
 
-        val line = sent.single()
+        val line = sent.first()
         assertTrue(line.contains("lobby-a") && line.contains("READY"), line)
         // Registered and not the phase: the two disagree during a drain, and
         // this is the one that answers "can I send somebody there".
@@ -221,8 +233,8 @@ class CloudCommandTest {
 
         run("cloud info lobby-a", api = api(described))
 
-        val line = plain(sent.single())
-        assertTrue(line.contains("says running"), line)
+        val line = plain(sent.single { plain(it).contains("Says") })
+        assertTrue(line.contains("running"), line)
     }
 
     @Test
@@ -231,7 +243,7 @@ class CloudCommandTest {
         // is a different thing from one that has never spoken.
         run("cloud info lobby-a")
 
-        assertTrue(!plain(sent.single()).contains("says"), plain(sent.single()))
+        assertTrue(sent.none { plain(it).contains("Says") }, "$sent")
     }
 
     @Test
@@ -242,7 +254,7 @@ class CloudCommandTest {
         // so somebody scanning a list needs to see it without reading it.
         run("cloud info lobby-a")
 
-        val line = sent.single()
+        val line = sent.first()
         assertTrue(line.contains("<green>taking joins</green>"), line)
         // And the words still say it, for anyone whose client shows no colour
         // and for the console's log.
@@ -274,7 +286,7 @@ class CloudCommandTest {
     fun `info about a group works through the same argument`() {
         run("cloud info lobby")
 
-        assertTrue(plain(sent.single()).contains("88 free slots"), sent.toString())
+        assertTrue(sent.any { plain(it).contains("88 free") }, sent.toString())
     }
 
     @Test
@@ -340,7 +352,7 @@ class CloudCommandTest {
         // "java.util.concurrent.CompletionException: ..." in a chat line tells
         // an admin nothing they can act on.
         assertFalse(line.contains("CompletionException"), "the future's wrapper reached chat: $line")
-        assertTrue(line.startsWith("could not retire"), "a refusal was worded as a success: $line")
+        assertTrue(line.startsWith("✘ could not retire"), "a refusal was worded as a success: $line")
     }
 
     @Test
@@ -608,13 +620,13 @@ class CloudCommandTest {
     @Test
     fun `info answers for a proxy`() {
         run("cloud info gateway-b", api(aNetworkWithProxies()))
-        assertTrue(sent.single().contains("gateway-b") && sent.single().contains("draining"), sent.single())
+        assertTrue(sent.first().contains("gateway-b") && sent.first().contains("draining"), "$sent")
     }
 
     @Test
     fun `info says a held server is held`() {
         run("cloud info lobby-h", api(aNetworkWithProxies()))
-        assertTrue(sent.single().contains("held"), sent.single())
+        assertTrue(sent.any { it.contains("held") }, "$sent")
     }
 
 
@@ -626,107 +638,6 @@ class CloudCommandTest {
             .setCpuUsedMillicores(cpuUsed).setCpuRequestedMillicores(cpuReq).setCpuLimitMillicores(2 * cpuReq)
             .setMemoryUsedBytes(memUsed).setMemoryRequestedBytes(memReq).setMemoryLimitBytes(2 * memReq)
             .setPods(pods).setPodsMeasured(measured)
-
-    @Test
-    fun `status shows the network, its groups and the rest`() {
-        run("cloud status", api(aNetworkWithProxies()))
-        assertEquals("", requested.single().status.target)
-        assertTrue(sent.isEmpty(), "answered before the operator did: $sent")
-        statusAnswer {
-            metricsAvailable = true
-            players = 12; servers = 9; proxies = 2
-            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 11, 11).build()
-            addGroups(
-                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("arena").setKind(GroupState.Kind.EPHEMERAL)
-                    .setPhase("Ready").setReplicas(2).setReadyReplicas(2).setPlayers(6).setLowestTps(17.8)
-                    .setUsage(usage(1100, 2000, 3L shl 30, 4L shl 30, 2, 2)),
-            )
-            other = usage(500, 400, 1L shl 30, 1L shl 30, 2, 2).build()
-        }
-        assertTrue(sent[0].contains("12") && sent[0].contains("9") && sent[0].contains("2"), sent[0])
-        assertTrue(sent[1].contains("3.1") && sent[1].contains("8.0") && sent[1].contains("12.0"), sent[1])
-        val arena = sent.single { it.contains("arena") }
-        assertTrue(arena.contains("17.8") && arena.contains("<yellow>"), arena)
-        assertTrue(sent.last().contains("other"), sent.last())
-    }
-
-    @Test
-    fun `status says when usage is unavailable`() {
-        run("cloud status", api(aNetworkWithProxies()))
-        statusAnswer {
-            metricsAvailable = false
-            total = usage(0, 8000, 0, 24L shl 30, 11, 0).build()
-        }
-        assertTrue(sent[1].contains("–") && sent[1].contains("metrics API not answering"), sent[1])
-        assertFalse(sent[1].contains("0.0</white><gray> /"), "unmeasured usage printed as zero: ${sent[1]}")
-    }
-
-    @Test
-    fun `status says when nothing has a limit`() {
-        run("cloud status", api(aNetworkWithProxies()))
-        statusAnswer {
-            metricsAvailable = true
-            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 4, 4)
-                .setCpuLimitMillicores(0).setCpuUnlimited(true).build()
-        }
-        assertTrue(sent[1].contains("no limit"), sent[1])
-        assertFalse(sent[1].contains("limit </gray><white>0.0"), "an absent limit printed as zero: ${sent[1]}")
-    }
-
-    @Test
-    fun `status says when a limit covers only some containers`() {
-        run("cloud status", api(aNetworkWithProxies()))
-        statusAnswer {
-            metricsAvailable = true
-            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 4, 4).setMemoryUnlimited(true).build()
-        }
-        assertTrue(sent[1].contains("≥ ") && sent[1].contains("48.0 GiB"), sent[1])
-    }
-
-    @Test
-    fun `status says how many pods the usage covers`() {
-        run("cloud status", api(aNetworkWithProxies()))
-        statusAnswer {
-            metricsAvailable = true
-            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 9, 8).build()
-        }
-        assertTrue(sent[1].contains("8 of 9 pods"), sent[1])
-    }
-
-    @Test
-    fun `status of a server shows its ticks, its markers and its limits`() {
-        run("cloud status lobby-r", api(aNetworkWithProxies()))
-        assertEquals("lobby-r", requested.single().status.target)
-        statusAnswer {
-            metricsAvailable = true
-            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
-            addInstances(
-                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
-                    .setPhase("Retiring").setPlayers(3).setSlots(20).setTps(12.0).setMspt(80.0)
-                    .setAgeSeconds(3 * 3600 + 20 * 60).setRetiring(true).setHeld(true)
-                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
-            )
-        }
-        val line = sent[0]
-        assertTrue(line.contains("<red>12.0") && line.contains("80.0"), line)
-        assertTrue(line.contains("3h20m") && line.contains("retiring") && line.contains("held"), line)
-        assertTrue(sent[1].contains("limit ") && sent[1].contains("1.0"), sent[1])
-    }
-
-    @Test
-    fun `status shows a server without a reported TPS as missing`() {
-        run("cloud status lobby-r", api(aNetworkWithProxies()))
-        statusAnswer {
-            metricsAvailable = true
-            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
-            addInstances(
-                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
-                    .setPhase("Ready").setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
-            )
-        }
-        assertTrue(sent[0].contains("TPS </gray><white>–"), sent[0])
-        assertFalse(sent[0].contains("TPS </gray><red>"), "an unreported TPS printed as a value: ${sent[0]}")
-    }
 
     @Test
     fun `status says why the operator refused`() {
@@ -751,6 +662,256 @@ class CloudCommandTest {
         permissions = setOf(PERMISSION_STATUS)
         run("cloud status", api(aNetworkWithProxies()))
         assertEquals("", requested.single().status.target)
+    }
+    @Test
+    fun `list opens with a heading and sorts groups into sections`() {
+        run("cloud list", api(aNetworkWithProxies()))
+        assertTrue(sent[0].contains("<bold>Network</bold>") && sent[0].contains("2 groups"), sent[0])
+        val serverGroups = sent.indexOfFirst { it.contains("Server groups") }
+        val proxyGroups = sent.indexOfFirst { it.contains("Proxy groups") }
+        assertTrue(serverGroups in 1 until proxyGroups, "$sent")
+        assertTrue(sent[serverGroups + 1].startsWith("   ") && sent[serverGroups + 1].contains("lobby"), "$sent")
+        assertTrue(sent.any { it.startsWith("     ") && it.contains("gateway-b") && it.contains("draining") }, "$sent")
+    }
+
+    @Test
+    fun `list of an empty network still says so`() {
+        run("cloud list", api(NetworkState.getDefaultInstance()))
+        assertTrue(sent.any { it.contains("no groups on this network yet") }, "$sent")
+    }
+
+    @Test
+    fun `info of a server shows its node and a players bar`() {
+        run("cloud info lobby-a", api(aNetworkWithNode("node-2")))
+        assertTrue(sent[0].contains("<bold>lobby-a</bold>") && sent[0].contains("lobby"), sent[0])
+        assertTrue(sent.any { it.contains("Node") && it.contains("node-2") }, "$sent")
+        assertTrue(sent.any { it.contains("Players") && it.contains("|") && it.contains("12") }, "$sent")
+    }
+
+    @Test
+    fun `info of an unscheduled server says so`() {
+        run("cloud info lobby-a", api(aNetworkWithNode("")))
+        assertTrue(sent.any { it.contains("Node") && it.contains("not scheduled") }, "$sent")
+    }
+    @Test
+    fun `status shows resources with bars and groups in sections`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            players = 12; servers = 9; proxies = 2
+            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 11, 11).build()
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("arena").setKind(GroupState.Kind.EPHEMERAL)
+                    .setPhase("Ready").setReplicas(2).setReadyReplicas(2).setPlayers(6).setLowestTps(17.8)
+                    .setUsage(usage(1100, 2000, 3L shl 30, 4L shl 30, 2, 2)),
+            )
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("gateway").setKind(GroupState.Kind.PROXY)
+                    .setPhase("Ready").setReplicas(2).setReadyReplicas(2).setPlayers(12)
+                    .setUsage(usage(200, 400, 1L shl 29, 1L shl 30, 2, 2)),
+            )
+            other = usage(500, 400, 1L shl 30, 1L shl 30, 2, 2).build()
+        }
+        assertTrue(sent[0].contains("<bold>Network status</bold>") && plain(sent[0]).contains("12 players"), sent[0])
+        assertTrue(sent[1].contains("Resources"), sent[1])
+        val cpu = sent.single { it.contains("CPU") && it.contains("cores") }
+        assertTrue(cpu.contains("|") && plain(cpu).contains("3.1 of 16.0") && plain(cpu).contains("8.0 requested"), cpu)
+        val ram = sent.single { it.contains("RAM") && it.contains("GiB") && it.contains("requested") }
+        assertTrue(plain(ram).contains("12.0 of 48.0"), ram)
+        val serverSection = sent.indexOfFirst { it.contains("Server groups") }
+        val proxySection = sent.indexOfFirst { it.contains("Proxy groups") }
+        assertTrue(sent[serverSection + 1].contains("arena") && sent[serverSection + 1].contains("<yellow>17.8"), "$sent")
+        assertTrue(sent[proxySection + 1].contains("gateway") && !sent[proxySection + 1].contains("TPS"), "$sent")
+        assertTrue(sent.any { it.contains("Other pods") }, "$sent")
+    }
+
+    @Test
+    fun `status says when usage is unavailable`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = false
+            total = usage(0, 8000, 0, 24L shl 30, 11, 0).build()
+        }
+        assertTrue(sent.any { it.contains("metrics API not answering") }, "$sent")
+        val cpu = sent.single { it.contains("CPU") && it.contains("cores") }
+        assertTrue(cpu.contains("–") && !cpu.contains("|"), "an unmeasured value got a bar: $cpu")
+    }
+
+    @Test
+    fun `status says when nothing has a limit and measures against the request`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 4, 4)
+                .setCpuLimitMillicores(0).setCpuUnlimited(true).build()
+        }
+        val cpu = sent.single { it.contains("CPU") && it.contains("cores") }
+        assertTrue(plain(cpu).contains("no limit") && cpu.contains("|"), cpu)
+    }
+
+    @Test
+    fun `status says how many pods the usage covers`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 9, 8).build()
+        }
+        assertTrue(sent.any { it.contains("8 of 9 pods") }, "$sent")
+    }
+
+    @Test
+    fun `status of a server shows its node, bars and markers`() {
+        run("cloud status lobby-r", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Retiring").setPlayers(3).setSlots(20).setTps(12.0).setMspt(80.0)
+                    .setAgeSeconds(3 * 3600 + 20 * 60).setRetiring(true).setHeld(true).setNode("node-2")
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        assertTrue(sent[0].contains("<bold>lobby-r</bold>") && plain(sent[0]).contains("3h20m"), sent[0])
+        assertTrue(sent.any { it.contains("Node") && it.contains("node-2") }, "$sent")
+        val tps = sent.single { it.contains("TPS") }
+        assertTrue(tps.contains("<red>") && plain(tps).contains("12.0") && plain(tps).contains("80.0"), tps)
+        assertTrue(sent.any { plain(it).contains("Players") && plain(it).contains("3 / 20") }, "$sent")
+        assertTrue(sent.any { it.contains("Marked") && it.contains("retiring") && it.contains("held") }, "$sent")
+    }
+
+    @Test
+    fun `status shows a server without a reported TPS as missing`() {
+        run("cloud status lobby-r", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setNode("node-2").setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        val tps = sent.single { it.contains("TPS") }
+        assertTrue(tps.contains("–") && !tps.contains("|"), tps)
+    }
+
+    @Test
+    fun `status of an unscheduled server says so`() {
+        run("cloud status lobby-r", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(0, 0, 0, 0, 0, 0).build()
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Pending").setUsage(usage(0, 0, 0, 0, 0, 0)),
+            )
+        }
+        assertTrue(sent.any { it.contains("Node") && it.contains("not scheduled") }, "$sent")
+        assertTrue(sent.none { it.contains("CPU") && it.contains("|") }, "an unscheduled server got a usage bar: $sent")
+    }
+
+    @Test
+    fun `status of a group lists its members with their node`() {
+        run("cloud status lobby", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("lobby").setKind(GroupState.Kind.EPHEMERAL)
+                    .setPhase("Ready").setReplicas(1).setReadyReplicas(1).setPlayers(3).setLowestTps(19.5)
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setPlayers(3).setSlots(20).setTps(19.5).setNode("node-2")
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        assertTrue(sent[0].contains("<bold>lobby</bold>"), sent[0])
+        val member = sent.single { it.contains("lobby-r") }
+        assertTrue(member.startsWith("   ") && member.contains("node-2") && member.contains("<green>19.5"), member)
+    }
+    @Test
+    fun `one-line answers say at a glance whether it worked`() {
+        run("cloud retire lobby-a")
+        answer { setRetire(RetireResult.newBuilder().setServer("lobby-a")) }
+        assertTrue(sent.single().startsWith("<green>✔</green> "), sent.single())
+        sent.clear(); requested.clear()
+
+        run("cloud retire lobby-a")
+        answer { setError(RequestError.newBuilder().setReason(RequestError.Reason.REFUSED).setMessage("already retiring")) }
+        assertTrue(sent.single().startsWith("<red>✘</red> ") && sent.single().contains("already retiring"), sent.single())
+        sent.clear(); requested.clear()
+
+        run("cloud events off")
+        assertTrue(sent.single().startsWith("<green>✔</green> "), sent.single())
+    }
+
+    @Test
+    fun `status of a server says why usage is missing`() {
+        run("cloud status lobby-r", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = false
+            total = usage(0, 500, 0, 2L shl 30, 1, 0).build()
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setNode("node-2").setUsage(usage(0, 500, 0, 2L shl 30, 1, 0)),
+            )
+        }
+        assertTrue(sent.any { it.contains("metrics API not answering") }, "$sent")
+    }
+
+    @Test
+    fun `status of a group shows each member's MSPT`() {
+        run("cloud status lobby", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("lobby").setKind(GroupState.Kind.EPHEMERAL)
+                    .setPhase("Ready").setReplicas(1).setReadyReplicas(1).setPlayers(3).setLowestTps(19.5)
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setPlayers(3).setSlots(20).setTps(19.5).setMspt(42.0).setNode("node-2")
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        val member = plain(sent.single { it.contains("lobby-r") })
+        assertTrue(member.contains("MSPT 42.0"), member)
+    }
+
+    @Test
+    fun `one of a thing is counted in the singular`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            players = 1; servers = 1; proxies = 1
+            total = usage(100, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("arena").setKind(GroupState.Kind.EPHEMERAL)
+                    .setPhase("Ready").setReplicas(1).setReadyReplicas(1).setPlayers(1)
+                    .setUsage(usage(100, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        val heading = plain(sent[0])
+        assertTrue(heading.contains("1 player ·") && heading.contains("1 server ·") && heading.contains("1 proxy"), heading)
+        assertTrue(plain(sent.single { it.contains("arena") }).contains("1 player"), "$sent")
+        assertFalse(sent.any { plain(it).contains("1 players") }, "$sent")
+    }
+
+    @Test
+    fun `an on-demand group reads as words`() {
+        run(
+            "cloud list",
+            api(
+                NetworkState.newBuilder()
+                    .addGroups(GroupState.newBuilder().setName("rooms").setKind(GroupState.Kind.ON_DEMAND))
+                    .build(),
+            ),
+        )
+        assertTrue(sent.any { plain(it).contains("(on-demand)") } && sent.none { it.contains("on_demand") }, "$sent")
     }
 }
 
