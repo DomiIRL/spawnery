@@ -295,6 +295,11 @@ type ServerGroupSpec struct {
 	// +optional
 	ExtraFiles *ExtraFiles `json:"extraFiles,omitempty"`
 
+	// Substitution fills placeholders in the files the entrypoint copies from
+	// extraPlugins and extraFiles. See Substitution.
+	// +optional
+	Substitution *Substitution `json:"substitution,omitempty"`
+
 	// ConfigOverlay names a ConfigMap whose keys are configuration files to
 	// merge over the rendered defaults — "server.properties",
 	// "paper-global.yml", "paper-world-defaults.yml" or "velocity.toml", in
