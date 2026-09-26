@@ -657,8 +657,30 @@ class CloudCommandTest {
             metricsAvailable = false
             total = usage(0, 8000, 0, 24L shl 30, 11, 0).build()
         }
-        assertTrue(sent[1].contains("–") && sent[1].contains("no metrics API"), sent[1])
+        assertTrue(sent[1].contains("–") && sent[1].contains("metrics API not answering"), sent[1])
         assertFalse(sent[1].contains("0.0</white><gray> /"), "unmeasured usage printed as zero: ${sent[1]}")
+    }
+
+    @Test
+    fun `status says when nothing has a limit`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 4, 4)
+                .setCpuLimitMillicores(0).setCpuUnlimited(true).build()
+        }
+        assertTrue(sent[1].contains("no limit"), sent[1])
+        assertFalse(sent[1].contains("limit </gray><white>0.0"), "an absent limit printed as zero: ${sent[1]}")
+    }
+
+    @Test
+    fun `status says when a limit covers only some containers`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(3100, 8000, 12L shl 30, 24L shl 30, 4, 4).setMemoryUnlimited(true).build()
+        }
+        assertTrue(sent[1].contains("≥ ") && sent[1].contains("48.0 GiB"), sent[1])
     }
 
     @Test

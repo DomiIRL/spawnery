@@ -41,19 +41,27 @@ private fun gib(bytes: Long) = String.format(Locale.ROOT, "%.1f", bytes / (1L sh
 private fun usageLine(u: ResourceUsage, metrics: Boolean): String {
     val used = if (metrics && u.measured()) null else "–"
     val cpu = Style.quiet("CPU ") + Style.number(used ?: cores(u.cpuUsedMillicores())) + Style.quiet(" / ") +
-        Style.number(cores(u.cpuRequestedMillicores())) + Style.quiet(" cores requested (limit ") +
-        Style.number(cores(u.cpuLimitMillicores()) + if (u.cpuUnlimited()) "+" else "") + Style.quiet(")")
+        Style.number(cores(u.cpuRequestedMillicores())) + Style.quiet(" cores requested (") +
+        limit(cores(u.cpuLimitMillicores()), u.cpuLimitMillicores(), u.cpuUnlimited()) + Style.quiet(")")
     val ram = Style.quiet("RAM ") + Style.number(used ?: gib(u.memoryUsedBytes())) + Style.quiet(" / ") +
-        Style.number(gib(u.memoryRequestedBytes()) + " GiB") + Style.quiet(" requested (limit ") +
-        Style.number(gib(u.memoryLimitBytes()) + (if (u.memoryUnlimited()) "+" else "") + " GiB") + Style.quiet(")")
+        Style.number(gib(u.memoryRequestedBytes()) + " GiB") + Style.quiet(" requested (") +
+        limit(gib(u.memoryLimitBytes()) + " GiB", u.memoryLimitBytes(), u.memoryUnlimited()) + Style.quiet(")")
     var line = cpu + Style.quiet(" · ") + ram
     if (!metrics) {
-        line += Style.quiet(" · ") + Style.bad("no metrics API on this cluster")
+        line += Style.quiet(" · ") + Style.bad("usage unavailable (metrics API not answering)")
     } else if (u.measured() && !u.complete()) {
         line += Style.quiet(" · usage of ${u.podsMeasured()} of ${u.pods()} pods")
     }
     return line
 }
+
+/** A limit some container lacks is a floor, and one no container has is no limit at all. */
+private fun limit(text: String, sum: Long, unlimited: Boolean): String =
+    when {
+        unlimited && sum == 0L -> Style.quiet("no limit")
+        unlimited -> Style.quiet("limit ≥ ") + Style.number(text)
+        else -> Style.quiet("limit ") + Style.number(text)
+    }
 
 private fun cpuRam(u: ResourceUsage): String =
     if (!u.measured()) {
