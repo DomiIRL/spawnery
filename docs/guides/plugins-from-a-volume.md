@@ -236,6 +236,45 @@ spawnery: spec.extraFiles carries server.properties, which the operator writes i
 spawnery: use spec.configOverlay for it. Refusing to start.
 ```
 
+## From an image instead of a claim
+
+`extraPlugins` and `extraFiles` can name an image instead of a claim:
+
+```yaml
+spec:
+  extraPlugins:
+    image: registry.example.net/lobby-plugins@sha256:…
+  extraFiles:
+    image: registry.example.net/lobby-files@sha256:…
+```
+
+The image's filesystem root is what the claim's root would be. It is mounted
+read-only as an image volume and copied exactly as a claim is. Every node pulls
+and caches it on its own, so no single server holds the group's plugins, and a
+new digest rolls the group like any other change. The pod's
+`imagePullSecrets` (from the Network) apply, and `pullPolicy` defaults to
+`IfNotPresent`. An image source needs neither `--allow-plugin-volumes` nor
+`--allow-file-volumes`.
+
+## Placeholders filled at start
+
+```yaml
+spec:
+  substitution:
+    prefix: SECRET_
+  env:
+    - name: SECRET_DB_PASSWORD
+      valueFrom:
+        secretKeyRef: { name: lobby-db, key: password }
+```
+
+After copying, the entrypoint replaces every `{{ SECRET_… }}` in the copied
+text files (`.yml`, `.yaml`, `.json`, `.properties`, `.conf`, `.toml`, `.txt`,
+`.cfg`) with the variable of that name, verbatim. A placeholder whose variable
+is missing stops the start and names the file and the placeholder. This keeps
+secrets out of the image or claim: the artifact carries the placeholder, the
+cluster the value.
+
 ## Styling what the agent says
 
 `Network.spec.defaults.feedFormat` sets the shape of every line the agent

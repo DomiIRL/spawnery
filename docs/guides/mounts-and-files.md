@@ -35,6 +35,7 @@ can reach belongs;
 belongs anywhere else had nowhere to go — a world tree, a directory of assets
 every server reads, the output of one group that another consumes. That is
 what a claim mount carries.
+It can also name an image; see [From an image instead of a claim](plugins-from-a-volume.md#from-an-image-instead-of-a-claim).
 
 It is still not a layered template system. There is no composition, no
 priority, no per-server rendering. A mount is one volume at one path, and
