@@ -336,7 +336,12 @@
           # its TPS and MSPT, SpawneryApi gains status() and status(target)
           # with four records, and /cloud gains status under the new
           # spawnery.cloud.status. An older operator answers status as unknown.
-          imageVersion = "0.9.0";
+          #
+          # 0.10.0 moves it because the agents changed: every /cloud answer is
+          # laid out in sections with bars, one-line answers carry ✔ or ✘, and
+          # ServerInfo, ProxyInfo and InstanceStatus gain node(), each keeping
+          # its previous constructor.
+          imageVersion = "0.10.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
@@ -506,7 +511,11 @@
           # each server's reported TPS and MSPT in memory and answers the
           # agents' status request with a network's usage from metrics.k8s.io,
           # which it may now list. Nothing rolls.
-          operatorVersion = "0.9.0";
+          #
+          # 0.10.0 moves it with the chart and the images: the network picture
+          # and the status answer carry the node each server and proxy pod runs
+          # on. Nothing rolls.
+          operatorVersion = "0.10.0";
 
           spawnery-slp = pkgs.buildGoModule {
             pname = "spawnery-slp";
