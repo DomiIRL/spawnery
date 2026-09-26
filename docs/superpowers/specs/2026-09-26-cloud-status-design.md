@@ -108,13 +108,17 @@ message StatusResult {
   ResourceUsage total = 1;
   repeated GroupStatus groups = 2;      // every group, or only the target's
   repeated InstanceStatus instances = 3; // empty for the network form
-  int32 pods_without_metrics = 4;
+  ResourceUsage other = 4;              // pods outside every listed group
   bool metrics_available = 5;
+  int32 players = 6;
+  int32 servers = 7;
+  int32 proxies = 8;
 }
 ```
 
 `ResourceUsage` carries CPU in millicores and memory in bytes, each as used,
-requested and limit, with a flag for "no limit on some container".
+requested and limit, a flag per resource for "no limit on some container",
+and how many of its pods were measured.
 `GroupStatus` carries name, kind (server or proxy), phase, ready and desired
 replicas, players, lowest TPS, and usage. `InstanceStatus` carries name,
 group, kind, phase, players, slots, TPS, MSPT, age, the three markers, and
@@ -126,7 +130,7 @@ The operator builds the answer from:
   pod specs;
 - the registry: players, TPS, MSPT;
 - one live list of `PodMetrics` in the namespace (`metrics.k8s.io/v1beta1`).
-  The ClusterRole gains `get` and `list` on `pods` in `metrics.k8s.io`, with an
+  The ClusterRole gains `list` on `pods` in `metrics.k8s.io`, with an
   rbacaudit reason. A failing metrics call sets `metrics_available: false`;
   it never fails the request.
 
@@ -157,7 +161,7 @@ and shows up with `TPS –`.
   group, a server, a proxy, and an unknown name; namespace-bound (a name in
   another namespace is unknown); metrics API failing → answer without usage
   and `metrics_available: false`; a pod without a sample counted in
-  `pods_without_metrics`.
+  `pods_measured`.
 - **registry:** TPS/MSPT stored from the report, zero kept as missing, stale
   values dropped.
 - **aggregation:** lowest TPS ignores servers without TPS; requests and limits

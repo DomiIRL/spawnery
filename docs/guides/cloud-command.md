@@ -23,7 +23,7 @@ and from then on they have:
 
 Everything else is a separate grant, deliberately.
 
-## The four nodes
+## The five nodes
 
 | Node | Opens |
 |---|---|
@@ -31,6 +31,7 @@ Everything else is a separate grant, deliberately.
 | `spawnery.cloud.retire` | `/cloud retire <name>`, `/cloud unretire <name>` |
 | `spawnery.cloud.scale` | `/cloud start <group> <count> [for <duration>]`, `/cloud stop <group>` |
 | `spawnery.cloud.events` | `/cloud events on`, `/cloud events off` |
+| `spawnery.cloud.status` | `/cloud status [group\|server\|proxy]` |
 
 **None of them implies another.** Retiring is its own node rather than a level
 above reading, because the two are not the same kind of thing: reading is what
@@ -109,6 +110,23 @@ such a server.
 
 `/cloud list` shows each proxy under its proxy group, and `/cloud info
 <name>` answers for a proxy: ready or not, draining or not, and its players.
+
+**`/cloud status`** shows how the network is doing: its pods' CPU and memory
+against what they requested, one line per group with the lowest TPS among its
+servers, and a line for the namespace's other pods. `/cloud status <group>`
+lists the group's servers or proxies with TPS, MSPT, usage and age;
+`/cloud status <server|proxy>` shows one of them against its requests and
+limits. It asks the operator, so it answers only while the agent is
+connected.
+
+Usage comes from the cluster's metrics API (metrics-server). Without one the
+answer still arrives, with `–` where usage would be. A pod started within the
+last minute may not have a sample yet; the totals then say how many pods they
+cover. `TPS –` is a server that has not reported a tick rate, such as one
+running an agent older than 0.9.0.
+
+Nothing outside the network's namespace is shown. A backend server's answer
+leaves private servers and on-demand groups out, as `/cloud list` does.
 
 **`/cloud start <group> <count> for <duration>`** creates a `ScaleBoost`, which
 is the same object [Scaling and boosts](scaling-and-boosts.md) describes. A
