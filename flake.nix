@@ -341,7 +341,12 @@
           # laid out in sections with bars, one-line answers carry ✔ or ✘, and
           # ServerInfo, ProxyInfo and InstanceStatus gain node(), each keeping
           # its previous constructor.
-          imageVersion = "0.10.0";
+          #
+          # 0.11.0 moves it because the entrypoints changed: with
+          # SPAWNERY_SUBSTITUTION_PREFIX set, spawnery-config --substitute fills
+          # the copied plugins' and files' placeholders from the environment
+          # before the JVM starts. The published API is unchanged.
+          imageVersion = "0.11.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
@@ -515,7 +520,12 @@
           # 0.10.0 moves it with the chart and the images: the network picture
           # and the status answer carry the node each server and proxy pod runs
           # on. Nothing rolls.
-          operatorVersion = "0.10.0";
+          #
+          # 0.11.0 moves it with the chart and the images: extraPlugins and
+          # extraFiles take an image as their source, mounted as an image
+          # volume, and spec.substitution passes its prefix to the entrypoint.
+          # Nothing rolls.
+          operatorVersion = "0.11.0";
 
           spawnery-slp = pkgs.buildGoModule {
             pname = "spawnery-slp";
