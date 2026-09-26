@@ -282,6 +282,7 @@ message InstanceStatus {
   bool held = 12;
   bool draining = 13;
   ResourceUsage usage = 14;
+  string node = 15; // as ServerState.node
 }
 
 message StatusResult {
@@ -872,6 +873,9 @@ message ServerState {
   int32 number = 10;
   // Whether an admin took this server's retirement back: spec.hold.
   bool held = 11;
+  // The Kubernetes node this server's pod runs on; empty while it is not
+  // scheduled. A name only: nothing about the node itself is ever sent.
+  string node = 12;
 }
 
 // ProxyState is one proxy pod as the operator last saw it.
@@ -883,6 +887,7 @@ message ProxyState {
   // Taking no new connections.
   bool draining = 4;
   int32 players = 5;
+  string node = 6;  // as ServerState.node
 }
 
 message ProxyMessage {

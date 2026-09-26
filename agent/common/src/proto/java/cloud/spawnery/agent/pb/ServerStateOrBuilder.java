@@ -221,4 +221,26 @@ java.lang.String defaultValue);
    * @return The held.
    */
   boolean getHeld();
+
+  /**
+   * <pre>
+   * The Kubernetes node this server's pod runs on; empty while it is not
+   * scheduled. A name only: nothing about the node itself is ever sent.
+   * </pre>
+   *
+   * <code>string node = 12;</code>
+   * @return The node.
+   */
+  java.lang.String getNode();
+  /**
+   * <pre>
+   * The Kubernetes node this server's pod runs on; empty while it is not
+   * scheduled. A name only: nothing about the node itself is ever sent.
+   * </pre>
+   *
+   * <code>string node = 12;</code>
+   * @return The bytes for node.
+   */
+  com.google.protobuf.ByteString
+      getNodeBytes();
 }

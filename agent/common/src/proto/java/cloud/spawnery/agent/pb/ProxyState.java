@@ -34,6 +34,7 @@ private static final long serialVersionUID = 0L;
   private ProxyState() {
     name_ = "";
     group_ = "";
+    node_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -177,6 +178,53 @@ private static final long serialVersionUID = 0L;
     return players_;
   }
 
+  public static final int NODE_FIELD_NUMBER = 6;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object node_ = "";
+  /**
+   * <pre>
+   * as ServerState.node
+   * </pre>
+   *
+   * <code>string node = 6;</code>
+   * @return The node.
+   */
+  @java.lang.Override
+  public java.lang.String getNode() {
+    java.lang.Object ref = node_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      node_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * as ServerState.node
+   * </pre>
+   *
+   * <code>string node = 6;</code>
+   * @return The bytes for node.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNodeBytes() {
+    java.lang.Object ref = node_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      node_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -206,6 +254,9 @@ private static final long serialVersionUID = 0L;
     if (players_ != 0) {
       output.writeInt32(5, players_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 6, node_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -227,6 +278,9 @@ private static final long serialVersionUID = 0L;
     if (players_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(5, players_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(6, node_);
     }
     return size;
   }
@@ -262,6 +316,8 @@ private static final long serialVersionUID = 0L;
         != other.getDraining()) return false;
     if (getPlayers()
         != other.getPlayers()) return false;
+    if (!getNode()
+        .equals(other.getNode())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -285,6 +341,8 @@ private static final long serialVersionUID = 0L;
         getDraining());
     hash = (37 * hash) + PLAYERS_FIELD_NUMBER;
     hash = (53 * hash) + getPlayers();
+    hash = (37 * hash) + NODE_FIELD_NUMBER;
+    hash = (53 * hash) + getNode().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -425,6 +483,7 @@ private static final long serialVersionUID = 0L;
       ready_ = false;
       draining_ = false;
       players_ = 0;
+      node_ = "";
       return this;
     }
 
@@ -473,6 +532,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000010) != 0)) {
         result.players_ = players_;
       }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.node_ = node_;
+      }
     }
 
     @java.lang.Override
@@ -505,6 +567,11 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getPlayers() != 0) {
         setPlayers(other.getPlayers());
+      }
+      if (!other.getNode().isEmpty()) {
+        node_ = other.node_;
+        bitField0_ |= 0x00000020;
+        onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -557,6 +624,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000010;
               break;
             } // case 40
+            case 50: {
+              node_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 50
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -842,6 +914,98 @@ private static final long serialVersionUID = 0L;
     public Builder clearPlayers() {
       bitField0_ = (bitField0_ & ~0x00000010);
       players_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object node_ = "";
+    /**
+     * <pre>
+     * as ServerState.node
+     * </pre>
+     *
+     * <code>string node = 6;</code>
+     * @return The node.
+     */
+    public java.lang.String getNode() {
+      java.lang.Object ref = node_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        node_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * as ServerState.node
+     * </pre>
+     *
+     * <code>string node = 6;</code>
+     * @return The bytes for node.
+     */
+    public com.google.protobuf.ByteString
+        getNodeBytes() {
+      java.lang.Object ref = node_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        node_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * as ServerState.node
+     * </pre>
+     *
+     * <code>string node = 6;</code>
+     * @param value The node to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNode(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      node_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * as ServerState.node
+     * </pre>
+     *
+     * <code>string node = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNode() {
+      node_ = getDefaultInstance().getNode();
+      bitField0_ = (bitField0_ & ~0x00000020);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * as ServerState.node
+     * </pre>
+     *
+     * <code>string node = 6;</code>
+     * @param value The bytes for node to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      node_ = value;
+      bitField0_ |= 0x00000020;
       onChanged();
       return this;
     }

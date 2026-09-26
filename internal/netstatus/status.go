@@ -215,6 +215,7 @@ func (v *view) server(agents *agent.Registry, srv *spawneryv1alpha1.Server) *age
 	started := srv.CreationTimestamp.Time
 	if p, ok := v.pods[srv.Name]; ok {
 		v.add(in.Usage, p)
+		in.Node = p.Spec.NodeName
 		started = p.CreationTimestamp.Time
 	}
 	in.AgeSeconds = int64(v.now.Sub(started) / time.Second)
@@ -231,6 +232,7 @@ func (v *view) proxy(agents *agent.Registry, p *corev1.Pod) *agentpb.InstanceSta
 		Draining:   p.Annotations[podspec.AnnotationProxyDrainingSince] != "",
 		AgeSeconds: int64(v.now.Sub(p.CreationTimestamp.Time) / time.Second),
 		Usage:      &agentpb.ResourceUsage{},
+		Node:       p.Spec.NodeName,
 	}
 	v.add(in.Usage, p)
 	return in

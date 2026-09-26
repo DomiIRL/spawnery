@@ -568,3 +568,40 @@ func TestBuildListsEveryProxy(t *testing.T) {
 		t.Errorf("gateway-b = %+v, want it draining", b)
 	}
 }
+
+func TestBuildNamesTheNodeAServerAndAProxyRunOn(t *testing.T) {
+	srv := readyServer("ns", "lobby-a", "lobby", 0, 100)
+	srv.Status.PodName = "lobby-a"
+	unplaced := readyServer("ns", "lobby-b", "lobby", 0, 100)
+	unplaced.Status.PodName = "lobby-b"
+	serverPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "lobby-a", Namespace: "ns",
+			Labels: map[string]string{podspec.LabelRole: podspec.RoleServer, podspec.LabelGroup: "lobby"}},
+		Spec: corev1.PodSpec{NodeName: "node-2"},
+	}
+	pendingPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "lobby-b", Namespace: "ns",
+			Labels: map[string]string{podspec.LabelRole: podspec.RoleServer, podspec.LabelGroup: "lobby"}},
+	}
+	proxyPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "gateway-a", Namespace: "ns",
+			Labels: map[string]string{podspec.LabelRole: podspec.RoleProxy, podspec.LabelGroup: "gateway"}},
+		Spec: corev1.PodSpec{NodeName: "node-3"},
+	}
+	src, _ := source(t, ephemeralGroup("ns", "lobby"), srv, unplaced, serverPod, pendingPod, proxyPod)
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	nodes := map[string]string{}
+	for _, s := range got.GetServers() {
+		nodes[s.GetName()] = s.GetNode()
+	}
+	if nodes["lobby-a"] != "node-2" || nodes["lobby-b"] != "" {
+		t.Errorf("server nodes = %v, want lobby-a on node-2 and lobby-b unscheduled", nodes)
+	}
+	if p := got.GetProxies(); len(p) != 1 || p[0].GetNode() != "node-3" {
+		t.Errorf("proxies = %v, want gateway-a on node-3", p)
+	}
+}
