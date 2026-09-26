@@ -30,6 +30,10 @@ internal object Style {
     /** Something somebody should look at. */
     fun bad(value: String): String = "<red>${escape(value)}</red>"
 
+    fun title(value: String): String = "<white><bold>${escape(value)}</bold></white>"
+
+    fun sectionTitle(value: String): String = "<gray><bold>${escape(value)}</bold></gray>"
+
     fun warn(value: String): String = "<yellow>${escape(value)}</yellow>"
 
     /** Context rather than news: the sentences that explain a result. */
