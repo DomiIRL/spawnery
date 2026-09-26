@@ -42,6 +42,10 @@ object Layout {
         else -> "red"
     }
 
+    fun count(n: Int, one: String, many: String): String = "$n ${if (n == 1) one else many}"
+
+    fun kindName(kind: cloud.spawnery.agent.api.Group.Kind): String = kind.name.lowercase().replace('_', '-')
+
     fun ok(text: String): String = "<green>✔</green> $text"
 
     fun fail(text: String): String = "<red>✘</red> $text"

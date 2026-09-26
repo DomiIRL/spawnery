@@ -846,6 +846,73 @@ class CloudCommandTest {
         run("cloud events off")
         assertTrue(sent.single().startsWith("<green>✔</green> "), sent.single())
     }
+
+    @Test
+    fun `status of a server says why usage is missing`() {
+        run("cloud status lobby-r", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = false
+            total = usage(0, 500, 0, 2L shl 30, 1, 0).build()
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setNode("node-2").setUsage(usage(0, 500, 0, 2L shl 30, 1, 0)),
+            )
+        }
+        assertTrue(sent.any { it.contains("metrics API not answering") }, "$sent")
+    }
+
+    @Test
+    fun `status of a group shows each member's MSPT`() {
+        run("cloud status lobby", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("lobby").setKind(GroupState.Kind.EPHEMERAL)
+                    .setPhase("Ready").setReplicas(1).setReadyReplicas(1).setPlayers(3).setLowestTps(19.5)
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setPlayers(3).setSlots(20).setTps(19.5).setMspt(42.0).setNode("node-2")
+                    .setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        val member = plain(sent.single { it.contains("lobby-r") })
+        assertTrue(member.contains("MSPT 42.0"), member)
+    }
+
+    @Test
+    fun `one of a thing is counted in the singular`() {
+        run("cloud status", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            players = 1; servers = 1; proxies = 1
+            total = usage(100, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addGroups(
+                cloud.spawnery.agent.pb.GroupStatus.newBuilder().setName("arena").setKind(GroupState.Kind.EPHEMERAL)
+                    .setPhase("Ready").setReplicas(1).setReadyReplicas(1).setPlayers(1)
+                    .setUsage(usage(100, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        val heading = plain(sent[0])
+        assertTrue(heading.contains("1 player ·") && heading.contains("1 server ·") && heading.contains("1 proxy"), heading)
+        assertTrue(plain(sent.single { it.contains("arena") }).contains("1 player"), "$sent")
+        assertFalse(sent.any { plain(it).contains("1 players") }, "$sent")
+    }
+
+    @Test
+    fun `an on-demand group reads as words`() {
+        run(
+            "cloud list",
+            api(
+                NetworkState.newBuilder()
+                    .addGroups(GroupState.newBuilder().setName("rooms").setKind(GroupState.Kind.ON_DEMAND))
+                    .build(),
+            ),
+        )
+        assertTrue(sent.any { plain(it).contains("(on-demand)") } && sent.none { it.contains("on_demand") }, "$sent")
+    }
 }
 
 class CloudCompletionTest {

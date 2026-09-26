@@ -16,7 +16,11 @@ internal fun statusLines(status: NetworkStatus, target: String): List<String> {
         target.isEmpty() -> {
             lines += Layout.heading(
                 "Network status",
-                Style.quiet("${status.players()} players · ${status.servers()} servers · ${status.proxies()} proxies"),
+                Style.quiet(
+                    Layout.count(status.players(), "player", "players") + " · " +
+                        Layout.count(status.servers(), "server", "servers") + " · " +
+                        Layout.count(status.proxies(), "proxy", "proxies"),
+                ),
             )
             lines += Layout.section("Resources")
             lines += Layout.entry(cpuLine(status.total(), metrics))
@@ -111,7 +115,7 @@ private fun groupLine(g: GroupStatus, withName: Boolean = true): String {
         if (withName) Style.name(g.name()) else "",
         Style.number(g.phase()),
         Style.number("${g.readyReplicas()}/${g.replicas()}"),
-        Style.number(g.players()) + Style.quiet(" players"),
+        Style.number(g.players()) + Style.quiet(if (g.players() == 1) " player" else " players"),
         if (proxy) "" else tpsText(g.lowestTps()),
         cpuRam(g.usage()),
     )
@@ -138,6 +142,7 @@ private fun memberLine(i: InstanceStatus): String = Layout.joined(
     if (i.proxy()) (if (i.ready()) Style.good("ready") else Style.bad("not ready")) else Style.number(i.phase()),
     Style.number("${i.players()}/${i.slots()}"),
     if (i.proxy()) "" else tpsText(i.tps()),
+    if (i.proxy()) "" else Style.quiet("MSPT ") + Style.number(if (i.mspt().isEmpty) "–" else one(i.mspt().asDouble)),
     cpuRam(i.usage()),
     nodeText(i.node()),
     Style.quiet("up ") + Style.number(age(i.age())),
@@ -177,6 +182,7 @@ private fun instanceLines(i: InstanceStatus, metrics: Boolean): List<String> {
         lines += Layout.field("CPU", cpuLine(i.usage(), metrics, labelled = false))
         lines += Layout.field("RAM", ramLine(i.usage(), metrics, labelled = false))
     }
+    if (!metrics) lines += Layout.field("Usage", Style.bad("unavailable (metrics API not answering)"))
     markers(i).takeIf { it.isNotEmpty() }?.let { lines += Layout.field("Marked", it) }
     return lines
 }

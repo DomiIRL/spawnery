@@ -7,13 +7,12 @@ import cloud.spawnery.agent.api.ServerInfo
 internal fun nodeText(node: String): String =
     if (node.isEmpty()) Style.quiet("not scheduled") else Style.name(node)
 
-private fun count(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
 
 internal fun listLines(groups: List<Group>, servers: List<ServerInfo>, proxies: List<ProxyInfo>): List<String> {
     val lines = mutableListOf(
         Layout.heading(
             "Network",
-            Style.quiet("${count(groups.size, "group", "groups")} · ${count(servers.size, "server", "servers")} · ${count(proxies.size, "proxy", "proxies")}"),
+            Style.quiet("${Layout.count(groups.size, "group", "groups")} · ${Layout.count(servers.size, "server", "servers")} · ${Layout.count(proxies.size, "proxy", "proxies")}"),
         ),
     )
     if (groups.isEmpty()) {
@@ -26,7 +25,7 @@ internal fun listLines(groups: List<Group>, servers: List<ServerInfo>, proxies: 
         for (g in serverGroups) {
             lines += Layout.entry(
                 Layout.joined(
-                    Style.name(g.name()) + Style.quiet(" (${g.kind().name.lowercase()})"),
+                    Style.name(g.name()) + Style.quiet(" (${Layout.kindName(g.kind())})"),
                     Style.number("${g.readyReplicas()}/${g.replicas()}") + Style.quiet(" ready"),
                     Style.number("${g.onlinePlayers()}/${g.onlinePlayers() + g.freeSlots()}") + Style.quiet(" players"),
                     Style.number(g.freeSlots()) + Style.quiet(" free"),
@@ -41,7 +40,7 @@ internal fun listLines(groups: List<Group>, servers: List<ServerInfo>, proxies: 
                 Layout.joined(
                     Style.name(g.name()),
                     Style.number("${g.readyReplicas()}/${g.replicas()}") + Style.quiet(" ready"),
-                    Style.number(g.onlinePlayers()) + Style.quiet(" players"),
+                    Style.number(g.onlinePlayers()) + Style.quiet(if (g.onlinePlayers() == 1) " player" else " players"),
                 ),
             )
             for (p in proxies.filter { it.group() == g.name() }.sortedBy { it.name() }) {
@@ -57,7 +56,7 @@ private fun proxyLine(p: ProxyInfo): String =
         Style.name(p.name()),
         if (p.ready()) Style.good("ready") else Style.bad("not ready"),
         if (p.draining()) Style.bad("draining") else "",
-        Style.number(p.players()) + Style.quiet(" players"),
+        Style.number(p.players()) + Style.quiet(if (p.players() == 1) " player" else " players"),
     )
 
 internal fun serverInfoLines(s: ServerInfo): List<String> {
@@ -101,7 +100,7 @@ internal fun groupInfoLines(g: Group, servers: List<ServerInfo>, proxies: List<P
         Layout.heading(
             g.name(),
             Layout.joined(
-                Style.quiet("${g.kind().name.lowercase()} group"),
+                Style.quiet("${Layout.kindName(g.kind())} group"),
                 Style.number("${g.readyReplicas()}/${g.replicas()}") + Style.quiet(" ready"),
             ),
         ),
