@@ -76,6 +76,18 @@ class ServerRoleTest {
     }
 
     @Test
+    fun `the report carries the sampled tick rate`() {
+        val state = ServerState()
+        val role = ServerRole(state, NetworkMirror(), dormantConnector(), aFeed(), CloudEvents())
+        assertEquals(0.0, role.playerCount().playerCount.tps, "a server that has not sampled reports none")
+
+        state.sampleTicks(tps = 19.7, mspt = 23.5)
+        val report = role.playerCount().playerCount
+        assertEquals(19.7, report.tps)
+        assertEquals(23.5, report.mspt)
+    }
+
+    @Test
     fun `a report interval message yields a Report directive`() {
         val role = ServerRole(ServerState(), NetworkMirror(), dormantConnector(), aFeed(), CloudEvents())
 
