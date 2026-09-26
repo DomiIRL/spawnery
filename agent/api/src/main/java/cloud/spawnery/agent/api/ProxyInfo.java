@@ -27,9 +27,15 @@ import java.util.Objects;
  * @param draining whether it takes no new connections and stops once empty
  * @param players the players its agent reports
  */
-public record ProxyInfo(String name, String group, boolean ready, boolean draining, int players) {
+public record ProxyInfo(String name, String group, boolean ready, boolean draining, int players, String node) {
     public ProxyInfo {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(group, "group");
+        node = node == null ? "" : node;
+    }
+
+    /** The record as it was before {@code node}, which it reads as not scheduled. */
+    public ProxyInfo(String name, String group, boolean ready, boolean draining, int players) {
+        this(name, group, ready, draining, players, "");
     }
 }

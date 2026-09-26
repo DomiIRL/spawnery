@@ -87,10 +87,11 @@ class NetworkMirror {
                     it.incarnation,
                     it.number,
                     it.held,
+                    it.node,
                 )
             },
             proxies = state.proxiesList.map {
-                ProxyInfo(it.name, it.group, it.ready, it.draining, it.players)
+                ProxyInfo(it.name, it.group, it.ready, it.draining, it.players, it.node)
             },
             // An entry whose UUID will not parse is dropped and the rest of the
             // state applies. One malformed player must not cost this agent its
