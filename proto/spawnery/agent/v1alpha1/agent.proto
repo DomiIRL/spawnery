@@ -87,6 +87,11 @@ message Hello {
 message PlayerCount {
   int32 players = 1;
   int32 slots = 2;
+  // Server agents only: the server's one-minute TPS average and its mean tick
+  // duration in milliseconds. 0 means not reported -- what a proxy and an
+  // agent older than these fields send.
+  double tps = 3;
+  double mspt = 4;
 }
 
 // ---- requests (milestone 7b-5) ----
@@ -116,6 +121,7 @@ message CloudRequest {
     StartServerRequest start_server = 8;
     StopServerRequest stop_server = 9;
     UnretireRequest unretire = 10;
+    StatusRequest status = 11;
   }
 }
 
@@ -138,6 +144,7 @@ message CloudResponse {
     StartServerResult start_server = 9;
     StopServerResult stop_server = 10;
     UnretireResult unretire = 11;
+    StatusResult status = 12;
   }
 }
 
@@ -220,6 +227,74 @@ message UnretireRequest {
 // UnretireResult says the server takes joins again and is held.
 message UnretireResult {
   string server = 1;
+}
+
+// StatusRequest asks how the network is doing: its CPU and memory against
+// what it asked for, and each server's tick rate. Namespace-bound like every
+// request; nothing cluster-scoped is ever in the answer.
+message StatusRequest {
+  // Empty for the whole network, else a server group, a proxy group, a
+  // server or a proxy, looked up in that order.
+  string target = 1;
+}
+
+// ResourceUsage is a set of pods: what they use, and what they asked for.
+message ResourceUsage {
+  int64 cpu_used_millicores = 1;
+  int64 cpu_requested_millicores = 2;
+  int64 cpu_limit_millicores = 3;
+  // Some container has no CPU limit, so cpu_limit_millicores is a floor.
+  bool cpu_unlimited = 4;
+  int64 memory_used_bytes = 5;
+  int64 memory_requested_bytes = 6;
+  int64 memory_limit_bytes = 7;
+  bool memory_unlimited = 8;
+  int32 pods = 9;
+  // Pods with a metrics sample; the used figures cover these only.
+  int32 pods_measured = 10;
+}
+
+message GroupStatus {
+  string name = 1;
+  GroupState.Kind kind = 2;
+  string phase = 3;
+  int32 replicas = 4;
+  int32 ready_replicas = 5;
+  int32 players = 6;
+  // The lowest TPS among the group's servers that reported one; 0 if none did.
+  double lowest_tps = 7;
+  ResourceUsage usage = 8;
+}
+
+message InstanceStatus {
+  string name = 1;
+  string group = 2;
+  bool proxy = 3;
+  // A server's phase; empty for a proxy, whose state is ready and draining.
+  string phase = 4;
+  bool ready = 5;
+  int32 players = 6;
+  int32 slots = 7;
+  double tps = 8;   // 0 = not reported
+  double mspt = 9;  // 0 = not reported
+  int64 age_seconds = 10;
+  bool retiring = 11;
+  bool held = 12;
+  bool draining = 13;
+  ResourceUsage usage = 14;
+}
+
+message StatusResult {
+  // The whole network, the target group, or the target instance.
+  ResourceUsage total = 1;
+  repeated GroupStatus groups = 2;
+  repeated InstanceStatus instances = 3;
+  // Pods of the namespace outside every listed group. Network form only.
+  ResourceUsage other = 4;
+  bool metrics_available = 5;
+  int32 players = 6;
+  int32 servers = 7;
+  int32 proxies = 8;
 }
 
 // BoostRequest asks for extra capacity on a group, for a while.

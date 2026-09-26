@@ -106,7 +106,7 @@ func (x RequestError_Reason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RequestError_Reason.Descriptor instead.
 func (RequestError_Reason) EnumDescriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{26, 0}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{31, 0}
 }
 
 // Which sizing rule the group answers to.
@@ -167,7 +167,7 @@ func (x GroupState_Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GroupState_Kind.Descriptor instead.
 func (GroupState_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{36, 0}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{41, 0}
 }
 
 // ReportInterval is how often the agent should report. The operator dictates
@@ -362,9 +362,14 @@ func (x *Hello) GetReadTimeoutMillis() int32 {
 // One rule in the registry is worth more than a role-dependent one, and a
 // proxy does have a capacity: ProxyGroup.spec.config.playerLimit.
 type PlayerCount struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Players       int32                  `protobuf:"varint,1,opt,name=players,proto3" json:"players,omitempty"`
-	Slots         int32                  `protobuf:"varint,2,opt,name=slots,proto3" json:"slots,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Players int32                  `protobuf:"varint,1,opt,name=players,proto3" json:"players,omitempty"`
+	Slots   int32                  `protobuf:"varint,2,opt,name=slots,proto3" json:"slots,omitempty"`
+	// Server agents only: the server's one-minute TPS average and its mean tick
+	// duration in milliseconds. 0 means not reported -- what a proxy and an
+	// agent older than these fields send.
+	Tps           float64 `protobuf:"fixed64,3,opt,name=tps,proto3" json:"tps,omitempty"`
+	Mspt          float64 `protobuf:"fixed64,4,opt,name=mspt,proto3" json:"mspt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -413,6 +418,20 @@ func (x *PlayerCount) GetSlots() int32 {
 	return 0
 }
 
+func (x *PlayerCount) GetTps() float64 {
+	if x != nil {
+		return x.Tps
+	}
+	return 0
+}
+
+func (x *PlayerCount) GetMspt() float64 {
+	if x != nil {
+		return x.Mspt
+	}
+	return 0
+}
+
 // CloudRequest is an agent asking the operator for something.
 //
 // **The first message on this channel that is a question.** Until 7b-5 an
@@ -440,6 +459,7 @@ type CloudRequest struct {
 	//	*CloudRequest_StartServer
 	//	*CloudRequest_StopServer
 	//	*CloudRequest_Unretire
+	//	*CloudRequest_Status
 	Request       isCloudRequest_Request `protobuf_oneof:"request"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -570,6 +590,15 @@ func (x *CloudRequest) GetUnretire() *UnretireRequest {
 	return nil
 }
 
+func (x *CloudRequest) GetStatus() *StatusRequest {
+	if x != nil {
+		if x, ok := x.Request.(*CloudRequest_Status); ok {
+			return x.Status
+		}
+	}
+	return nil
+}
+
 type isCloudRequest_Request interface {
 	isCloudRequest_Request()
 }
@@ -610,6 +639,10 @@ type CloudRequest_Unretire struct {
 	Unretire *UnretireRequest `protobuf:"bytes,10,opt,name=unretire,proto3,oneof"`
 }
 
+type CloudRequest_Status struct {
+	Status *StatusRequest `protobuf:"bytes,11,opt,name=status,proto3,oneof"`
+}
+
 func (*CloudRequest_Connect) isCloudRequest_Request() {}
 
 func (*CloudRequest_Retire) isCloudRequest_Request() {}
@@ -627,6 +660,8 @@ func (*CloudRequest_StartServer) isCloudRequest_Request() {}
 func (*CloudRequest_StopServer) isCloudRequest_Request() {}
 
 func (*CloudRequest_Unretire) isCloudRequest_Request() {}
+
+func (*CloudRequest_Status) isCloudRequest_Request() {}
 
 // CloudResponse answers exactly one CloudRequest.
 //
@@ -649,6 +684,7 @@ type CloudResponse struct {
 	//	*CloudResponse_StartServer
 	//	*CloudResponse_StopServer
 	//	*CloudResponse_Unretire
+	//	*CloudResponse_Status
 	Result        isCloudResponse_Result `protobuf_oneof:"result"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -788,6 +824,15 @@ func (x *CloudResponse) GetUnretire() *UnretireResult {
 	return nil
 }
 
+func (x *CloudResponse) GetStatus() *StatusResult {
+	if x != nil {
+		if x, ok := x.Result.(*CloudResponse_Status); ok {
+			return x.Status
+		}
+	}
+	return nil
+}
+
 type isCloudResponse_Result interface {
 	isCloudResponse_Result()
 }
@@ -832,6 +877,10 @@ type CloudResponse_Unretire struct {
 	Unretire *UnretireResult `protobuf:"bytes,11,opt,name=unretire,proto3,oneof"`
 }
 
+type CloudResponse_Status struct {
+	Status *StatusResult `protobuf:"bytes,12,opt,name=status,proto3,oneof"`
+}
+
 func (*CloudResponse_Connect) isCloudResponse_Result() {}
 
 func (*CloudResponse_Error) isCloudResponse_Result() {}
@@ -851,6 +900,8 @@ func (*CloudResponse_StartServer) isCloudResponse_Result() {}
 func (*CloudResponse_StopServer) isCloudResponse_Result() {}
 
 func (*CloudResponse_Unretire) isCloudResponse_Result() {}
+
+func (*CloudResponse_Status) isCloudResponse_Result() {}
 
 // ConnectRequest asks that a player be moved.
 //
@@ -1229,6 +1280,526 @@ func (x *UnretireResult) GetServer() string {
 	return ""
 }
 
+// StatusRequest asks how the network is doing: its CPU and memory against
+// what it asked for, and each server's tick rate. Namespace-bound like every
+// request; nothing cluster-scoped is ever in the answer.
+type StatusRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Empty for the whole network, else a server group, a proxy group, a
+	// server or a proxy, looked up in that order.
+	Target        string `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusRequest) Reset() {
+	*x = StatusRequest{}
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusRequest) ProtoMessage() {}
+
+func (x *StatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
+func (*StatusRequest) Descriptor() ([]byte, []int) {
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *StatusRequest) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+// ResourceUsage is a set of pods: what they use, and what they asked for.
+type ResourceUsage struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	CpuUsedMillicores      int64                  `protobuf:"varint,1,opt,name=cpu_used_millicores,json=cpuUsedMillicores,proto3" json:"cpu_used_millicores,omitempty"`
+	CpuRequestedMillicores int64                  `protobuf:"varint,2,opt,name=cpu_requested_millicores,json=cpuRequestedMillicores,proto3" json:"cpu_requested_millicores,omitempty"`
+	CpuLimitMillicores     int64                  `protobuf:"varint,3,opt,name=cpu_limit_millicores,json=cpuLimitMillicores,proto3" json:"cpu_limit_millicores,omitempty"`
+	// Some container has no CPU limit, so cpu_limit_millicores is a floor.
+	CpuUnlimited         bool  `protobuf:"varint,4,opt,name=cpu_unlimited,json=cpuUnlimited,proto3" json:"cpu_unlimited,omitempty"`
+	MemoryUsedBytes      int64 `protobuf:"varint,5,opt,name=memory_used_bytes,json=memoryUsedBytes,proto3" json:"memory_used_bytes,omitempty"`
+	MemoryRequestedBytes int64 `protobuf:"varint,6,opt,name=memory_requested_bytes,json=memoryRequestedBytes,proto3" json:"memory_requested_bytes,omitempty"`
+	MemoryLimitBytes     int64 `protobuf:"varint,7,opt,name=memory_limit_bytes,json=memoryLimitBytes,proto3" json:"memory_limit_bytes,omitempty"`
+	MemoryUnlimited      bool  `protobuf:"varint,8,opt,name=memory_unlimited,json=memoryUnlimited,proto3" json:"memory_unlimited,omitempty"`
+	Pods                 int32 `protobuf:"varint,9,opt,name=pods,proto3" json:"pods,omitempty"`
+	// Pods with a metrics sample; the used figures cover these only.
+	PodsMeasured  int32 `protobuf:"varint,10,opt,name=pods_measured,json=podsMeasured,proto3" json:"pods_measured,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResourceUsage) Reset() {
+	*x = ResourceUsage{}
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourceUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourceUsage) ProtoMessage() {}
+
+func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourceUsage.ProtoReflect.Descriptor instead.
+func (*ResourceUsage) Descriptor() ([]byte, []int) {
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ResourceUsage) GetCpuUsedMillicores() int64 {
+	if x != nil {
+		return x.CpuUsedMillicores
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetCpuRequestedMillicores() int64 {
+	if x != nil {
+		return x.CpuRequestedMillicores
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetCpuLimitMillicores() int64 {
+	if x != nil {
+		return x.CpuLimitMillicores
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetCpuUnlimited() bool {
+	if x != nil {
+		return x.CpuUnlimited
+	}
+	return false
+}
+
+func (x *ResourceUsage) GetMemoryUsedBytes() int64 {
+	if x != nil {
+		return x.MemoryUsedBytes
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetMemoryRequestedBytes() int64 {
+	if x != nil {
+		return x.MemoryRequestedBytes
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetMemoryLimitBytes() int64 {
+	if x != nil {
+		return x.MemoryLimitBytes
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetMemoryUnlimited() bool {
+	if x != nil {
+		return x.MemoryUnlimited
+	}
+	return false
+}
+
+func (x *ResourceUsage) GetPods() int32 {
+	if x != nil {
+		return x.Pods
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetPodsMeasured() int32 {
+	if x != nil {
+		return x.PodsMeasured
+	}
+	return 0
+}
+
+type GroupStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Kind          GroupState_Kind        `protobuf:"varint,2,opt,name=kind,proto3,enum=spawnery.agent.v1alpha1.GroupState_Kind" json:"kind,omitempty"`
+	Phase         string                 `protobuf:"bytes,3,opt,name=phase,proto3" json:"phase,omitempty"`
+	Replicas      int32                  `protobuf:"varint,4,opt,name=replicas,proto3" json:"replicas,omitempty"`
+	ReadyReplicas int32                  `protobuf:"varint,5,opt,name=ready_replicas,json=readyReplicas,proto3" json:"ready_replicas,omitempty"`
+	Players       int32                  `protobuf:"varint,6,opt,name=players,proto3" json:"players,omitempty"`
+	// The lowest TPS among the group's servers that reported one; 0 if none did.
+	LowestTps     float64        `protobuf:"fixed64,7,opt,name=lowest_tps,json=lowestTps,proto3" json:"lowest_tps,omitempty"`
+	Usage         *ResourceUsage `protobuf:"bytes,8,opt,name=usage,proto3" json:"usage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GroupStatus) Reset() {
+	*x = GroupStatus{}
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GroupStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupStatus) ProtoMessage() {}
+
+func (x *GroupStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupStatus.ProtoReflect.Descriptor instead.
+func (*GroupStatus) Descriptor() ([]byte, []int) {
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GroupStatus) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *GroupStatus) GetKind() GroupState_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return GroupState_KIND_UNSPECIFIED
+}
+
+func (x *GroupStatus) GetPhase() string {
+	if x != nil {
+		return x.Phase
+	}
+	return ""
+}
+
+func (x *GroupStatus) GetReplicas() int32 {
+	if x != nil {
+		return x.Replicas
+	}
+	return 0
+}
+
+func (x *GroupStatus) GetReadyReplicas() int32 {
+	if x != nil {
+		return x.ReadyReplicas
+	}
+	return 0
+}
+
+func (x *GroupStatus) GetPlayers() int32 {
+	if x != nil {
+		return x.Players
+	}
+	return 0
+}
+
+func (x *GroupStatus) GetLowestTps() float64 {
+	if x != nil {
+		return x.LowestTps
+	}
+	return 0
+}
+
+func (x *GroupStatus) GetUsage() *ResourceUsage {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+type InstanceStatus struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Group string                 `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`
+	Proxy bool                   `protobuf:"varint,3,opt,name=proxy,proto3" json:"proxy,omitempty"`
+	// A server's phase; empty for a proxy, whose state is ready and draining.
+	Phase         string         `protobuf:"bytes,4,opt,name=phase,proto3" json:"phase,omitempty"`
+	Ready         bool           `protobuf:"varint,5,opt,name=ready,proto3" json:"ready,omitempty"`
+	Players       int32          `protobuf:"varint,6,opt,name=players,proto3" json:"players,omitempty"`
+	Slots         int32          `protobuf:"varint,7,opt,name=slots,proto3" json:"slots,omitempty"`
+	Tps           float64        `protobuf:"fixed64,8,opt,name=tps,proto3" json:"tps,omitempty"`   // 0 = not reported
+	Mspt          float64        `protobuf:"fixed64,9,opt,name=mspt,proto3" json:"mspt,omitempty"` // 0 = not reported
+	AgeSeconds    int64          `protobuf:"varint,10,opt,name=age_seconds,json=ageSeconds,proto3" json:"age_seconds,omitempty"`
+	Retiring      bool           `protobuf:"varint,11,opt,name=retiring,proto3" json:"retiring,omitempty"`
+	Held          bool           `protobuf:"varint,12,opt,name=held,proto3" json:"held,omitempty"`
+	Draining      bool           `protobuf:"varint,13,opt,name=draining,proto3" json:"draining,omitempty"`
+	Usage         *ResourceUsage `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstanceStatus) Reset() {
+	*x = InstanceStatus{}
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstanceStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstanceStatus) ProtoMessage() {}
+
+func (x *InstanceStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstanceStatus.ProtoReflect.Descriptor instead.
+func (*InstanceStatus) Descriptor() ([]byte, []int) {
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *InstanceStatus) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *InstanceStatus) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *InstanceStatus) GetProxy() bool {
+	if x != nil {
+		return x.Proxy
+	}
+	return false
+}
+
+func (x *InstanceStatus) GetPhase() string {
+	if x != nil {
+		return x.Phase
+	}
+	return ""
+}
+
+func (x *InstanceStatus) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+func (x *InstanceStatus) GetPlayers() int32 {
+	if x != nil {
+		return x.Players
+	}
+	return 0
+}
+
+func (x *InstanceStatus) GetSlots() int32 {
+	if x != nil {
+		return x.Slots
+	}
+	return 0
+}
+
+func (x *InstanceStatus) GetTps() float64 {
+	if x != nil {
+		return x.Tps
+	}
+	return 0
+}
+
+func (x *InstanceStatus) GetMspt() float64 {
+	if x != nil {
+		return x.Mspt
+	}
+	return 0
+}
+
+func (x *InstanceStatus) GetAgeSeconds() int64 {
+	if x != nil {
+		return x.AgeSeconds
+	}
+	return 0
+}
+
+func (x *InstanceStatus) GetRetiring() bool {
+	if x != nil {
+		return x.Retiring
+	}
+	return false
+}
+
+func (x *InstanceStatus) GetHeld() bool {
+	if x != nil {
+		return x.Held
+	}
+	return false
+}
+
+func (x *InstanceStatus) GetDraining() bool {
+	if x != nil {
+		return x.Draining
+	}
+	return false
+}
+
+func (x *InstanceStatus) GetUsage() *ResourceUsage {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+type StatusResult struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The whole network, the target group, or the target instance.
+	Total     *ResourceUsage    `protobuf:"bytes,1,opt,name=total,proto3" json:"total,omitempty"`
+	Groups    []*GroupStatus    `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
+	Instances []*InstanceStatus `protobuf:"bytes,3,rep,name=instances,proto3" json:"instances,omitempty"`
+	// Pods of the namespace outside every listed group. Network form only.
+	Other            *ResourceUsage `protobuf:"bytes,4,opt,name=other,proto3" json:"other,omitempty"`
+	MetricsAvailable bool           `protobuf:"varint,5,opt,name=metrics_available,json=metricsAvailable,proto3" json:"metrics_available,omitempty"`
+	Players          int32          `protobuf:"varint,6,opt,name=players,proto3" json:"players,omitempty"`
+	Servers          int32          `protobuf:"varint,7,opt,name=servers,proto3" json:"servers,omitempty"`
+	Proxies          int32          `protobuf:"varint,8,opt,name=proxies,proto3" json:"proxies,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *StatusResult) Reset() {
+	*x = StatusResult{}
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusResult) ProtoMessage() {}
+
+func (x *StatusResult) ProtoReflect() protoreflect.Message {
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusResult.ProtoReflect.Descriptor instead.
+func (*StatusResult) Descriptor() ([]byte, []int) {
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *StatusResult) GetTotal() *ResourceUsage {
+	if x != nil {
+		return x.Total
+	}
+	return nil
+}
+
+func (x *StatusResult) GetGroups() []*GroupStatus {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+func (x *StatusResult) GetInstances() []*InstanceStatus {
+	if x != nil {
+		return x.Instances
+	}
+	return nil
+}
+
+func (x *StatusResult) GetOther() *ResourceUsage {
+	if x != nil {
+		return x.Other
+	}
+	return nil
+}
+
+func (x *StatusResult) GetMetricsAvailable() bool {
+	if x != nil {
+		return x.MetricsAvailable
+	}
+	return false
+}
+
+func (x *StatusResult) GetPlayers() int32 {
+	if x != nil {
+		return x.Players
+	}
+	return 0
+}
+
+func (x *StatusResult) GetServers() int32 {
+	if x != nil {
+		return x.Servers
+	}
+	return 0
+}
+
+func (x *StatusResult) GetProxies() int32 {
+	if x != nil {
+		return x.Proxies
+	}
+	return 0
+}
+
 // BoostRequest asks for extra capacity on a group, for a while.
 //
 // It carries no namespace, for the reason RetireRequest carries none.
@@ -1252,7 +1823,7 @@ type BoostRequest struct {
 
 func (x *BoostRequest) Reset() {
 	*x = BoostRequest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[12]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1264,7 +1835,7 @@ func (x *BoostRequest) String() string {
 func (*BoostRequest) ProtoMessage() {}
 
 func (x *BoostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[12]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1277,7 +1848,7 @@ func (x *BoostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BoostRequest.ProtoReflect.Descriptor instead.
 func (*BoostRequest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{12}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *BoostRequest) GetGroup() string {
@@ -1320,7 +1891,7 @@ type BoostResult struct {
 
 func (x *BoostResult) Reset() {
 	*x = BoostResult{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[13]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1332,7 +1903,7 @@ func (x *BoostResult) String() string {
 func (*BoostResult) ProtoMessage() {}
 
 func (x *BoostResult) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[13]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1345,7 +1916,7 @@ func (x *BoostResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BoostResult.ProtoReflect.Descriptor instead.
 func (*BoostResult) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{13}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *BoostResult) GetReplicas() int32 {
@@ -1376,7 +1947,7 @@ type StopBoostRequest struct {
 
 func (x *StopBoostRequest) Reset() {
 	*x = StopBoostRequest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[14]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1388,7 +1959,7 @@ func (x *StopBoostRequest) String() string {
 func (*StopBoostRequest) ProtoMessage() {}
 
 func (x *StopBoostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[14]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1401,7 +1972,7 @@ func (x *StopBoostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopBoostRequest.ProtoReflect.Descriptor instead.
 func (*StopBoostRequest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{14}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *StopBoostRequest) GetGroup() string {
@@ -1425,7 +1996,7 @@ type StopBoostResult struct {
 
 func (x *StopBoostResult) Reset() {
 	*x = StopBoostResult{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[15]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1437,7 +2008,7 @@ func (x *StopBoostResult) String() string {
 func (*StopBoostResult) ProtoMessage() {}
 
 func (x *StopBoostResult) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[15]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1450,7 +2021,7 @@ func (x *StopBoostResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopBoostResult.ProtoReflect.Descriptor instead.
 func (*StopBoostResult) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{15}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *StopBoostResult) GetRemoved() int32 {
@@ -1508,7 +2079,7 @@ type AcceptJoinsRequest struct {
 
 func (x *AcceptJoinsRequest) Reset() {
 	*x = AcceptJoinsRequest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[16]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1520,7 +2091,7 @@ func (x *AcceptJoinsRequest) String() string {
 func (*AcceptJoinsRequest) ProtoMessage() {}
 
 func (x *AcceptJoinsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[16]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1533,7 +2104,7 @@ func (x *AcceptJoinsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptJoinsRequest.ProtoReflect.Descriptor instead.
 func (*AcceptJoinsRequest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{16}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AcceptJoinsRequest) GetAccept() bool {
@@ -1564,7 +2135,7 @@ type AcceptJoinsResult struct {
 
 func (x *AcceptJoinsResult) Reset() {
 	*x = AcceptJoinsResult{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[17]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1576,7 +2147,7 @@ func (x *AcceptJoinsResult) String() string {
 func (*AcceptJoinsResult) ProtoMessage() {}
 
 func (x *AcceptJoinsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[17]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1589,7 +2160,7 @@ func (x *AcceptJoinsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptJoinsResult.ProtoReflect.Descriptor instead.
 func (*AcceptJoinsResult) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{17}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{22}
 }
 
 // AnnounceRequest is a server describing itself.
@@ -1635,7 +2206,7 @@ type AnnounceRequest struct {
 
 func (x *AnnounceRequest) Reset() {
 	*x = AnnounceRequest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[18]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1647,7 +2218,7 @@ func (x *AnnounceRequest) String() string {
 func (*AnnounceRequest) ProtoMessage() {}
 
 func (x *AnnounceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[18]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1660,7 +2231,7 @@ func (x *AnnounceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnounceRequest.ProtoReflect.Descriptor instead.
 func (*AnnounceRequest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{18}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *AnnounceRequest) GetState() string {
@@ -1691,7 +2262,7 @@ type AnnounceResult struct {
 
 func (x *AnnounceResult) Reset() {
 	*x = AnnounceResult{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[19]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1703,7 +2274,7 @@ func (x *AnnounceResult) String() string {
 func (*AnnounceResult) ProtoMessage() {}
 
 func (x *AnnounceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[19]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1716,7 +2287,7 @@ func (x *AnnounceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnounceResult.ProtoReflect.Descriptor instead.
 func (*AnnounceResult) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{19}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{24}
 }
 
 // StartServerRequest asks for the member of an OnDemand group that carries
@@ -1747,7 +2318,7 @@ type StartServerRequest struct {
 
 func (x *StartServerRequest) Reset() {
 	*x = StartServerRequest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[20]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1759,7 +2330,7 @@ func (x *StartServerRequest) String() string {
 func (*StartServerRequest) ProtoMessage() {}
 
 func (x *StartServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[20]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1772,7 +2343,7 @@ func (x *StartServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartServerRequest.ProtoReflect.Descriptor instead.
 func (*StartServerRequest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{20}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *StartServerRequest) GetGroup() string {
@@ -1822,7 +2393,7 @@ type StartServerResult struct {
 
 func (x *StartServerResult) Reset() {
 	*x = StartServerResult{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[21]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1834,7 +2405,7 @@ func (x *StartServerResult) String() string {
 func (*StartServerResult) ProtoMessage() {}
 
 func (x *StartServerResult) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[21]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1847,7 +2418,7 @@ func (x *StartServerResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartServerResult.ProtoReflect.Descriptor instead.
 func (*StartServerResult) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{21}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *StartServerResult) GetServer() string {
@@ -1887,7 +2458,7 @@ type StopServerRequest struct {
 
 func (x *StopServerRequest) Reset() {
 	*x = StopServerRequest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[22]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1899,7 +2470,7 @@ func (x *StopServerRequest) String() string {
 func (*StopServerRequest) ProtoMessage() {}
 
 func (x *StopServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[22]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1912,7 +2483,7 @@ func (x *StopServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopServerRequest.ProtoReflect.Descriptor instead.
 func (*StopServerRequest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{22}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *StopServerRequest) GetServer() string {
@@ -1942,7 +2513,7 @@ type StopServerResult struct {
 
 func (x *StopServerResult) Reset() {
 	*x = StopServerResult{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[23]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1954,7 +2525,7 @@ func (x *StopServerResult) String() string {
 func (*StopServerResult) ProtoMessage() {}
 
 func (x *StopServerResult) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[23]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1967,7 +2538,7 @@ func (x *StopServerResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopServerResult.ProtoReflect.Descriptor instead.
 func (*StopServerResult) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{23}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *StopServerResult) GetServer() string {
@@ -2015,7 +2586,7 @@ type CloudEvent struct {
 
 func (x *CloudEvent) Reset() {
 	*x = CloudEvent{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[24]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2027,7 +2598,7 @@ func (x *CloudEvent) String() string {
 func (*CloudEvent) ProtoMessage() {}
 
 func (x *CloudEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[24]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2040,7 +2611,7 @@ func (x *CloudEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloudEvent.ProtoReflect.Descriptor instead.
 func (*CloudEvent) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{24}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CloudEvent) GetKind() string {
@@ -2102,7 +2673,7 @@ type EventInterest struct {
 
 func (x *EventInterest) Reset() {
 	*x = EventInterest{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[25]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2114,7 +2685,7 @@ func (x *EventInterest) String() string {
 func (*EventInterest) ProtoMessage() {}
 
 func (x *EventInterest) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[25]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2127,7 +2698,7 @@ func (x *EventInterest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventInterest.ProtoReflect.Descriptor instead.
 func (*EventInterest) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{25}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *EventInterest) GetWanted() bool {
@@ -2154,7 +2725,7 @@ type RequestError struct {
 
 func (x *RequestError) Reset() {
 	*x = RequestError{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[26]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2166,7 +2737,7 @@ func (x *RequestError) String() string {
 func (*RequestError) ProtoMessage() {}
 
 func (x *RequestError) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[26]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2179,7 +2750,7 @@ func (x *RequestError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestError.ProtoReflect.Descriptor instead.
 func (*RequestError) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{26}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RequestError) GetReason() RequestError_Reason {
@@ -2205,7 +2776,7 @@ type Ready struct {
 
 func (x *Ready) Reset() {
 	*x = Ready{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[27]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2217,7 +2788,7 @@ func (x *Ready) String() string {
 func (*Ready) ProtoMessage() {}
 
 func (x *Ready) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[27]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2230,7 +2801,7 @@ func (x *Ready) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ready.ProtoReflect.Descriptor instead.
 func (*Ready) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{27}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{32}
 }
 
 type ServerMessage struct {
@@ -2249,7 +2820,7 @@ type ServerMessage struct {
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[28]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2261,7 +2832,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[28]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2274,7 +2845,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{28}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ServerMessage) GetMessage() isServerMessage_Message {
@@ -2379,7 +2950,7 @@ type OperatorToServer struct {
 
 func (x *OperatorToServer) Reset() {
 	*x = OperatorToServer{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[29]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2391,7 +2962,7 @@ func (x *OperatorToServer) String() string {
 func (*OperatorToServer) ProtoMessage() {}
 
 func (x *OperatorToServer) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[29]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2404,7 +2975,7 @@ func (x *OperatorToServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperatorToServer.ProtoReflect.Descriptor instead.
 func (*OperatorToServer) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{29}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *OperatorToServer) GetMessage() isOperatorToServer_Message {
@@ -2501,7 +3072,7 @@ type Heartbeat struct {
 
 func (x *Heartbeat) Reset() {
 	*x = Heartbeat{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[30]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2513,7 +3084,7 @@ func (x *Heartbeat) String() string {
 func (*Heartbeat) ProtoMessage() {}
 
 func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[30]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2526,7 +3097,7 @@ func (x *Heartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
 func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{30}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{35}
 }
 
 type PlayerJoinedServer struct {
@@ -2539,7 +3110,7 @@ type PlayerJoinedServer struct {
 
 func (x *PlayerJoinedServer) Reset() {
 	*x = PlayerJoinedServer{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[31]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2551,7 +3122,7 @@ func (x *PlayerJoinedServer) String() string {
 func (*PlayerJoinedServer) ProtoMessage() {}
 
 func (x *PlayerJoinedServer) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[31]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2564,7 +3135,7 @@ func (x *PlayerJoinedServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerJoinedServer.ProtoReflect.Descriptor instead.
 func (*PlayerJoinedServer) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{31}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *PlayerJoinedServer) GetPlayer() string {
@@ -2617,7 +3188,7 @@ type BackendPlayers struct {
 
 func (x *BackendPlayers) Reset() {
 	*x = BackendPlayers{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[32]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2629,7 +3200,7 @@ func (x *BackendPlayers) String() string {
 func (*BackendPlayers) ProtoMessage() {}
 
 func (x *BackendPlayers) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[32]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2642,7 +3213,7 @@ func (x *BackendPlayers) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPlayers.ProtoReflect.Descriptor instead.
 func (*BackendPlayers) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{32}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *BackendPlayers) GetPlayers() map[string]int32 {
@@ -2682,7 +3253,7 @@ type PlayerRoster struct {
 
 func (x *PlayerRoster) Reset() {
 	*x = PlayerRoster{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[33]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2694,7 +3265,7 @@ func (x *PlayerRoster) String() string {
 func (*PlayerRoster) ProtoMessage() {}
 
 func (x *PlayerRoster) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[33]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2707,7 +3278,7 @@ func (x *PlayerRoster) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerRoster.ProtoReflect.Descriptor instead.
 func (*PlayerRoster) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{33}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *PlayerRoster) GetPlayers() []*RosterEntry {
@@ -2737,7 +3308,7 @@ type RosterEntry struct {
 
 func (x *RosterEntry) Reset() {
 	*x = RosterEntry{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[34]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2749,7 +3320,7 @@ func (x *RosterEntry) String() string {
 func (*RosterEntry) ProtoMessage() {}
 
 func (x *RosterEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[34]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2762,7 +3333,7 @@ func (x *RosterEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RosterEntry.ProtoReflect.Descriptor instead.
 func (*RosterEntry) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{34}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RosterEntry) GetUuid() string {
@@ -2840,7 +3411,7 @@ type NetworkState struct {
 
 func (x *NetworkState) Reset() {
 	*x = NetworkState{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[35]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2852,7 +3423,7 @@ func (x *NetworkState) String() string {
 func (*NetworkState) ProtoMessage() {}
 
 func (x *NetworkState) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[35]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2865,7 +3436,7 @@ func (x *NetworkState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkState.ProtoReflect.Descriptor instead.
 func (*NetworkState) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{35}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *NetworkState) GetGroups() []*GroupState {
@@ -2938,7 +3509,7 @@ type GroupState struct {
 
 func (x *GroupState) Reset() {
 	*x = GroupState{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[36]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2950,7 +3521,7 @@ func (x *GroupState) String() string {
 func (*GroupState) ProtoMessage() {}
 
 func (x *GroupState) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[36]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2963,7 +3534,7 @@ func (x *GroupState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupState.ProtoReflect.Descriptor instead.
 func (*GroupState) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{36}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GroupState) GetName() string {
@@ -3082,7 +3653,7 @@ type ServerState struct {
 
 func (x *ServerState) Reset() {
 	*x = ServerState{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[37]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3094,7 +3665,7 @@ func (x *ServerState) String() string {
 func (*ServerState) ProtoMessage() {}
 
 func (x *ServerState) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[37]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3107,7 +3678,7 @@ func (x *ServerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerState.ProtoReflect.Descriptor instead.
 func (*ServerState) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{37}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ServerState) GetName() string {
@@ -3203,7 +3774,7 @@ type ProxyState struct {
 
 func (x *ProxyState) Reset() {
 	*x = ProxyState{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[38]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3215,7 +3786,7 @@ func (x *ProxyState) String() string {
 func (*ProxyState) ProtoMessage() {}
 
 func (x *ProxyState) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[38]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3228,7 +3799,7 @@ func (x *ProxyState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyState.ProtoReflect.Descriptor instead.
 func (*ProxyState) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{38}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ProxyState) GetName() string {
@@ -3285,7 +3856,7 @@ type ProxyMessage struct {
 
 func (x *ProxyMessage) Reset() {
 	*x = ProxyMessage{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[39]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3297,7 +3868,7 @@ func (x *ProxyMessage) String() string {
 func (*ProxyMessage) ProtoMessage() {}
 
 func (x *ProxyMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[39]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3310,7 +3881,7 @@ func (x *ProxyMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyMessage.ProtoReflect.Descriptor instead.
 func (*ProxyMessage) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{39}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ProxyMessage) GetMessage() isProxyMessage_Message {
@@ -3455,7 +4026,7 @@ type RegisteredServer struct {
 
 func (x *RegisteredServer) Reset() {
 	*x = RegisteredServer{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[40]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3467,7 +4038,7 @@ func (x *RegisteredServer) String() string {
 func (*RegisteredServer) ProtoMessage() {}
 
 func (x *RegisteredServer) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[40]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3480,7 +4051,7 @@ func (x *RegisteredServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisteredServer.ProtoReflect.Descriptor instead.
 func (*RegisteredServer) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{40}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *RegisteredServer) GetName() string {
@@ -3515,7 +4086,7 @@ type FullSync struct {
 
 func (x *FullSync) Reset() {
 	*x = FullSync{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[41]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3527,7 +4098,7 @@ func (x *FullSync) String() string {
 func (*FullSync) ProtoMessage() {}
 
 func (x *FullSync) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[41]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3540,7 +4111,7 @@ func (x *FullSync) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FullSync.ProtoReflect.Descriptor instead.
 func (*FullSync) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{41}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *FullSync) GetServers() []*RegisteredServer {
@@ -3559,7 +4130,7 @@ type RegisterServer struct {
 
 func (x *RegisterServer) Reset() {
 	*x = RegisterServer{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[42]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3571,7 +4142,7 @@ func (x *RegisterServer) String() string {
 func (*RegisterServer) ProtoMessage() {}
 
 func (x *RegisterServer) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[42]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3584,7 +4155,7 @@ func (x *RegisterServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterServer.ProtoReflect.Descriptor instead.
 func (*RegisterServer) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{42}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *RegisterServer) GetServer() *RegisteredServer {
@@ -3603,7 +4174,7 @@ type UnregisterServer struct {
 
 func (x *UnregisterServer) Reset() {
 	*x = UnregisterServer{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[43]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3615,7 +4186,7 @@ func (x *UnregisterServer) String() string {
 func (*UnregisterServer) ProtoMessage() {}
 
 func (x *UnregisterServer) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[43]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3628,7 +4199,7 @@ func (x *UnregisterServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterServer.ProtoReflect.Descriptor instead.
 func (*UnregisterServer) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{43}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *UnregisterServer) GetName() string {
@@ -3658,7 +4229,7 @@ type MovePlayer struct {
 
 func (x *MovePlayer) Reset() {
 	*x = MovePlayer{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[44]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3670,7 +4241,7 @@ func (x *MovePlayer) String() string {
 func (*MovePlayer) ProtoMessage() {}
 
 func (x *MovePlayer) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[44]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3683,7 +4254,7 @@ func (x *MovePlayer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MovePlayer.ProtoReflect.Descriptor instead.
 func (*MovePlayer) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{44}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MovePlayer) GetPlayerUuid() string {
@@ -3710,7 +4281,7 @@ type DrainPlayers struct {
 
 func (x *DrainPlayers) Reset() {
 	*x = DrainPlayers{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[45]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3722,7 +4293,7 @@ func (x *DrainPlayers) String() string {
 func (*DrainPlayers) ProtoMessage() {}
 
 func (x *DrainPlayers) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[45]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3735,7 +4306,7 @@ func (x *DrainPlayers) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainPlayers.ProtoReflect.Descriptor instead.
 func (*DrainPlayers) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{45}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *DrainPlayers) GetFromServer() string {
@@ -3783,7 +4354,7 @@ type SetReady struct {
 
 func (x *SetReady) Reset() {
 	*x = SetReady{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[46]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3795,7 +4366,7 @@ func (x *SetReady) String() string {
 func (*SetReady) ProtoMessage() {}
 
 func (x *SetReady) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[46]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3808,7 +4379,7 @@ func (x *SetReady) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReady.ProtoReflect.Descriptor instead.
 func (*SetReady) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{46}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *SetReady) GetReady() bool {
@@ -3840,7 +4411,7 @@ type OperatorToProxy struct {
 
 func (x *OperatorToProxy) Reset() {
 	*x = OperatorToProxy{}
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[47]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3852,7 +4423,7 @@ func (x *OperatorToProxy) String() string {
 func (*OperatorToProxy) ProtoMessage() {}
 
 func (x *OperatorToProxy) ProtoReflect() protoreflect.Message {
-	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[47]
+	mi := &file_spawnery_agent_v1alpha1_agent_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3865,7 +4436,7 @@ func (x *OperatorToProxy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperatorToProxy.ProtoReflect.Descriptor instead.
 func (*OperatorToProxy) Descriptor() ([]byte, []int) {
-	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{47}
+	return file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *OperatorToProxy) GetMessage() isOperatorToProxy_Message {
@@ -4057,10 +4628,12 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x05Hello\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12.\n" +
-	"\x13read_timeout_millis\x18\x03 \x01(\x05R\x11readTimeoutMillis\"=\n" +
+	"\x13read_timeout_millis\x18\x03 \x01(\x05R\x11readTimeoutMillis\"c\n" +
 	"\vPlayerCount\x12\x18\n" +
 	"\aplayers\x18\x01 \x01(\x05R\aplayers\x12\x14\n" +
-	"\x05slots\x18\x02 \x01(\x05R\x05slots\"\xbe\x05\n" +
+	"\x05slots\x18\x02 \x01(\x05R\x05slots\x12\x10\n" +
+	"\x03tps\x18\x03 \x01(\x01R\x03tps\x12\x12\n" +
+	"\x04mspt\x18\x04 \x01(\x01R\x04mspt\"\x80\x06\n" +
 	"\fCloudRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12C\n" +
 	"\aconnect\x18\x02 \x01(\v2'.spawnery.agent.v1alpha1.ConnectRequestH\x00R\aconnect\x12@\n" +
@@ -4074,8 +4647,9 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\vstop_server\x18\t \x01(\v2*.spawnery.agent.v1alpha1.StopServerRequestH\x00R\n" +
 	"stopServer\x12F\n" +
 	"\bunretire\x18\n" +
-	" \x01(\v2(.spawnery.agent.v1alpha1.UnretireRequestH\x00R\bunretireB\t\n" +
-	"\arequest\"\xf4\x05\n" +
+	" \x01(\v2(.spawnery.agent.v1alpha1.UnretireRequestH\x00R\bunretire\x12@\n" +
+	"\x06status\x18\v \x01(\v2&.spawnery.agent.v1alpha1.StatusRequestH\x00R\x06statusB\t\n" +
+	"\arequest\"\xb5\x06\n" +
 	"\rCloudResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12B\n" +
 	"\aconnect\x18\x02 \x01(\v2&.spawnery.agent.v1alpha1.ConnectResultH\x00R\aconnect\x12=\n" +
@@ -4090,7 +4664,8 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\vstop_server\x18\n" +
 	" \x01(\v2).spawnery.agent.v1alpha1.StopServerResultH\x00R\n" +
 	"stopServer\x12E\n" +
-	"\bunretire\x18\v \x01(\v2'.spawnery.agent.v1alpha1.UnretireResultH\x00R\bunretireB\b\n" +
+	"\bunretire\x18\v \x01(\v2'.spawnery.agent.v1alpha1.UnretireResultH\x00R\bunretire\x12?\n" +
+	"\x06status\x18\f \x01(\v2%.spawnery.agent.v1alpha1.StatusResultH\x00R\x06statusB\b\n" +
 	"\x06result\"m\n" +
 	"\x0eConnectRequest\x12\x1f\n" +
 	"\vplayer_uuid\x18\x01 \x01(\tR\n" +
@@ -4109,7 +4684,57 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x0fUnretireRequest\x12\x16\n" +
 	"\x06server\x18\x01 \x01(\tR\x06server\"(\n" +
 	"\x0eUnretireResult\x12\x16\n" +
-	"\x06server\x18\x01 \x01(\tR\x06server\"k\n" +
+	"\x06server\x18\x01 \x01(\tR\x06server\"'\n" +
+	"\rStatusRequest\x12\x16\n" +
+	"\x06target\x18\x01 \x01(\tR\x06target\"\xc4\x03\n" +
+	"\rResourceUsage\x12.\n" +
+	"\x13cpu_used_millicores\x18\x01 \x01(\x03R\x11cpuUsedMillicores\x128\n" +
+	"\x18cpu_requested_millicores\x18\x02 \x01(\x03R\x16cpuRequestedMillicores\x120\n" +
+	"\x14cpu_limit_millicores\x18\x03 \x01(\x03R\x12cpuLimitMillicores\x12#\n" +
+	"\rcpu_unlimited\x18\x04 \x01(\bR\fcpuUnlimited\x12*\n" +
+	"\x11memory_used_bytes\x18\x05 \x01(\x03R\x0fmemoryUsedBytes\x124\n" +
+	"\x16memory_requested_bytes\x18\x06 \x01(\x03R\x14memoryRequestedBytes\x12,\n" +
+	"\x12memory_limit_bytes\x18\a \x01(\x03R\x10memoryLimitBytes\x12)\n" +
+	"\x10memory_unlimited\x18\b \x01(\bR\x0fmemoryUnlimited\x12\x12\n" +
+	"\x04pods\x18\t \x01(\x05R\x04pods\x12#\n" +
+	"\rpods_measured\x18\n" +
+	" \x01(\x05R\fpodsMeasured\"\xaf\x02\n" +
+	"\vGroupStatus\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12<\n" +
+	"\x04kind\x18\x02 \x01(\x0e2(.spawnery.agent.v1alpha1.GroupState.KindR\x04kind\x12\x14\n" +
+	"\x05phase\x18\x03 \x01(\tR\x05phase\x12\x1a\n" +
+	"\breplicas\x18\x04 \x01(\x05R\breplicas\x12%\n" +
+	"\x0eready_replicas\x18\x05 \x01(\x05R\rreadyReplicas\x12\x18\n" +
+	"\aplayers\x18\x06 \x01(\x05R\aplayers\x12\x1d\n" +
+	"\n" +
+	"lowest_tps\x18\a \x01(\x01R\tlowestTps\x12<\n" +
+	"\x05usage\x18\b \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05usage\"\xfd\x02\n" +
+	"\x0eInstanceStatus\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05group\x18\x02 \x01(\tR\x05group\x12\x14\n" +
+	"\x05proxy\x18\x03 \x01(\bR\x05proxy\x12\x14\n" +
+	"\x05phase\x18\x04 \x01(\tR\x05phase\x12\x14\n" +
+	"\x05ready\x18\x05 \x01(\bR\x05ready\x12\x18\n" +
+	"\aplayers\x18\x06 \x01(\x05R\aplayers\x12\x14\n" +
+	"\x05slots\x18\a \x01(\x05R\x05slots\x12\x10\n" +
+	"\x03tps\x18\b \x01(\x01R\x03tps\x12\x12\n" +
+	"\x04mspt\x18\t \x01(\x01R\x04mspt\x12\x1f\n" +
+	"\vage_seconds\x18\n" +
+	" \x01(\x03R\n" +
+	"ageSeconds\x12\x1a\n" +
+	"\bretiring\x18\v \x01(\bR\bretiring\x12\x12\n" +
+	"\x04held\x18\f \x01(\bR\x04held\x12\x1a\n" +
+	"\bdraining\x18\r \x01(\bR\bdraining\x12<\n" +
+	"\x05usage\x18\x0e \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05usage\"\x8a\x03\n" +
+	"\fStatusResult\x12<\n" +
+	"\x05total\x18\x01 \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05total\x12<\n" +
+	"\x06groups\x18\x02 \x03(\v2$.spawnery.agent.v1alpha1.GroupStatusR\x06groups\x12E\n" +
+	"\tinstances\x18\x03 \x03(\v2'.spawnery.agent.v1alpha1.InstanceStatusR\tinstances\x12<\n" +
+	"\x05other\x18\x04 \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05other\x12+\n" +
+	"\x11metrics_available\x18\x05 \x01(\bR\x10metricsAvailable\x12\x18\n" +
+	"\aplayers\x18\x06 \x01(\x05R\aplayers\x12\x18\n" +
+	"\aservers\x18\a \x01(\x05R\aservers\x12\x18\n" +
+	"\aproxies\x18\b \x01(\x05R\aproxies\"k\n" +
 	"\fBoostRequest\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x1a\n" +
 	"\breplicas\x18\x02 \x01(\x05R\breplicas\x12)\n" +
@@ -4317,7 +4942,7 @@ func file_spawnery_agent_v1alpha1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_spawnery_agent_v1alpha1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_spawnery_agent_v1alpha1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_spawnery_agent_v1alpha1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
 var file_spawnery_agent_v1alpha1_agent_proto_goTypes = []any{
 	(RequestError_Reason)(0),   // 0: spawnery.agent.v1alpha1.RequestError.Reason
 	(GroupState_Kind)(0),       // 1: spawnery.agent.v1alpha1.GroupState.Kind
@@ -4333,118 +4958,132 @@ var file_spawnery_agent_v1alpha1_agent_proto_goTypes = []any{
 	(*RetireResult)(nil),       // 11: spawnery.agent.v1alpha1.RetireResult
 	(*UnretireRequest)(nil),    // 12: spawnery.agent.v1alpha1.UnretireRequest
 	(*UnretireResult)(nil),     // 13: spawnery.agent.v1alpha1.UnretireResult
-	(*BoostRequest)(nil),       // 14: spawnery.agent.v1alpha1.BoostRequest
-	(*BoostResult)(nil),        // 15: spawnery.agent.v1alpha1.BoostResult
-	(*StopBoostRequest)(nil),   // 16: spawnery.agent.v1alpha1.StopBoostRequest
-	(*StopBoostResult)(nil),    // 17: spawnery.agent.v1alpha1.StopBoostResult
-	(*AcceptJoinsRequest)(nil), // 18: spawnery.agent.v1alpha1.AcceptJoinsRequest
-	(*AcceptJoinsResult)(nil),  // 19: spawnery.agent.v1alpha1.AcceptJoinsResult
-	(*AnnounceRequest)(nil),    // 20: spawnery.agent.v1alpha1.AnnounceRequest
-	(*AnnounceResult)(nil),     // 21: spawnery.agent.v1alpha1.AnnounceResult
-	(*StartServerRequest)(nil), // 22: spawnery.agent.v1alpha1.StartServerRequest
-	(*StartServerResult)(nil),  // 23: spawnery.agent.v1alpha1.StartServerResult
-	(*StopServerRequest)(nil),  // 24: spawnery.agent.v1alpha1.StopServerRequest
-	(*StopServerResult)(nil),   // 25: spawnery.agent.v1alpha1.StopServerResult
-	(*CloudEvent)(nil),         // 26: spawnery.agent.v1alpha1.CloudEvent
-	(*EventInterest)(nil),      // 27: spawnery.agent.v1alpha1.EventInterest
-	(*RequestError)(nil),       // 28: spawnery.agent.v1alpha1.RequestError
-	(*Ready)(nil),              // 29: spawnery.agent.v1alpha1.Ready
-	(*ServerMessage)(nil),      // 30: spawnery.agent.v1alpha1.ServerMessage
-	(*OperatorToServer)(nil),   // 31: spawnery.agent.v1alpha1.OperatorToServer
-	(*Heartbeat)(nil),          // 32: spawnery.agent.v1alpha1.Heartbeat
-	(*PlayerJoinedServer)(nil), // 33: spawnery.agent.v1alpha1.PlayerJoinedServer
-	(*BackendPlayers)(nil),     // 34: spawnery.agent.v1alpha1.BackendPlayers
-	(*PlayerRoster)(nil),       // 35: spawnery.agent.v1alpha1.PlayerRoster
-	(*RosterEntry)(nil),        // 36: spawnery.agent.v1alpha1.RosterEntry
-	(*NetworkState)(nil),       // 37: spawnery.agent.v1alpha1.NetworkState
-	(*GroupState)(nil),         // 38: spawnery.agent.v1alpha1.GroupState
-	(*ServerState)(nil),        // 39: spawnery.agent.v1alpha1.ServerState
-	(*ProxyState)(nil),         // 40: spawnery.agent.v1alpha1.ProxyState
-	(*ProxyMessage)(nil),       // 41: spawnery.agent.v1alpha1.ProxyMessage
-	(*RegisteredServer)(nil),   // 42: spawnery.agent.v1alpha1.RegisteredServer
-	(*FullSync)(nil),           // 43: spawnery.agent.v1alpha1.FullSync
-	(*RegisterServer)(nil),     // 44: spawnery.agent.v1alpha1.RegisterServer
-	(*UnregisterServer)(nil),   // 45: spawnery.agent.v1alpha1.UnregisterServer
-	(*MovePlayer)(nil),         // 46: spawnery.agent.v1alpha1.MovePlayer
-	(*DrainPlayers)(nil),       // 47: spawnery.agent.v1alpha1.DrainPlayers
-	(*SetReady)(nil),           // 48: spawnery.agent.v1alpha1.SetReady
-	(*OperatorToProxy)(nil),    // 49: spawnery.agent.v1alpha1.OperatorToProxy
-	nil,                        // 50: spawnery.agent.v1alpha1.AnnounceRequest.AttributesEntry
-	nil,                        // 51: spawnery.agent.v1alpha1.BackendPlayers.PlayersEntry
-	nil,                        // 52: spawnery.agent.v1alpha1.GroupState.AttributesEntry
-	nil,                        // 53: spawnery.agent.v1alpha1.ServerState.AttributesEntry
+	(*StatusRequest)(nil),      // 14: spawnery.agent.v1alpha1.StatusRequest
+	(*ResourceUsage)(nil),      // 15: spawnery.agent.v1alpha1.ResourceUsage
+	(*GroupStatus)(nil),        // 16: spawnery.agent.v1alpha1.GroupStatus
+	(*InstanceStatus)(nil),     // 17: spawnery.agent.v1alpha1.InstanceStatus
+	(*StatusResult)(nil),       // 18: spawnery.agent.v1alpha1.StatusResult
+	(*BoostRequest)(nil),       // 19: spawnery.agent.v1alpha1.BoostRequest
+	(*BoostResult)(nil),        // 20: spawnery.agent.v1alpha1.BoostResult
+	(*StopBoostRequest)(nil),   // 21: spawnery.agent.v1alpha1.StopBoostRequest
+	(*StopBoostResult)(nil),    // 22: spawnery.agent.v1alpha1.StopBoostResult
+	(*AcceptJoinsRequest)(nil), // 23: spawnery.agent.v1alpha1.AcceptJoinsRequest
+	(*AcceptJoinsResult)(nil),  // 24: spawnery.agent.v1alpha1.AcceptJoinsResult
+	(*AnnounceRequest)(nil),    // 25: spawnery.agent.v1alpha1.AnnounceRequest
+	(*AnnounceResult)(nil),     // 26: spawnery.agent.v1alpha1.AnnounceResult
+	(*StartServerRequest)(nil), // 27: spawnery.agent.v1alpha1.StartServerRequest
+	(*StartServerResult)(nil),  // 28: spawnery.agent.v1alpha1.StartServerResult
+	(*StopServerRequest)(nil),  // 29: spawnery.agent.v1alpha1.StopServerRequest
+	(*StopServerResult)(nil),   // 30: spawnery.agent.v1alpha1.StopServerResult
+	(*CloudEvent)(nil),         // 31: spawnery.agent.v1alpha1.CloudEvent
+	(*EventInterest)(nil),      // 32: spawnery.agent.v1alpha1.EventInterest
+	(*RequestError)(nil),       // 33: spawnery.agent.v1alpha1.RequestError
+	(*Ready)(nil),              // 34: spawnery.agent.v1alpha1.Ready
+	(*ServerMessage)(nil),      // 35: spawnery.agent.v1alpha1.ServerMessage
+	(*OperatorToServer)(nil),   // 36: spawnery.agent.v1alpha1.OperatorToServer
+	(*Heartbeat)(nil),          // 37: spawnery.agent.v1alpha1.Heartbeat
+	(*PlayerJoinedServer)(nil), // 38: spawnery.agent.v1alpha1.PlayerJoinedServer
+	(*BackendPlayers)(nil),     // 39: spawnery.agent.v1alpha1.BackendPlayers
+	(*PlayerRoster)(nil),       // 40: spawnery.agent.v1alpha1.PlayerRoster
+	(*RosterEntry)(nil),        // 41: spawnery.agent.v1alpha1.RosterEntry
+	(*NetworkState)(nil),       // 42: spawnery.agent.v1alpha1.NetworkState
+	(*GroupState)(nil),         // 43: spawnery.agent.v1alpha1.GroupState
+	(*ServerState)(nil),        // 44: spawnery.agent.v1alpha1.ServerState
+	(*ProxyState)(nil),         // 45: spawnery.agent.v1alpha1.ProxyState
+	(*ProxyMessage)(nil),       // 46: spawnery.agent.v1alpha1.ProxyMessage
+	(*RegisteredServer)(nil),   // 47: spawnery.agent.v1alpha1.RegisteredServer
+	(*FullSync)(nil),           // 48: spawnery.agent.v1alpha1.FullSync
+	(*RegisterServer)(nil),     // 49: spawnery.agent.v1alpha1.RegisterServer
+	(*UnregisterServer)(nil),   // 50: spawnery.agent.v1alpha1.UnregisterServer
+	(*MovePlayer)(nil),         // 51: spawnery.agent.v1alpha1.MovePlayer
+	(*DrainPlayers)(nil),       // 52: spawnery.agent.v1alpha1.DrainPlayers
+	(*SetReady)(nil),           // 53: spawnery.agent.v1alpha1.SetReady
+	(*OperatorToProxy)(nil),    // 54: spawnery.agent.v1alpha1.OperatorToProxy
+	nil,                        // 55: spawnery.agent.v1alpha1.AnnounceRequest.AttributesEntry
+	nil,                        // 56: spawnery.agent.v1alpha1.BackendPlayers.PlayersEntry
+	nil,                        // 57: spawnery.agent.v1alpha1.GroupState.AttributesEntry
+	nil,                        // 58: spawnery.agent.v1alpha1.ServerState.AttributesEntry
 }
 var file_spawnery_agent_v1alpha1_agent_proto_depIdxs = []int32{
 	8,  // 0: spawnery.agent.v1alpha1.CloudRequest.connect:type_name -> spawnery.agent.v1alpha1.ConnectRequest
 	10, // 1: spawnery.agent.v1alpha1.CloudRequest.retire:type_name -> spawnery.agent.v1alpha1.RetireRequest
-	14, // 2: spawnery.agent.v1alpha1.CloudRequest.boost:type_name -> spawnery.agent.v1alpha1.BoostRequest
-	16, // 3: spawnery.agent.v1alpha1.CloudRequest.stop_boost:type_name -> spawnery.agent.v1alpha1.StopBoostRequest
-	20, // 4: spawnery.agent.v1alpha1.CloudRequest.announce:type_name -> spawnery.agent.v1alpha1.AnnounceRequest
-	18, // 5: spawnery.agent.v1alpha1.CloudRequest.accept_joins:type_name -> spawnery.agent.v1alpha1.AcceptJoinsRequest
-	22, // 6: spawnery.agent.v1alpha1.CloudRequest.start_server:type_name -> spawnery.agent.v1alpha1.StartServerRequest
-	24, // 7: spawnery.agent.v1alpha1.CloudRequest.stop_server:type_name -> spawnery.agent.v1alpha1.StopServerRequest
+	19, // 2: spawnery.agent.v1alpha1.CloudRequest.boost:type_name -> spawnery.agent.v1alpha1.BoostRequest
+	21, // 3: spawnery.agent.v1alpha1.CloudRequest.stop_boost:type_name -> spawnery.agent.v1alpha1.StopBoostRequest
+	25, // 4: spawnery.agent.v1alpha1.CloudRequest.announce:type_name -> spawnery.agent.v1alpha1.AnnounceRequest
+	23, // 5: spawnery.agent.v1alpha1.CloudRequest.accept_joins:type_name -> spawnery.agent.v1alpha1.AcceptJoinsRequest
+	27, // 6: spawnery.agent.v1alpha1.CloudRequest.start_server:type_name -> spawnery.agent.v1alpha1.StartServerRequest
+	29, // 7: spawnery.agent.v1alpha1.CloudRequest.stop_server:type_name -> spawnery.agent.v1alpha1.StopServerRequest
 	12, // 8: spawnery.agent.v1alpha1.CloudRequest.unretire:type_name -> spawnery.agent.v1alpha1.UnretireRequest
-	9,  // 9: spawnery.agent.v1alpha1.CloudResponse.connect:type_name -> spawnery.agent.v1alpha1.ConnectResult
-	28, // 10: spawnery.agent.v1alpha1.CloudResponse.error:type_name -> spawnery.agent.v1alpha1.RequestError
-	11, // 11: spawnery.agent.v1alpha1.CloudResponse.retire:type_name -> spawnery.agent.v1alpha1.RetireResult
-	15, // 12: spawnery.agent.v1alpha1.CloudResponse.boost:type_name -> spawnery.agent.v1alpha1.BoostResult
-	17, // 13: spawnery.agent.v1alpha1.CloudResponse.stop_boost:type_name -> spawnery.agent.v1alpha1.StopBoostResult
-	21, // 14: spawnery.agent.v1alpha1.CloudResponse.announce:type_name -> spawnery.agent.v1alpha1.AnnounceResult
-	19, // 15: spawnery.agent.v1alpha1.CloudResponse.accept_joins:type_name -> spawnery.agent.v1alpha1.AcceptJoinsResult
-	23, // 16: spawnery.agent.v1alpha1.CloudResponse.start_server:type_name -> spawnery.agent.v1alpha1.StartServerResult
-	25, // 17: spawnery.agent.v1alpha1.CloudResponse.stop_server:type_name -> spawnery.agent.v1alpha1.StopServerResult
-	13, // 18: spawnery.agent.v1alpha1.CloudResponse.unretire:type_name -> spawnery.agent.v1alpha1.UnretireResult
-	50, // 19: spawnery.agent.v1alpha1.AnnounceRequest.attributes:type_name -> spawnery.agent.v1alpha1.AnnounceRequest.AttributesEntry
-	0,  // 20: spawnery.agent.v1alpha1.RequestError.reason:type_name -> spawnery.agent.v1alpha1.RequestError.Reason
-	4,  // 21: spawnery.agent.v1alpha1.ServerMessage.hello:type_name -> spawnery.agent.v1alpha1.Hello
-	29, // 22: spawnery.agent.v1alpha1.ServerMessage.ready:type_name -> spawnery.agent.v1alpha1.Ready
-	5,  // 23: spawnery.agent.v1alpha1.ServerMessage.player_count:type_name -> spawnery.agent.v1alpha1.PlayerCount
-	6,  // 24: spawnery.agent.v1alpha1.ServerMessage.cloud_request:type_name -> spawnery.agent.v1alpha1.CloudRequest
-	27, // 25: spawnery.agent.v1alpha1.ServerMessage.event_interest:type_name -> spawnery.agent.v1alpha1.EventInterest
-	2,  // 26: spawnery.agent.v1alpha1.OperatorToServer.report_interval:type_name -> spawnery.agent.v1alpha1.ReportInterval
-	3,  // 27: spawnery.agent.v1alpha1.OperatorToServer.session_deadline:type_name -> spawnery.agent.v1alpha1.SessionDeadline
-	37, // 28: spawnery.agent.v1alpha1.OperatorToServer.network_state:type_name -> spawnery.agent.v1alpha1.NetworkState
-	7,  // 29: spawnery.agent.v1alpha1.OperatorToServer.cloud_response:type_name -> spawnery.agent.v1alpha1.CloudResponse
-	26, // 30: spawnery.agent.v1alpha1.OperatorToServer.cloud_event:type_name -> spawnery.agent.v1alpha1.CloudEvent
-	51, // 31: spawnery.agent.v1alpha1.BackendPlayers.players:type_name -> spawnery.agent.v1alpha1.BackendPlayers.PlayersEntry
-	36, // 32: spawnery.agent.v1alpha1.PlayerRoster.players:type_name -> spawnery.agent.v1alpha1.RosterEntry
-	38, // 33: spawnery.agent.v1alpha1.NetworkState.groups:type_name -> spawnery.agent.v1alpha1.GroupState
-	39, // 34: spawnery.agent.v1alpha1.NetworkState.servers:type_name -> spawnery.agent.v1alpha1.ServerState
-	36, // 35: spawnery.agent.v1alpha1.NetworkState.players:type_name -> spawnery.agent.v1alpha1.RosterEntry
-	40, // 36: spawnery.agent.v1alpha1.NetworkState.proxies:type_name -> spawnery.agent.v1alpha1.ProxyState
-	1,  // 37: spawnery.agent.v1alpha1.GroupState.kind:type_name -> spawnery.agent.v1alpha1.GroupState.Kind
-	52, // 38: spawnery.agent.v1alpha1.GroupState.attributes:type_name -> spawnery.agent.v1alpha1.GroupState.AttributesEntry
-	53, // 39: spawnery.agent.v1alpha1.ServerState.attributes:type_name -> spawnery.agent.v1alpha1.ServerState.AttributesEntry
-	4,  // 40: spawnery.agent.v1alpha1.ProxyMessage.hello:type_name -> spawnery.agent.v1alpha1.Hello
-	5,  // 41: spawnery.agent.v1alpha1.ProxyMessage.player_count:type_name -> spawnery.agent.v1alpha1.PlayerCount
-	33, // 42: spawnery.agent.v1alpha1.ProxyMessage.player_joined_server:type_name -> spawnery.agent.v1alpha1.PlayerJoinedServer
-	32, // 43: spawnery.agent.v1alpha1.ProxyMessage.heartbeat:type_name -> spawnery.agent.v1alpha1.Heartbeat
-	34, // 44: spawnery.agent.v1alpha1.ProxyMessage.backend_players:type_name -> spawnery.agent.v1alpha1.BackendPlayers
-	35, // 45: spawnery.agent.v1alpha1.ProxyMessage.player_roster:type_name -> spawnery.agent.v1alpha1.PlayerRoster
-	6,  // 46: spawnery.agent.v1alpha1.ProxyMessage.cloud_request:type_name -> spawnery.agent.v1alpha1.CloudRequest
-	27, // 47: spawnery.agent.v1alpha1.ProxyMessage.event_interest:type_name -> spawnery.agent.v1alpha1.EventInterest
-	42, // 48: spawnery.agent.v1alpha1.FullSync.servers:type_name -> spawnery.agent.v1alpha1.RegisteredServer
-	42, // 49: spawnery.agent.v1alpha1.RegisterServer.server:type_name -> spawnery.agent.v1alpha1.RegisteredServer
-	43, // 50: spawnery.agent.v1alpha1.OperatorToProxy.full_sync:type_name -> spawnery.agent.v1alpha1.FullSync
-	44, // 51: spawnery.agent.v1alpha1.OperatorToProxy.register_server:type_name -> spawnery.agent.v1alpha1.RegisterServer
-	45, // 52: spawnery.agent.v1alpha1.OperatorToProxy.unregister_server:type_name -> spawnery.agent.v1alpha1.UnregisterServer
-	47, // 53: spawnery.agent.v1alpha1.OperatorToProxy.drain_players:type_name -> spawnery.agent.v1alpha1.DrainPlayers
-	2,  // 54: spawnery.agent.v1alpha1.OperatorToProxy.report_interval:type_name -> spawnery.agent.v1alpha1.ReportInterval
-	3,  // 55: spawnery.agent.v1alpha1.OperatorToProxy.session_deadline:type_name -> spawnery.agent.v1alpha1.SessionDeadline
-	48, // 56: spawnery.agent.v1alpha1.OperatorToProxy.set_ready:type_name -> spawnery.agent.v1alpha1.SetReady
-	37, // 57: spawnery.agent.v1alpha1.OperatorToProxy.network_state:type_name -> spawnery.agent.v1alpha1.NetworkState
-	7,  // 58: spawnery.agent.v1alpha1.OperatorToProxy.cloud_response:type_name -> spawnery.agent.v1alpha1.CloudResponse
-	46, // 59: spawnery.agent.v1alpha1.OperatorToProxy.move_player:type_name -> spawnery.agent.v1alpha1.MovePlayer
-	26, // 60: spawnery.agent.v1alpha1.OperatorToProxy.cloud_event:type_name -> spawnery.agent.v1alpha1.CloudEvent
-	41, // 61: spawnery.agent.v1alpha1.AgentService.ProxySession:input_type -> spawnery.agent.v1alpha1.ProxyMessage
-	30, // 62: spawnery.agent.v1alpha1.AgentService.ServerSession:input_type -> spawnery.agent.v1alpha1.ServerMessage
-	49, // 63: spawnery.agent.v1alpha1.AgentService.ProxySession:output_type -> spawnery.agent.v1alpha1.OperatorToProxy
-	31, // 64: spawnery.agent.v1alpha1.AgentService.ServerSession:output_type -> spawnery.agent.v1alpha1.OperatorToServer
-	63, // [63:65] is the sub-list for method output_type
-	61, // [61:63] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	14, // 9: spawnery.agent.v1alpha1.CloudRequest.status:type_name -> spawnery.agent.v1alpha1.StatusRequest
+	9,  // 10: spawnery.agent.v1alpha1.CloudResponse.connect:type_name -> spawnery.agent.v1alpha1.ConnectResult
+	33, // 11: spawnery.agent.v1alpha1.CloudResponse.error:type_name -> spawnery.agent.v1alpha1.RequestError
+	11, // 12: spawnery.agent.v1alpha1.CloudResponse.retire:type_name -> spawnery.agent.v1alpha1.RetireResult
+	20, // 13: spawnery.agent.v1alpha1.CloudResponse.boost:type_name -> spawnery.agent.v1alpha1.BoostResult
+	22, // 14: spawnery.agent.v1alpha1.CloudResponse.stop_boost:type_name -> spawnery.agent.v1alpha1.StopBoostResult
+	26, // 15: spawnery.agent.v1alpha1.CloudResponse.announce:type_name -> spawnery.agent.v1alpha1.AnnounceResult
+	24, // 16: spawnery.agent.v1alpha1.CloudResponse.accept_joins:type_name -> spawnery.agent.v1alpha1.AcceptJoinsResult
+	28, // 17: spawnery.agent.v1alpha1.CloudResponse.start_server:type_name -> spawnery.agent.v1alpha1.StartServerResult
+	30, // 18: spawnery.agent.v1alpha1.CloudResponse.stop_server:type_name -> spawnery.agent.v1alpha1.StopServerResult
+	13, // 19: spawnery.agent.v1alpha1.CloudResponse.unretire:type_name -> spawnery.agent.v1alpha1.UnretireResult
+	18, // 20: spawnery.agent.v1alpha1.CloudResponse.status:type_name -> spawnery.agent.v1alpha1.StatusResult
+	1,  // 21: spawnery.agent.v1alpha1.GroupStatus.kind:type_name -> spawnery.agent.v1alpha1.GroupState.Kind
+	15, // 22: spawnery.agent.v1alpha1.GroupStatus.usage:type_name -> spawnery.agent.v1alpha1.ResourceUsage
+	15, // 23: spawnery.agent.v1alpha1.InstanceStatus.usage:type_name -> spawnery.agent.v1alpha1.ResourceUsage
+	15, // 24: spawnery.agent.v1alpha1.StatusResult.total:type_name -> spawnery.agent.v1alpha1.ResourceUsage
+	16, // 25: spawnery.agent.v1alpha1.StatusResult.groups:type_name -> spawnery.agent.v1alpha1.GroupStatus
+	17, // 26: spawnery.agent.v1alpha1.StatusResult.instances:type_name -> spawnery.agent.v1alpha1.InstanceStatus
+	15, // 27: spawnery.agent.v1alpha1.StatusResult.other:type_name -> spawnery.agent.v1alpha1.ResourceUsage
+	55, // 28: spawnery.agent.v1alpha1.AnnounceRequest.attributes:type_name -> spawnery.agent.v1alpha1.AnnounceRequest.AttributesEntry
+	0,  // 29: spawnery.agent.v1alpha1.RequestError.reason:type_name -> spawnery.agent.v1alpha1.RequestError.Reason
+	4,  // 30: spawnery.agent.v1alpha1.ServerMessage.hello:type_name -> spawnery.agent.v1alpha1.Hello
+	34, // 31: spawnery.agent.v1alpha1.ServerMessage.ready:type_name -> spawnery.agent.v1alpha1.Ready
+	5,  // 32: spawnery.agent.v1alpha1.ServerMessage.player_count:type_name -> spawnery.agent.v1alpha1.PlayerCount
+	6,  // 33: spawnery.agent.v1alpha1.ServerMessage.cloud_request:type_name -> spawnery.agent.v1alpha1.CloudRequest
+	32, // 34: spawnery.agent.v1alpha1.ServerMessage.event_interest:type_name -> spawnery.agent.v1alpha1.EventInterest
+	2,  // 35: spawnery.agent.v1alpha1.OperatorToServer.report_interval:type_name -> spawnery.agent.v1alpha1.ReportInterval
+	3,  // 36: spawnery.agent.v1alpha1.OperatorToServer.session_deadline:type_name -> spawnery.agent.v1alpha1.SessionDeadline
+	42, // 37: spawnery.agent.v1alpha1.OperatorToServer.network_state:type_name -> spawnery.agent.v1alpha1.NetworkState
+	7,  // 38: spawnery.agent.v1alpha1.OperatorToServer.cloud_response:type_name -> spawnery.agent.v1alpha1.CloudResponse
+	31, // 39: spawnery.agent.v1alpha1.OperatorToServer.cloud_event:type_name -> spawnery.agent.v1alpha1.CloudEvent
+	56, // 40: spawnery.agent.v1alpha1.BackendPlayers.players:type_name -> spawnery.agent.v1alpha1.BackendPlayers.PlayersEntry
+	41, // 41: spawnery.agent.v1alpha1.PlayerRoster.players:type_name -> spawnery.agent.v1alpha1.RosterEntry
+	43, // 42: spawnery.agent.v1alpha1.NetworkState.groups:type_name -> spawnery.agent.v1alpha1.GroupState
+	44, // 43: spawnery.agent.v1alpha1.NetworkState.servers:type_name -> spawnery.agent.v1alpha1.ServerState
+	41, // 44: spawnery.agent.v1alpha1.NetworkState.players:type_name -> spawnery.agent.v1alpha1.RosterEntry
+	45, // 45: spawnery.agent.v1alpha1.NetworkState.proxies:type_name -> spawnery.agent.v1alpha1.ProxyState
+	1,  // 46: spawnery.agent.v1alpha1.GroupState.kind:type_name -> spawnery.agent.v1alpha1.GroupState.Kind
+	57, // 47: spawnery.agent.v1alpha1.GroupState.attributes:type_name -> spawnery.agent.v1alpha1.GroupState.AttributesEntry
+	58, // 48: spawnery.agent.v1alpha1.ServerState.attributes:type_name -> spawnery.agent.v1alpha1.ServerState.AttributesEntry
+	4,  // 49: spawnery.agent.v1alpha1.ProxyMessage.hello:type_name -> spawnery.agent.v1alpha1.Hello
+	5,  // 50: spawnery.agent.v1alpha1.ProxyMessage.player_count:type_name -> spawnery.agent.v1alpha1.PlayerCount
+	38, // 51: spawnery.agent.v1alpha1.ProxyMessage.player_joined_server:type_name -> spawnery.agent.v1alpha1.PlayerJoinedServer
+	37, // 52: spawnery.agent.v1alpha1.ProxyMessage.heartbeat:type_name -> spawnery.agent.v1alpha1.Heartbeat
+	39, // 53: spawnery.agent.v1alpha1.ProxyMessage.backend_players:type_name -> spawnery.agent.v1alpha1.BackendPlayers
+	40, // 54: spawnery.agent.v1alpha1.ProxyMessage.player_roster:type_name -> spawnery.agent.v1alpha1.PlayerRoster
+	6,  // 55: spawnery.agent.v1alpha1.ProxyMessage.cloud_request:type_name -> spawnery.agent.v1alpha1.CloudRequest
+	32, // 56: spawnery.agent.v1alpha1.ProxyMessage.event_interest:type_name -> spawnery.agent.v1alpha1.EventInterest
+	47, // 57: spawnery.agent.v1alpha1.FullSync.servers:type_name -> spawnery.agent.v1alpha1.RegisteredServer
+	47, // 58: spawnery.agent.v1alpha1.RegisterServer.server:type_name -> spawnery.agent.v1alpha1.RegisteredServer
+	48, // 59: spawnery.agent.v1alpha1.OperatorToProxy.full_sync:type_name -> spawnery.agent.v1alpha1.FullSync
+	49, // 60: spawnery.agent.v1alpha1.OperatorToProxy.register_server:type_name -> spawnery.agent.v1alpha1.RegisterServer
+	50, // 61: spawnery.agent.v1alpha1.OperatorToProxy.unregister_server:type_name -> spawnery.agent.v1alpha1.UnregisterServer
+	52, // 62: spawnery.agent.v1alpha1.OperatorToProxy.drain_players:type_name -> spawnery.agent.v1alpha1.DrainPlayers
+	2,  // 63: spawnery.agent.v1alpha1.OperatorToProxy.report_interval:type_name -> spawnery.agent.v1alpha1.ReportInterval
+	3,  // 64: spawnery.agent.v1alpha1.OperatorToProxy.session_deadline:type_name -> spawnery.agent.v1alpha1.SessionDeadline
+	53, // 65: spawnery.agent.v1alpha1.OperatorToProxy.set_ready:type_name -> spawnery.agent.v1alpha1.SetReady
+	42, // 66: spawnery.agent.v1alpha1.OperatorToProxy.network_state:type_name -> spawnery.agent.v1alpha1.NetworkState
+	7,  // 67: spawnery.agent.v1alpha1.OperatorToProxy.cloud_response:type_name -> spawnery.agent.v1alpha1.CloudResponse
+	51, // 68: spawnery.agent.v1alpha1.OperatorToProxy.move_player:type_name -> spawnery.agent.v1alpha1.MovePlayer
+	31, // 69: spawnery.agent.v1alpha1.OperatorToProxy.cloud_event:type_name -> spawnery.agent.v1alpha1.CloudEvent
+	46, // 70: spawnery.agent.v1alpha1.AgentService.ProxySession:input_type -> spawnery.agent.v1alpha1.ProxyMessage
+	35, // 71: spawnery.agent.v1alpha1.AgentService.ServerSession:input_type -> spawnery.agent.v1alpha1.ServerMessage
+	54, // 72: spawnery.agent.v1alpha1.AgentService.ProxySession:output_type -> spawnery.agent.v1alpha1.OperatorToProxy
+	36, // 73: spawnery.agent.v1alpha1.AgentService.ServerSession:output_type -> spawnery.agent.v1alpha1.OperatorToServer
+	72, // [72:74] is the sub-list for method output_type
+	70, // [70:72] is the sub-list for method input_type
+	70, // [70:70] is the sub-list for extension type_name
+	70, // [70:70] is the sub-list for extension extendee
+	0,  // [0:70] is the sub-list for field type_name
 }
 
 func init() { file_spawnery_agent_v1alpha1_agent_proto_init() }
@@ -4462,6 +5101,7 @@ func file_spawnery_agent_v1alpha1_agent_proto_init() {
 		(*CloudRequest_StartServer)(nil),
 		(*CloudRequest_StopServer)(nil),
 		(*CloudRequest_Unretire)(nil),
+		(*CloudRequest_Status)(nil),
 	}
 	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[5].OneofWrappers = []any{
 		(*CloudResponse_Connect)(nil),
@@ -4474,26 +5114,27 @@ func file_spawnery_agent_v1alpha1_agent_proto_init() {
 		(*CloudResponse_StartServer)(nil),
 		(*CloudResponse_StopServer)(nil),
 		(*CloudResponse_Unretire)(nil),
+		(*CloudResponse_Status)(nil),
 	}
 	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[6].OneofWrappers = []any{
 		(*ConnectRequest_Server)(nil),
 		(*ConnectRequest_Group)(nil),
 	}
-	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[28].OneofWrappers = []any{
+	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[33].OneofWrappers = []any{
 		(*ServerMessage_Hello)(nil),
 		(*ServerMessage_Ready)(nil),
 		(*ServerMessage_PlayerCount)(nil),
 		(*ServerMessage_CloudRequest)(nil),
 		(*ServerMessage_EventInterest)(nil),
 	}
-	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[29].OneofWrappers = []any{
+	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[34].OneofWrappers = []any{
 		(*OperatorToServer_ReportInterval)(nil),
 		(*OperatorToServer_SessionDeadline)(nil),
 		(*OperatorToServer_NetworkState)(nil),
 		(*OperatorToServer_CloudResponse)(nil),
 		(*OperatorToServer_CloudEvent)(nil),
 	}
-	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[39].OneofWrappers = []any{
+	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[44].OneofWrappers = []any{
 		(*ProxyMessage_Hello)(nil),
 		(*ProxyMessage_PlayerCount)(nil),
 		(*ProxyMessage_PlayerJoinedServer)(nil),
@@ -4503,7 +5144,7 @@ func file_spawnery_agent_v1alpha1_agent_proto_init() {
 		(*ProxyMessage_CloudRequest)(nil),
 		(*ProxyMessage_EventInterest)(nil),
 	}
-	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[47].OneofWrappers = []any{
+	file_spawnery_agent_v1alpha1_agent_proto_msgTypes[52].OneofWrappers = []any{
 		(*OperatorToProxy_FullSync)(nil),
 		(*OperatorToProxy_RegisterServer)(nil),
 		(*OperatorToProxy_UnregisterServer)(nil),
@@ -4522,7 +5163,7 @@ func file_spawnery_agent_v1alpha1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_spawnery_agent_v1alpha1_agent_proto_rawDesc), len(file_spawnery_agent_v1alpha1_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   52,
+			NumMessages:   57,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

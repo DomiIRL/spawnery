@@ -128,6 +128,19 @@ public interface SpawneryApi {
     CompletionStage<Void> unretire(String server);
 
     /**
+     * How this network is doing: CPU and memory of its pods against what they
+     * asked for, per group, and each server's tick rate. Asks the operator;
+     * never anything outside this network's namespace.
+     */
+    CompletionStage<NetworkStatus> status();
+
+    /**
+     * {@link #status()} for one server group, proxy group, server or proxy,
+     * looked up in that order. Fails when nothing on this network has the name.
+     */
+    CompletionStage<NetworkStatus> status(String target);
+
+    /**
      * Asks for extra capacity on a group, for a while.
      *
      * <p><b>It adds to what the group tries for and never to what it may

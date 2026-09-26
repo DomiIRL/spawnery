@@ -45,6 +45,7 @@ import (
 	"github.com/spawnery/spawnery/internal/certs"
 	"github.com/spawnery/spawnery/internal/grpcauth"
 	"github.com/spawnery/spawnery/internal/netstate"
+	"github.com/spawnery/spawnery/internal/netstatus"
 	"github.com/spawnery/spawnery/internal/podspec"
 	"github.com/spawnery/spawnery/internal/proxyreg"
 	"github.com/spawnery/spawnery/internal/serverreg"
@@ -184,6 +185,7 @@ func newFixtureWithProxies(t *testing.T, renewAfter, hardDeadline time.Duration,
 		Servers:        servers,
 		State:          state,
 		Writer:         writer,
+		Status:         netstatus.Source{Reader: c, Agents: registry, Metrics: fixtureMetrics{}, Clock: now},
 		ReportInterval: 5 * time.Second,
 		RenewAfter:     renewAfter,
 		HardDeadline:   hardDeadline,

@@ -199,6 +199,8 @@ class AgentPlugin : JavaPlugin(), Listener {
                 // ever reads what this wrote.
                 server.scheduler.runTaskTimer(this, Runnable {
                     state.sample(Bukkit.getOnlinePlayers().size, Bukkit.getMaxPlayers())
+                    // Paper's own one-minute average; it caps at 20.
+                    state.sampleTicks(Bukkit.getTPS()[0], Bukkit.getAverageTickTime())
                     // The feed's window closes here, on the main thread, and
                     // the interest is recomputed on the same tick: a player
                     // joining, leaving or gaining a permission all change the

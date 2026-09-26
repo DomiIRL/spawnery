@@ -55,7 +55,11 @@ class ServerRole(
     override fun playerCount(): ServerMessage =
         ServerMessage.newBuilder()
             .setPlayerCount(
-                PlayerCount.newBuilder().setPlayers(state.players).setSlots(state.slots),
+                PlayerCount.newBuilder()
+                    .setPlayers(state.players)
+                    .setSlots(state.slots)
+                    .setTps(state.tps)
+                    .setMspt(state.mspt),
             )
             .build()
 

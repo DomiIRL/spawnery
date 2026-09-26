@@ -4,6 +4,7 @@ import cloud.spawnery.agent.api.BoostResult
 import cloud.spawnery.agent.api.ConnectResult
 import cloud.spawnery.agent.api.StartedServer
 import cloud.spawnery.agent.api.Target
+import cloud.spawnery.agent.api.NetworkStatus
 import cloud.spawnery.agent.pb.AcceptJoinsRequest
 import cloud.spawnery.agent.pb.AnnounceRequest
 import cloud.spawnery.agent.pb.CloudRequest
@@ -14,6 +15,7 @@ import cloud.spawnery.agent.pb.RetireRequest
 import cloud.spawnery.agent.pb.StartServerRequest
 import cloud.spawnery.agent.pb.StopBoostRequest
 import cloud.spawnery.agent.pb.StopServerRequest
+import cloud.spawnery.agent.pb.StatusRequest
 import cloud.spawnery.agent.pb.UnretireRequest
 import cloud.spawnery.agent.pb.RequestError
 import java.time.Duration
@@ -85,6 +87,17 @@ class CloudConnector(
                 CloudRequest.newBuilder()
                     .setId(id)
                     .setUnretire(UnretireRequest.newBuilder().setServer(server))
+                    .build(),
+            )
+        }
+
+    /** The network's usage and tick rates, for the whole network or one target. */
+    fun status(target: String): CompletionStage<NetworkStatus> =
+        requests.start<NetworkStatus> { id ->
+            sendRequest(
+                CloudRequest.newBuilder()
+                    .setId(id)
+                    .setStatus(StatusRequest.newBuilder().setTarget(target))
                     .build(),
             )
         }
@@ -265,6 +278,7 @@ class CloudConnector(
             )
             response.hasRetire() -> requests.complete(response.id, null)
             response.hasUnretire() -> requests.complete(response.id, null)
+            response.hasStatus() -> requests.complete(response.id, toNetworkStatus(response.status))
             response.hasBoost() -> requests.complete(
                 response.id,
                 BoostResult(

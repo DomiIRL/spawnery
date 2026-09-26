@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -895,5 +896,45 @@ func TestAnUnknownPodIsMeasuredFromWhenAgentsCouldReachTheOperator(t *testing.T)
 	clock.Advance(time.Second)
 	if got := r.Lookup("never-seen").StreamDownFor; got != 4*time.Second {
 		t.Errorf("StreamDownFor = %v after a second MarkServing, want 4s", got)
+	}
+}
+
+func TestReportTicksShowsInSnapshot(t *testing.T) {
+	now := time.Unix(1000, 0)
+	r := New(func() time.Time { return now }, 5*time.Second, now)
+	r.Connect("pod-a", RoleServer)
+	if err := r.ReportPlayers("pod-a", 2, 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ReportTicks("pod-a", 19.5, 12.25); err != nil {
+		t.Fatal(err)
+	}
+	snap := r.Lookup("pod-a")
+	if snap.TPS != 19.5 || snap.MSPT != 12.25 {
+		t.Fatalf("snapshot TPS/MSPT = %v/%v, want 19.5/12.25", snap.TPS, snap.MSPT)
+	}
+}
+
+func TestReportTicksRefusesImpossibleValues(t *testing.T) {
+	now := time.Unix(1000, 0)
+	r := New(func() time.Time { return now }, 5*time.Second, now)
+	r.Connect("pod-a", RoleServer)
+	for _, c := range []struct{ tps, mspt float64 }{
+		{-1, 10}, {101, 10}, {20, -1}, {20, 600001}, {math.NaN(), 10}, {20, math.Inf(1)},
+	} {
+		if err := r.ReportTicks("pod-a", c.tps, c.mspt); err == nil {
+			t.Errorf("ReportTicks(%v, %v) accepted", c.tps, c.mspt)
+		}
+	}
+	if snap := r.Lookup("pod-a"); snap.TPS != 0 || snap.MSPT != 0 {
+		t.Fatalf("a refused report was kept: %v/%v", snap.TPS, snap.MSPT)
+	}
+}
+
+func TestReportTicksNeedsALiveStream(t *testing.T) {
+	now := time.Unix(1000, 0)
+	r := New(func() time.Time { return now }, 5*time.Second, now)
+	if err := r.ReportTicks("nobody", 20, 10); err == nil {
+		t.Fatal("ReportTicks accepted a pod with no stream")
 	}
 }

@@ -166,5 +166,20 @@ public interface CloudResponseOrBuilder extends
    */
   cloud.spawnery.agent.pb.UnretireResultOrBuilder getUnretireOrBuilder();
 
+  /**
+   * <code>.spawnery.agent.v1alpha1.StatusResult status = 12;</code>
+   * @return Whether the status field is set.
+   */
+  boolean hasStatus();
+  /**
+   * <code>.spawnery.agent.v1alpha1.StatusResult status = 12;</code>
+   * @return The status.
+   */
+  cloud.spawnery.agent.pb.StatusResult getStatus();
+  /**
+   * <code>.spawnery.agent.v1alpha1.StatusResult status = 12;</code>
+   */
+  cloud.spawnery.agent.pb.StatusResultOrBuilder getStatusOrBuilder();
+
   cloud.spawnery.agent.pb.CloudResponse.ResultCase getResultCase();
 }

@@ -79,6 +79,12 @@ rules:
   - create
   - patch
 - apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
   - networking.k8s.io
   resources:
   - networkpolicies

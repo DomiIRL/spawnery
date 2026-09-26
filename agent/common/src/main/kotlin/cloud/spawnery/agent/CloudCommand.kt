@@ -1,6 +1,7 @@
 package cloud.spawnery.agent
 
 import cloud.spawnery.agent.api.Group
+import cloud.spawnery.agent.api.NetworkStatus
 import cloud.spawnery.agent.api.ProxyInfo
 import cloud.spawnery.agent.api.ServerInfo
 import cloud.spawnery.agent.api.ServerPhase
@@ -36,6 +37,9 @@ const val PERMISSION_RETIRE: String = "spawnery.cloud.retire"
  * their own mistake.
  */
 const val PERMISSION_SCALE: String = "spawnery.cloud.scale"
+
+/** `/cloud status`, which asks the operator and so is not part of reading the mirror. */
+const val PERMISSION_STATUS: String = "spawnery.cloud.status"
 
 // PERMISSION_EVENTS lives in Feed.kt, beside the thing that reads it: the feed
 // asks for it once a tick to decide whether this agent wants events at all,
@@ -96,6 +100,7 @@ fun <S> cloudCommand(
             adapter.hasPermission(it, PERMISSION_READ) ||
                 adapter.hasPermission(it, PERMISSION_RETIRE) ||
                 adapter.hasPermission(it, PERMISSION_SCALE) ||
+                adapter.hasPermission(it, PERMISSION_STATUS) ||
                 adapter.hasPermission(it, PERMISSION_EVENTS)
         }
         .then(
@@ -167,6 +172,22 @@ fun <S> cloudCommand(
                                     Style.quiet(" on this network"),
                             )
                             0
+                        },
+                ),
+        )
+        .then(
+            LiteralArgumentBuilder.literal<S>("status")
+                .requires { adapter.hasPermission(it, PERMISSION_STATUS) }
+                .executes { ctx -> askStatus(api.status(), adapter, format, ctx.source, "") }
+                .then(
+                    RequiredArgumentBuilder.argument<S, String>("name", StringArgumentType.word())
+                        .suggests(suggesting {
+                            api.groups().map(Group::name) + api.servers().map(ServerInfo::name) +
+                                api.proxies().map(ProxyInfo::name)
+                        })
+                        .executes { ctx ->
+                            val name = StringArgumentType.getString(ctx, "name")
+                            askStatus(api.status(name), adapter, format, ctx.source, name)
                         },
                 ),
         )
@@ -412,6 +433,23 @@ private fun <S> setFeed(
  */
 private fun <S> reply(adapter: SourceAdapter<S>, format: () -> String, source: S, message: String) {
     adapter.send(source, format().ifBlank { Feed.DEFAULT_FORMAT }.replace(Feed.MESSAGE_TOKEN, message))
+}
+
+private fun <S> askStatus(
+    answer: java.util.concurrent.CompletionStage<NetworkStatus>,
+    adapter: SourceAdapter<S>,
+    format: () -> String,
+    source: S,
+    target: String,
+): Int {
+    answer.whenComplete { status, failure ->
+        if (failure == null) {
+            for (line in statusLines(status, target)) reply(adapter, format, source, line)
+        } else {
+            reply(adapter, format, source, Style.bad("no status") + Style.quiet(": ") + Style.bad(reason(failure)))
+        }
+    }
+    return 1
 }
 
 private fun <S> group(ctx: com.mojang.brigadier.context.CommandContext<S>): String =

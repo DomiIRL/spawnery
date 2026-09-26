@@ -25,6 +25,7 @@ package agent
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -53,6 +54,11 @@ type Snapshot struct {
 	Players int32
 	// Slots is the last reported capacity.
 	Slots int32
+	// TPS and MSPT are what a server agent last reported about its tick rate;
+	// zero when it never did. Fresh exactly when the player count is: they
+	// arrive in the same report.
+	TPS  float64
+	MSPT float64
 	// PlayersStale is true if the count is older than twice the report
 	// interval, or if the pod is unknown. Stale counts as occupied.
 	PlayersStale bool
@@ -110,6 +116,8 @@ type entry struct {
 	ready          bool
 	players        int32
 	slots          int32
+	tps            float64
+	mspt           float64
 	emptySince     time.Time
 	lastReportAt   time.Time
 	disconnectedAt time.Time
@@ -308,6 +316,24 @@ func (r *Registry) ReportPlayers(key string, players, slots int32) error {
 		e.emptySince = time.Time{}
 	}
 	e.lastReportAt = r.now()
+	return nil
+}
+
+// ReportTicks records a server's tick rate from the same report as its player
+// count. Values no server can produce are refused, as a count above capacity is.
+func (r *Registry) ReportTicks(key string, tps, mspt float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	e, ok := r.entries[key]
+	if !ok || !e.connected {
+		return fmt.Errorf("no live stream for %q", key)
+	}
+	if math.IsNaN(tps) || math.IsNaN(mspt) || tps < 0 || tps > 100 || mspt < 0 || mspt > 600000 {
+		return fmt.Errorf("impossible tick report for %q: %v TPS, %v ms", key, tps, mspt)
+	}
+	e.tps = tps
+	e.mspt = mspt
 	return nil
 }
 
@@ -691,6 +717,8 @@ func (r *Registry) Lookup(key string) Snapshot {
 		Ready:             e.ready,
 		Players:           e.players,
 		Slots:             e.slots,
+		TPS:               e.tps,
+		MSPT:              e.mspt,
 		PlayersReportedAt: e.lastReportAt,
 	}
 	if !e.connected {

@@ -52,6 +52,15 @@ any more. It fails for a server that is already stopping or is not retiring.
 `retire` also takes a proxy's name: the proxy is replaced, takes no new
 connections and stops once empty.
 
+`status()` and `status(target)` ask the operator how the network is doing and
+answer with a `NetworkStatus`: CPU and memory per group against requests and
+limits (`ResourceUsage`, which says how many pods it measured), each group's
+lowest TPS (`GroupStatus`), and for a group or a single server or proxy its
+members with TPS, MSPT, age and markers (`InstanceStatus`). TPS and MSPT are
+`OptionalDouble`, empty where nothing was reported. `metricsAvailable()` is
+false on a cluster without a metrics API. A target is looked up as a server
+group, a proxy group, a server, then a proxy; an unknown one fails.
+
 `boost(group, replicas, forHowLong)` adds capacity for a while, as a
 `ScaleBoost` object rather than as an edit to the group. Pass `null` for the
 operator's default of an hour.

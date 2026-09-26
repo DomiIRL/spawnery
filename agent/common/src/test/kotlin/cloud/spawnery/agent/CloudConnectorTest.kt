@@ -1,16 +1,22 @@
 package cloud.spawnery.agent
 
+import cloud.spawnery.agent.api.Group
 import cloud.spawnery.agent.pb.CloudRequest
 import cloud.spawnery.agent.pb.CloudResponse
+import cloud.spawnery.agent.pb.GroupState
 import cloud.spawnery.agent.pb.RequestError
 import cloud.spawnery.agent.pb.StartServerResult
+import cloud.spawnery.agent.pb.StatusResult
 import cloud.spawnery.agent.pb.StopServerResult
+import java.time.Duration
+import java.util.OptionalDouble
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -338,4 +344,49 @@ class CloudConnectorTest {
         assertTrue(seen is CompletionException, "$seen")
         assertTrue(seen.cause is IllegalStateException, "${seen.cause}")
     }
+
+    @Test
+    fun `status asks with the target and turns the answer into records`() {
+        val connector = connector()
+        val future = connector.status("lobby")
+        assertEquals("lobby", requested.single().status.target)
+
+        connector.answer(
+            CloudResponse.newBuilder().setId(requested.single().id).setStatus(
+                StatusResult.newBuilder()
+                    .setMetricsAvailable(true)
+                    .setTotal(pbUsage(cpuUsed = 400, pods = 2, measured = 1))
+                    .addGroups(
+                        cloud.spawnery.agent.pb.GroupStatus.newBuilder()
+                            .setName("lobby").setKind(GroupState.Kind.EPHEMERAL).setPhase("Ready")
+                            .setReplicas(2).setReadyReplicas(2).setPlayers(5).setLowestTps(16.5)
+                            .setUsage(pbUsage(cpuUsed = 400, pods = 2, measured = 1)),
+                    )
+                    .addInstances(
+                        cloud.spawnery.agent.pb.InstanceStatus.newBuilder()
+                            .setName("lobby-a").setGroup("lobby").setPhase("Ready").setReady(true)
+                            .setPlayers(2).setSlots(20).setTps(0.0).setMspt(0.0).setAgeSeconds(5400)
+                            .setUsage(pbUsage(cpuUsed = 0, pods = 1, measured = 0)),
+                    ),
+            ).build(),
+        )
+
+        val status = future.toCompletableFuture().get(1, TimeUnit.SECONDS)
+        assertTrue(status.metricsAvailable())
+        assertEquals(1, status.total().podsMeasured())
+        assertFalse(status.total().complete())
+        val group = status.groups().single()
+        assertEquals(Group.Kind.EPHEMERAL, group.kind())
+        assertEquals(OptionalDouble.of(16.5), group.lowestTps())
+        val instance = status.instances().single()
+        assertEquals(OptionalDouble.empty(), instance.tps(), "0 on the wire is not a TPS of zero")
+        assertEquals(OptionalDouble.empty(), instance.mspt())
+        assertEquals(Duration.ofSeconds(5400), instance.age())
+        assertFalse(instance.usage().measured())
+        assertEquals(0, status.other().pods(), "an absent other is an empty usage, not null")
+    }
+
+    private fun pbUsage(cpuUsed: Long, pods: Int, measured: Int) =
+        cloud.spawnery.agent.pb.ResourceUsage.newBuilder()
+            .setCpuUsedMillicores(cpuUsed).setPods(pods).setPodsMeasured(measured).build()
 }
