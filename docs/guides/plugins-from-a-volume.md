@@ -256,6 +256,13 @@ new digest rolls the group like any other change. The pod's
 `IfNotPresent`. An image source needs neither `--allow-plugin-volumes` nor
 `--allow-file-volumes`.
 
+Image volumes need Kubernetes 1.31 or later with the `ImageVolume` feature
+enabled (on by default only in recent releases) and a container runtime that
+supports them, such as containerd 2.1 or later. On a cluster without them the
+API server drops the volume's source and the pods of the group are refused,
+so check before switching a group: `kubectl explain pod.spec.volumes.image`
+answers on a cluster that has the field.
+
 ## Placeholders filled at start
 
 ```yaml

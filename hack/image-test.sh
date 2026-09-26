@@ -15,10 +15,13 @@ NAME="spawnery-image-test-$$"
 VOLUME="spawnery-image-test-$$"
 CONFDIR="$(mktemp -d)"
 
+SUBNAME="$NAME-substitute"
+SUBVOLUME="$VOLUME-substitute"
+SUBDIR=""
 cleanup() {
-	"$CONTAINER" rm -f "$NAME" >/dev/null 2>&1 || true
-	"$CONTAINER" volume rm -f "$VOLUME" >/dev/null 2>&1 || true
-	rm -rf "$CONFDIR"
+	"$CONTAINER" rm -f "$NAME" "$SUBNAME" >/dev/null 2>&1 || true
+	"$CONTAINER" volume rm -f "$VOLUME" "$SUBVOLUME" >/dev/null 2>&1 || true
+	rm -rf "$CONFDIR" ${SUBDIR:+"$SUBDIR"}
 }
 trap cleanup EXIT
 
@@ -237,11 +240,10 @@ echo "clean shutdown on SIGTERM"
 
 # spec.substitution, end to end in the real image: a mounted plugin source
 # with a placeholder, the prefix and the value in the environment. The copy
-# and the substitution run before the JVM, so the file is there within
-# seconds of the start.
+# and the substitution run before the JVM, so the filled content is there
+# within seconds of the start. The loop waits for the content, not the file:
+# the file exists from the copy on, a moment before it is filled.
 SUBDIR="$(mktemp -d)"
-SUBNAME="$NAME-substitute"
-SUBVOLUME="$VOLUME-substitute"
 mkdir -p "$SUBDIR/Demo"
 printf 'password: {{ SECRET_DEMO }}\n' >"$SUBDIR/Demo/config.yml"
 chmod -R a+rX "$SUBDIR"
@@ -257,11 +259,12 @@ chmod -R a+rX "$SUBDIR"
 	-v "$SUBDIR:/var/run/spawnery/plugins:ro" \
 	-e SPAWNERY_SUBSTITUTION_PREFIX=SECRET_ -e 'SECRET_DEMO=a$b&c' \
 	"$IMAGE" >/dev/null
+got=""
 for _ in $(seq 1 60); do
-	"$CONTAINER" exec "$SUBNAME" test -f /data/plugins/Demo/config.yml 2>/dev/null && break
+	got="$("$CONTAINER" exec "$SUBNAME" cat /data/plugins/Demo/config.yml 2>/dev/null || true)"
+	[ "$got" = 'password: a$b&c' ] && break
 	sleep 1
 done
-got="$("$CONTAINER" exec "$SUBNAME" cat /data/plugins/Demo/config.yml 2>&1 || true)"
 "$CONTAINER" rm -f "$SUBNAME" >/dev/null
 "$CONTAINER" volume rm -f "$SUBVOLUME" >/dev/null
 rm -rf "$SUBDIR"

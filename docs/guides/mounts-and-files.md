@@ -35,7 +35,9 @@ can reach belongs;
 belongs anywhere else had nowhere to go — a world tree, a directory of assets
 every server reads, the output of one group that another consumes. That is
 what a claim mount carries.
-It can also name an image; see [From an image instead of a claim](plugins-from-a-volume.md#from-an-image-instead-of-a-claim).
+
+`extraPlugins` and `extraFiles` (not `spec.mounts`) can also name an image
+instead of a claim; see [From an image instead of a claim](plugins-from-a-volume.md#from-an-image-instead-of-a-claim).
 
 It is still not a layered template system. There is no composition, no
 priority, no per-server rendering. A mount is one volume at one path, and
@@ -45,9 +47,10 @@ assembling what goes in the volume is somebody else's job.
 would otherwise discover the hard way. **The source wins on every start** — a
 server that rewrites a file it was seeded with finds the claim's version again
 next start, which is why a world does not belong in either. **Nothing about
-the volume reaches the pod hash** — the operator holds a claim name, not a
+a claim's contents reaches the pod hash** — the operator holds a claim name, not a
 filesystem, so a changed file reaches a server on its next start rather than
-replacing one already running.
+replacing one already running. An image source is the exception: its
+reference is part of the pod, so a new digest rolls the group.
 
 ## One file, not a directory
 
