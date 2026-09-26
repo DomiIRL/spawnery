@@ -235,4 +235,40 @@ if ! grep -q 'All dimensions are saved' <<<"$container_logs"; then
 fi
 echo "clean shutdown on SIGTERM"
 
+# spec.substitution, end to end in the real image: a mounted plugin source
+# with a placeholder, the prefix and the value in the environment. The copy
+# and the substitution run before the JVM, so the file is there within
+# seconds of the start.
+SUBDIR="$(mktemp -d)"
+SUBNAME="$NAME-substitute"
+SUBVOLUME="$VOLUME-substitute"
+mkdir -p "$SUBDIR/Demo"
+printf 'password: {{ SECRET_DEMO }}\n' >"$SUBDIR/Demo/config.yml"
+chmod -R a+rX "$SUBDIR"
+"$CONTAINER" volume create "$SUBVOLUME" >/dev/null
+"$CONTAINER" run -d --name "$SUBNAME" \
+	--network none \
+	--read-only --tmpfs /tmp:rw,exec,size=256m \
+	--cap-drop ALL \
+	--security-opt no-new-privileges \
+	--memory 2g \
+	-v "$SUBVOLUME:/data" \
+	-v "$CONFDIR:/etc/spawnery:ro" \
+	-v "$SUBDIR:/var/run/spawnery/plugins:ro" \
+	-e SPAWNERY_SUBSTITUTION_PREFIX=SECRET_ -e 'SECRET_DEMO=a$b&c' \
+	"$IMAGE" >/dev/null
+for _ in $(seq 1 60); do
+	"$CONTAINER" exec "$SUBNAME" test -f /data/plugins/Demo/config.yml 2>/dev/null && break
+	sleep 1
+done
+got="$("$CONTAINER" exec "$SUBNAME" cat /data/plugins/Demo/config.yml 2>&1 || true)"
+"$CONTAINER" rm -f "$SUBNAME" >/dev/null
+"$CONTAINER" volume rm -f "$SUBVOLUME" >/dev/null
+rm -rf "$SUBDIR"
+if [ "$got" != 'password: a$b&c' ]; then
+	echo "substitution: got '$got', want 'password: a\$b&c'" >&2
+	exit 1
+fi
+echo "substitution: a placeholder in a mounted plugin source was filled from the environment"
+
 echo "image-test: ok"
