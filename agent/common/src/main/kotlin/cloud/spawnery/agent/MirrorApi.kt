@@ -8,6 +8,7 @@ import cloud.spawnery.agent.api.ReadinessHold
 import cloud.spawnery.agent.api.EventBus
 import cloud.spawnery.agent.api.Self
 import cloud.spawnery.agent.api.Target
+import cloud.spawnery.agent.api.NetworkStatus
 import cloud.spawnery.agent.api.ProxyInfo
 import cloud.spawnery.agent.api.ServerInfo
 import cloud.spawnery.agent.api.StartedServer
@@ -90,6 +91,10 @@ class MirrorApi(
 
     override fun unretire(server: String): CompletionStage<Void> =
         connector.unretire(server)
+
+    override fun status(): CompletionStage<NetworkStatus> = connector.status("")
+
+    override fun status(target: String): CompletionStage<NetworkStatus> = connector.status(target)
 
     override fun boost(group: String, replicas: Int, forHowLong: Duration?): CompletionStage<BoostResult> =
         connector.boost(group, replicas, forHowLong)

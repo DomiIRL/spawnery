@@ -61,6 +61,16 @@ final class FakeApi implements SpawneryApi {
     }
 
     @Override
+    public CompletionStage<NetworkStatus> status() {
+        return CompletableFuture.failedFuture(new UnsupportedOperationException("fake"));
+    }
+
+    @Override
+    public CompletionStage<NetworkStatus> status(String target) {
+        return CompletableFuture.failedFuture(new UnsupportedOperationException("fake"));
+    }
+
+    @Override
     public CompletionStage<BoostResult> boost(String group, int replicas, Duration forHowLong) {
         return CompletableFuture.failedFuture(new UnsupportedOperationException("fake"));
     }
