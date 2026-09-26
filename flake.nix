@@ -331,7 +331,12 @@
           # unretire, proxies() and proxy(name), ServerInfo gains held(), and
           # /cloud gains unretire and shows proxies. The proto gains the
           # messages for both; an older operator answers unretire as unknown.
-          imageVersion = "0.8.0";
+          #
+          # 0.9.0 moves it because the agents changed: the Paper agent reports
+          # its TPS and MSPT, SpawneryApi gains status() and status(target)
+          # with four records, and /cloud gains status under the new
+          # spawnery.cloud.status. An older operator answers status as unknown.
+          imageVersion = "0.9.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
@@ -496,7 +501,12 @@
           # can be retired by name, and drain without disconnecting unless
           # their node leaves, their count goes unreadable, or the new
           # ProxyGroup spec.update.maxStaleSeconds passes.
-          operatorVersion = "0.8.0";
+          #
+          # 0.9.0 moves it with the chart and the images. The operator keeps
+          # each server's reported TPS and MSPT in memory and answers the
+          # agents' status request with a network's usage from metrics.k8s.io,
+          # which it may now list. Nothing rolls.
+          operatorVersion = "0.9.0";
 
           spawnery-slp = pkgs.buildGoModule {
             pname = "spawnery-slp";
