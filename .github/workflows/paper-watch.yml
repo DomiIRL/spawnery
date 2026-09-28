@@ -36,8 +36,8 @@ jobs:
             experimental-features = nix-command flakes
 
       # `CHECK=1 hack/paper-pin.sh` with no arguments asks exactly the question
-      # this workflow exists for: does nix/paper.nix name the newest STABLE
-      # build of the version we are already on.
+      # this workflow exists for: does nix/paper.nix name the newest STABLE (or,
+      # without one, BETA) build of the version we are already on.
       #
       # The script and not `make paper-pin-check`, though a person should use
       # the target: make adds `*** [Makefile:133: paper-pin-check] Error 2` to

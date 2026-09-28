@@ -184,8 +184,8 @@ lint:
 .PHONY: paper-pin
 # Computes what nix/paper.nix has to say about a Paper build, and writes it in.
 #
-#   make paper-pin                    the newest STABLE build of the pinned version
-#   make paper-pin ARGS="26.3"        the newest STABLE build of 26.3
+#   make paper-pin                    the newest STABLE (else BETA) build of the pinned version
+#   make paper-pin ARGS="26.3"        the same for 26.3
 #   make paper-pin ARGS="26.3 118"    exactly that build
 #   make paper-pin-check              print, compare, change nothing
 #
