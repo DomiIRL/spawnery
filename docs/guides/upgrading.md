@@ -98,6 +98,15 @@ Rolling the *operator* back on its own is safe. An agent that supports
 `SetReady` and never receives one opens its gate on the first full sync
 unless a `false` was asserted.
 
+## A new Minecraft version
+
+A game image's tag is `<minecraft>-<release>`. When a release moves to a new
+Minecraft version, the previous version's Paper and Purpur images are
+published beside it for a short transition, so the operator and the proxies
+can move first and the worlds later: `purpur:26.2-<release>` next to
+`purpur:26.3-<release>`. The one Velocity image serves both. Worlds only go
+forward, so move a persistent group to the new version once, and not back.
+
 ## Older installations
 
 [Release notes](../archive/release-notes.md) carries the notes release by

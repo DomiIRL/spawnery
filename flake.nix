@@ -161,6 +161,14 @@
             inherit (paper) mojangJar;
           };
 
+          # The previous Minecraft version, still built beside the current one
+          # so a network can move on its own schedule. Removed as a pair with
+          # the two images below that carry them.
+          paper-26-2 = pkgs.callPackage ./nix/paper-26.2.nix { };
+          purpur-26-2 = pkgs.callPackage ./nix/purpur-26.2.nix {
+            inherit (paper-26-2) mojangJar;
+          };
+
           # Extracted while paper-image was the only consumer; velocity-image
           # will be the second (see nix/oci-common.nix for why that timing
           # matters).
@@ -651,6 +659,17 @@
           # nix/purpur-image.nix -- so what actually differs is the jar.
           purpur-image = pkgs.callPackage ./nix/purpur-image.nix {
             inherit purpur spawnery-slp spawnery-config agents imageVersion oci-common paper-jre;
+          };
+
+          # The same images over the 26.2 pins, with the same agent jar: its
+          # paper-plugin.yml asks for api-version 26.2, which both versions load.
+          paper-image-26-2 = pkgs.callPackage ./nix/paper-image.nix {
+            paper = paper-26-2;
+            inherit spawnery-slp spawnery-config agents imageVersion oci-common paper-jre;
+          };
+          purpur-image-26-2 = pkgs.callPackage ./nix/purpur-image.nix {
+            purpur = purpur-26-2;
+            inherit spawnery-slp spawnery-config agents imageVersion oci-common paper-jre;
           };
 
           # No spawnery-slp: a proxy's readiness is the agent's ready port,

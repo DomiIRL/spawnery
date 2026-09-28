@@ -1,6 +1,7 @@
 name: SpawneryAgent
 version: '${version}'
 main: cloud.spawnery.agent.paper.AgentPlugin
+# 26.2 while the 26.2 images ship this same jar: Paper refuses a newer one.
 api-version: '26.2'
 authors: [paulwtf]
 description: Reports readiness and player counts to the Spawnery operator.

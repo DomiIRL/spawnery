@@ -56,6 +56,8 @@ cd "$repo_root"
 all_images=(
 	"paper-image:result-paper"
 	"purpur-image:result-purpur"
+	"paper-image-26-2:result-paper-26-2"
+	"purpur-image-26-2:result-purpur-26-2"
 	"velocity-image:result-velocity"
 	"operator-image:result-operator"
 )
