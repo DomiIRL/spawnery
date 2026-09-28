@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Refuses a Paper/Velocity image tag whose imageVersion has drifted from the
-# one flake.nix currently builds.
+# Refuses a Purpur/Velocity image tag whose imageVersion, or whose upstream
+# version, has drifted from what flake.nix currently builds.
 #
 # nix/{purpur,velocity}-image.nix tag their images
 # "${upstreamVersion}-${imageVersion}", and the manifests below pin that tag
@@ -30,6 +30,7 @@
 #
 # Usage:
 #   hack/image-tag-pins-agree.sh [--flake FILE] [--image-version VERSION]
+#                                 [--purpur-version V] [--velocity-version V]
 #                                 [--manifest FILE]...
 #
 # With no --manifest, checks the tree's own two manifests. --image-version
@@ -45,12 +46,16 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 flake="$root/flake.nix"
 image_version=""
+purpur_version=""
+velocity_version=""
 manifests=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --flake) flake="$2"; shift 2 ;;
     --image-version) image_version="$2"; shift 2 ;;
+    --purpur-version) purpur_version="$2"; shift 2 ;;
+    --velocity-version) velocity_version="$2"; shift 2 ;;
     --manifest) manifests+=("$2"); shift 2 ;;
     *) echo "image-tag-pins-agree: unknown argument $1" >&2; exit 1 ;;
   esac
@@ -61,7 +66,9 @@ if [ "${#manifests[@]}" -eq 0 ]; then
     "$root/docs/tutorial/network.yaml"
     "$root/docs/tutorial/index.md"
     "$root/config/samples/network.yaml"
+    "$root/config/samples/ondemand.yaml"
     "$root/docs/guides/expose-strategies.md"
+    "$root/docs/guides/on-demand-servers.md"
     "$root/docs/guides/persistent-worlds.md"
     "$root/docs/guides/scaling-and-boosts.md"
     "$root/docs/guides/scheduling.md"
@@ -77,6 +84,14 @@ if [ -z "$image_version" ]; then
   image_version="$(sed -n 's/^[[:space:]]*imageVersion = "\([^"]*\)";/\1/p' "$flake")"
   [ -n "$image_version" ] || fail "cannot read imageVersion out of $flake"
 fi
+if [ -z "$purpur_version" ]; then
+  purpur_version="$(sed -n 's/^[[:space:]]*purpurVersion = "\([^"]*\)";/\1/p' "$root/nix/purpur.nix")"
+  [ -n "$purpur_version" ] || fail "cannot read purpurVersion out of nix/purpur.nix"
+fi
+if [ -z "$velocity_version" ]; then
+  velocity_version="$(sed -n 's/^[[:space:]]*velocityVersion = "\([^"]*\)";/\1/p' "$root/nix/velocity.nix")"
+  [ -n "$velocity_version" ] || fail "cannot read velocityVersion out of nix/velocity.nix"
+fi
 
 bad=0
 found_any=0
@@ -89,6 +104,15 @@ for manifest in "${manifests[@]}"; do
     if [ "$got" != "$image_version" ]; then
       echo "image-tag-pins-agree: $manifest pins $ref, imageVersion $got;" \
         "flake.nix currently builds $image_version" >&2
+      bad=1
+    fi
+    case "$ref" in
+      */purpur:*) want_upstream="$purpur_version" ;;
+      *) want_upstream="$velocity_version" ;;
+    esac
+    if [ "${tag%-*}" != "$want_upstream" ]; then
+      echo "image-tag-pins-agree: $manifest pins $ref, upstream version ${tag%-*};" \
+        "flake.nix currently builds $want_upstream" >&2
       bad=1
     fi
   done < <(grep -oE 'ghcr\.io/spawnery/(purpur|velocity):[^[:space:]]+' "$manifest" || true)
@@ -114,7 +138,7 @@ done
   fail "none of the given manifests name a ghcr.io/spawnery/{purpur,velocity} image; this check would pass vacuously"
 
 if [ "$bad" -ne 0 ]; then
-  echo "image-tag-pins-agree: after a release, move the tags above to" \
-    "imageVersion $image_version." >&2
+  echo "image-tag-pins-agree: move the tags above to purpur:$purpur_version-$image_version" \
+    "and velocity:$velocity_version-$image_version." >&2
   exit 1
 fi
