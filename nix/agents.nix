@@ -16,6 +16,7 @@
 , paper
 , velocity
 , unzip
+, jdk25_headless
 , imageVersion
 }:
 
@@ -56,7 +57,13 @@ stdenv.mkDerivation (finalAttrs: {
     ln -sfn ${velocity.jar} velocity/velocity.jar
   '';
 
-  gradleFlags = [ "-PagentVersion=${finalAttrs.version}" ];
+  # The tests run on Java 25 while Gradle itself stays on the JDK nixpkgs
+  # built it with: Velocity 4's classes are class-file major 69, which a Java
+  # 21 test JVM refuses to load.
+  gradleFlags = [
+    "-PagentVersion=${finalAttrs.version}"
+    "-PtestJava=${jdk25_headless}/bin/java"
+  ];
 
   # Unqualified on purpose. Gradle resolves a bare task name in every project
   # that has such a task, and only the agent subprojects have a shadowJar, so

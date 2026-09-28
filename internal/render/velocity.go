@@ -31,7 +31,7 @@ var VelocityFiles = []string{"velocity.toml"}
 // nix/velocity.nix for the version this belongs to and the command that read
 // it. A Velocity bump that does not re-measure this produces a config
 // Velocity migrates out from under the renderer on first start.
-const velocityConfigVersion = "2.8"
+const velocityConfigVersion = "2.9"
 
 // Velocity renders the one file a Spawnery-managed Velocity proxy reads.
 //

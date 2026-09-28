@@ -80,11 +80,11 @@ func Load(dir string) (Values, string, map[string]string, error) {
 	}
 	// Canonicalise, then refuse. Paper gets this package's own return value
 	// written verbatim into paper-global.yml, but Velocity is handed
-	// secretPath and reads the file itself — and the pinned 3.5.1-615 jar
-	// joins the file's lines with Files.readAllLines and "", which drops
-	// exactly one trailing \n or \r\n (readAllLines never emits a further
-	// empty line for it) and would delete an internal one too. A single
-	// trailing line terminator is therefore not a divergence — both this
+	// secretPath and reads the file itself — and the pinned jar, 4.2.0-30 as
+	// 3.5.1-615 before it, joins the file's lines with Files.readAllLines and
+	// "", which drops exactly one trailing \n or \r\n (readAllLines never
+	// emits a further empty line for it) and would delete an internal one too.
+	// A single trailing line terminator is therefore not a divergence — both this
 	// function's TrimSpace-based history and Velocity's own read have always
 	// discarded it the same way — but treating a raw byte comparison as the
 	// refusal predicate did, and that refused every operator-authored Secret

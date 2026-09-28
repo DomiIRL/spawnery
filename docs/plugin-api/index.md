@@ -16,7 +16,7 @@ dependencies {
 name: SlotBoard
 version: '1.0.0'
 main: com.example.slotboard.SlotBoardPlugin
-api-version: '26.2'
+api-version: '26.3'
 dependencies:
   server:
     SpawneryAgent:

@@ -231,7 +231,9 @@ container_logs="$("$CONTAINER" logs "$NAME" 2>&1)"
 # above, which only ever saw the pre-shutdown log; re-run it against the log
 # that already exists here for the SIGTERM assertion below.
 check_no_download "$container_logs"
-if ! grep -q 'All dimensions are saved' <<<"$container_logs"; then
+# Paper logs this after the worlds are saved. Vanilla's "All dimensions are
+# saved" would be the obvious line, but 26.3 no longer prints it.
+if ! grep -q 'All RegionFile I/O tasks to complete' <<<"$container_logs"; then
 	echo "SIGTERM did not produce a clean shutdown:" >&2
 	tail -30 <<<"$container_logs" >&2
 	exit 1

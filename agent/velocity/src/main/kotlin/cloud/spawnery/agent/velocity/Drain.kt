@@ -15,8 +15,9 @@ package cloud.spawnery.agent.velocity
  * drain, so no *new* player is routed there. What that does not stop is a
  * player whose connection to it was already in flight, and such a player is
  * invisible to everything the operator can read. Disassembling velocity
- * 3.5.1 build 615: `VelocityRegisteredServer.addPlayer` is called from exactly
- * one place, `BackendPlaySessionHandler.activated()` -- the backend's *play*
+ * 3.5.1 build 615, and again 4.2.0 build 30:
+ * `VelocityRegisteredServer.addPlayer` is called from exactly one place,
+ * `BackendPlaySessionHandler.activated()` -- the backend's *play*
  * phase -- so a player still in the configuration phase counts on neither
  * side. Not in the backend's own player list, and not in the proxy's
  * `getPlayersConnected()` either. [run] alone misses them for the same reason:

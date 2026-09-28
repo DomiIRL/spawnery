@@ -1,5 +1,5 @@
 #Minecraft server properties
-#Wed Aug 26 09:53:44 CEST 2026
+#Tue Sep 29 01:23:30 CEST 2026
 accepts-transfers=false
 allow-flight=false
 broadcast-console-to-ops=true
@@ -34,7 +34,7 @@ management-server-allowed-origins=
 management-server-enabled=false
 management-server-host=localhost
 management-server-port=0
-management-server-secret=cGXV1CpseYpnS9LgmetQEmeYX2pokQSK9kTS5Sc1
+management-server-secret=QayKQbcfX0HH1I8k5Qr0VlPZs75BPVCBHoCG0oJl
 management-server-tls-enabled=true
 management-server-tls-keystore=
 management-server-tls-keystore-password=
@@ -69,4 +69,4 @@ text-filtering-config=
 text-filtering-version=0
 use-native-transport=true
 view-distance=10
-white-list=false
+white-list=true

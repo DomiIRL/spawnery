@@ -107,7 +107,8 @@ internal class VelocityPlayer(private val player: Player) : PlayerRef {
     /**
      * `ConnectedPlayer.getConnectionInFlightOrConnectedServer()`, which is
      * literally `connectionInFlight ?: connectedServer` -- read off the
-     * disassembly of velocity 3.5.1 build 615 rather than from a document.
+     * disassembly of velocity 3.5.1 build 615 and 4.2.0 build 30 rather than
+     * from a document.
      *
      * Reached through a cast to Velocity's own implementation class, because
      * the API's [Player] exposes `getCurrentServer` and nothing that answers

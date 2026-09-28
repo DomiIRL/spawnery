@@ -83,7 +83,7 @@ velocity)
 	PLATFORM="Velocity"
 	# Velocity ships as a fat jar, so this list is read out of the jar
 	# itself rather than a libraries tree. Measured 2026-08-11 against
-	# velocity 3.5.1 build 615 with:
+	# velocity 3.5.1 build 615, and 2026-09-29 against 4.2.0 build 30, with:
 	#
 	#   JAR=$(nix build .#velocity-jar --no-link --print-out-paths)
 	#   python3 -c "
@@ -93,7 +93,8 @@ velocity)
 	#   c = collections.Counter('/'.join(n.split('/')[:3]) for n in names)
 	#   [print(v, k) for k, v in sorted(c.items())]"
 	#
-	# 11 418 classes, of which these are the packages this plugin could
+	# 11 418 classes in 3.5.1 and 23 961 in 4.2.0 (fastutil grew), with the
+	# same packages but two dropped; these are the ones this plugin could
 	# also ship. Note what is absent and is the whole reason this list
 	# differs from Paper's: the jar carries no protobuf, no gRPC, no
 	# okhttp/okio and no Kotlin.

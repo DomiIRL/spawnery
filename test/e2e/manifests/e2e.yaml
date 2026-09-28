@@ -29,7 +29,7 @@ spec:
   forwardingSecretRef:
     name: velocity-forwarding-secret
   defaults:
-    minecraftVersion: "26.2"
+    minecraftVersion: "26.3"
   # The HostPort groups below are about exposure and Pod Security, not about
   # this policy: the whole range keeps the Network out of their way.
   scheduling:
@@ -216,7 +216,7 @@ spec:
   forwardingSecretRef:
     name: velocity-forwarding-secret
   defaults:
-    minecraftVersion: "26.2"
+    minecraftVersion: "26.3"
   # The HostPort groups below are about exposure and Pod Security, not about
   # this policy: the whole range keeps the Network out of their way.
   scheduling:

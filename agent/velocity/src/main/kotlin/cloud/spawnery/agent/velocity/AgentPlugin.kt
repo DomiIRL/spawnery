@@ -114,7 +114,8 @@ class AgentPlugin @Inject constructor(
      * `VelocityEventManager.register` compares its two arguments and answers
      * `IllegalArgumentException("The plugin main instance is automatically
      * registered.")` when they are the same object. Measured 2026-08-11
-     * against velocity 3.5.1 build 615 by disassembling
+     * against velocity 3.5.1 build 615, and on 2026-09-29 against 4.2.0 build
+     * 30, by disassembling
      * `com.velocitypowered.proxy.event.VelocityEventManager.register` and
      * `com.velocitypowered.proxy.VelocityServer`, which calls
      * `registerInternally` for every loaded plugin's own instance -- the same

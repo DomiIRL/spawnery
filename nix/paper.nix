@@ -24,15 +24,15 @@
 # hand is still possible and still fine; the script exists because doing it by
 # hand is four chances to mistype a hash into a build that fails elsewhere.
 rec {
-  paperVersion = "26.2";
-  paperBuild = "119";
+  paperVersion = "26.3";
+  paperBuild = "135";
 
   # The launcher. Its hash was computed from a download and checked in here;
   # that does not make the source trustworthy, it makes the artifact frozen —
   # a changed upstream breaks the build instead of substituting a jar quietly.
   paperJar = fetchurl {
-    url = "https://fill-data.papermc.io/v1/objects/a8c9140c3075bd7c04973e9cdc491b21bfe6bad472b674ef932a4ae0fec19629/paper-${paperVersion}-${paperBuild}.jar";
-    hash = "sha256-qMkUDDB1vXwElz6c3EkbIb/mutRytnTvkypK4P7Blik=";
+    url = "https://fill-data.papermc.io/v1/objects/61a8723aa91c523ed279f925344847daf59a83d6fddce481e02304f3a3e66f43/paper-${paperVersion}-${paperBuild}.jar";
+    hash = "sha256-YahyOqkcUj7SefklNEhH2vWag9b93OSB4CME86Pmb0M=";
   };
 
   # Mojang's server jar. This URL and this hash both come from
@@ -41,8 +41,8 @@ rec {
   # artifact — which is what the main design asks for and what no other hash in
   # this project manages.
   mojangJar = fetchurl {
-    url = "https://piston-data.mojang.com/v1/objects/823e2250d24b3ddac457a60c92a6a941943fcd6a/server.jar";
-    hash = "sha256-zazfsliY3l5LSw5d3MJyL3cGfkZgVwnC2IbAAOu2PsU=";
+    url = "https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar";
+    hash = "sha256-0FLxTXoXNzT7pVNxHltXAWLi8qMTJn7jGiG5daZ5vmQ=";
   };
 
   # The patched server, produced offline: every input is already fetched, so
