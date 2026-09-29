@@ -354,7 +354,13 @@
           # SPAWNERY_SUBSTITUTION_PREFIX set, spawnery-config --substitute fills
           # the copied plugins' and files' placeholders from the environment
           # before the JVM starts. The published API is unchanged.
-          imageVersion = "0.11.0";
+          #
+          # 0.12.0 moves it because the images changed: Minecraft 26.3, on
+          # Paper 26.3, Purpur 26.3 and Velocity 4.2.0, with the 26.2 Paper and
+          # Purpur images built beside them for the transition, and the
+          # renderer writes white-list=false unless an overlay asks for it. The
+          # published API is unchanged.
+          imageVersion = "0.12.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
