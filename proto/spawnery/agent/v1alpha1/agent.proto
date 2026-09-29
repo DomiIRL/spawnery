@@ -92,6 +92,12 @@ message PlayerCount {
   // agent older than these fields send.
   double tps = 3;
   double mspt = 4;
+  // Server agents only: the seats the plugin says count as capacity. 0 means
+  // it said nothing -- what a proxy and an agent older than this field send --
+  // and the group's spec.playableSlots decides. It cannot ride in slots: the
+  // registry discards a report with more players than slots, and players
+  // beyond the playable seats are legitimate.
+  int32 playable_slots = 5;
 }
 
 // ---- requests (milestone 7b-5) ----
@@ -283,6 +289,7 @@ message InstanceStatus {
   bool draining = 13;
   ResourceUsage usage = 14;
   string node = 15; // as ServerState.node
+  int32 playable_slots = 16; // as ServerState.playable_slots
 }
 
 message StatusResult {
@@ -876,6 +883,9 @@ message ServerState {
   // The Kubernetes node this server's pod runs on; empty while it is not
   // scheduled. A name only: nothing about the node itself is ever sent.
   string node = 12;
+  // How many of slots count as capacity, as the operator resolved it. 0 from
+  // an operator older than this field; read it as equal to slots.
+  int32 playable_slots = 13;
 }
 
 // ProxyState is one proxy pod as the operator last saw it.

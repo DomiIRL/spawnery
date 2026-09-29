@@ -243,4 +243,15 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getNodeBytes();
+
+  /**
+   * <pre>
+   * How many of slots count as capacity, as the operator resolved it. 0 from
+   * an operator older than this field; read it as equal to slots.
+   * </pre>
+   *
+   * <code>int32 playable_slots = 13;</code>
+   * @return The playableSlots.
+   */
+  int getPlayableSlots();
 }

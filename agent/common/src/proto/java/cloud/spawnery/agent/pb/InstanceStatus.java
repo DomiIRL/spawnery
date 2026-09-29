@@ -369,6 +369,21 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int PLAYABLE_SLOTS_FIELD_NUMBER = 16;
+  private int playableSlots_ = 0;
+  /**
+   * <pre>
+   * as ServerState.playable_slots
+   * </pre>
+   *
+   * <code>int32 playable_slots = 16;</code>
+   * @return The playableSlots.
+   */
+  @java.lang.Override
+  public int getPlayableSlots() {
+    return playableSlots_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -427,6 +442,9 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 15, node_);
+    }
+    if (playableSlots_ != 0) {
+      output.writeInt32(16, playableSlots_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -488,6 +506,10 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(15, node_);
     }
+    if (playableSlots_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt32Size(16, playableSlots_);
+    }
     return size;
   }
   @java.lang.Override
@@ -547,6 +569,8 @@ private static final long serialVersionUID = 0L;
     }
     if (!getNode()
         .equals(other.getNode())) return false;
+    if (getPlayableSlots()
+        != other.getPlayableSlots()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -598,6 +622,8 @@ private static final long serialVersionUID = 0L;
     }
     hash = (37 * hash) + NODE_FIELD_NUMBER;
     hash = (53 * hash) + getNode().hashCode();
+    hash = (37 * hash) + PLAYABLE_SLOTS_FIELD_NUMBER;
+    hash = (53 * hash) + getPlayableSlots();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -754,6 +780,7 @@ private static final long serialVersionUID = 0L;
         usageBuilder_ = null;
       }
       node_ = "";
+      playableSlots_ = 0;
       return this;
     }
 
@@ -836,6 +863,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00004000) != 0)) {
         result.node_ = node_;
       }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.playableSlots_ = playableSlots_;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -903,6 +933,9 @@ private static final long serialVersionUID = 0L;
         node_ = other.node_;
         bitField0_ |= 0x00004000;
         onChanged();
+      }
+      if (other.getPlayableSlots() != 0) {
+        setPlayableSlots(other.getPlayableSlots());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1007,6 +1040,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00004000;
               break;
             } // case 122
+            case 128: {
+              playableSlots_ = input.readInt32();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 128
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1813,6 +1851,50 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       node_ = value;
       bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+
+    private int playableSlots_ ;
+    /**
+     * <pre>
+     * as ServerState.playable_slots
+     * </pre>
+     *
+     * <code>int32 playable_slots = 16;</code>
+     * @return The playableSlots.
+     */
+    @java.lang.Override
+    public int getPlayableSlots() {
+      return playableSlots_;
+    }
+    /**
+     * <pre>
+     * as ServerState.playable_slots
+     * </pre>
+     *
+     * <code>int32 playable_slots = 16;</code>
+     * @param value The playableSlots to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlayableSlots(int value) {
+
+      playableSlots_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * as ServerState.playable_slots
+     * </pre>
+     *
+     * <code>int32 playable_slots = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlayableSlots() {
+      bitField0_ = (bitField0_ & ~0x00008000);
+      playableSlots_ = 0;
       onChanged();
       return this;
     }
