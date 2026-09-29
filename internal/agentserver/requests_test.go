@@ -597,3 +597,40 @@ func TestStartRefusesAnOnDemandGroupWithNoCeiling(t *testing.T) {
 			resp.GetError().GetMessage())
 	}
 }
+
+func TestAGroupTargetPicksByPlayableSeats(t *testing.T) {
+	state := networkWith(nil, []*agentpb.ServerState{
+		{Name: "duels-a", Group: "duels", Players: 12, Slots: 100, PlayableSlots: 12, Registered: true},
+		{Name: "duels-b", Group: "duels", Players: 20, Slots: 100, PlayableSlots: 24, Registered: true},
+	})
+	got, ok := resolveTarget(state, &agentpb.ConnectRequest{
+		Target: &agentpb.ConnectRequest_Group{Group: "duels"},
+	})
+	if !ok || got != "duels-b" {
+		t.Errorf("target = %q ok=%v, want duels-b: duels-a is full at its playable seats", got, ok)
+	}
+}
+
+func TestAPlayableFigureOfZeroReadsAsEverySeat(t *testing.T) {
+	state := networkWith(nil, []*agentpb.ServerState{
+		{Name: "lobby-a", Group: "lobby", Players: 90, Slots: 100, PlayableSlots: 12, Registered: true},
+		{Name: "lobby-b", Group: "lobby", Players: 50, Slots: 100, Registered: true},
+	})
+	got, ok := resolveTarget(state, &agentpb.ConnectRequest{
+		Target: &agentpb.ConnectRequest_Group{Group: "lobby"},
+	})
+	if !ok || got != "lobby-b" {
+		t.Errorf("target = %q ok=%v, want lobby-b: an older status's 0 is all 100 seats", got, ok)
+	}
+}
+
+func TestAGroupWhoseServersAreAllFullStillResolves(t *testing.T) {
+	state := networkWith(nil, []*agentpb.ServerState{
+		{Name: "duels-a", Group: "duels", Players: 14, Slots: 100, PlayableSlots: 12, Registered: true},
+	})
+	if got, ok := resolveTarget(state, &agentpb.ConnectRequest{
+		Target: &agentpb.ConnectRequest_Group{Group: "duels"},
+	}); !ok || got != "duels-a" {
+		t.Errorf("target = %q ok=%v, want duels-a: full is not unroutable", got, ok)
+	}
+}

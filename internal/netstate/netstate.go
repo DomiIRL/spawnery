@@ -225,12 +225,13 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			// The operator's own spelling, unmapped. See the proto's comment:
 			// an agent older than a phase has to be able to read it as
 			// something it does not know.
-			Phase:      srv.Status.Phase,
-			Players:    srv.Status.Players,
-			Slots:      srv.Status.Slots,
-			Registered: srv.Status.Registered,
-			State:      announced.State,
-			Attributes: announced.Attributes,
+			Phase:         srv.Status.Phase,
+			Players:       srv.Status.Players,
+			Slots:         srv.Status.Slots,
+			PlayableSlots: srv.Status.PlayableSlots,
+			Registered:    srv.Status.Registered,
+			State:         announced.State,
+			Attributes:    announced.Attributes,
 			// Which run of this server this is. From the status, because it is
 			// the operator's own record of the pod it made.
 			Incarnation: srv.Status.PodUID,

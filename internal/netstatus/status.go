@@ -206,7 +206,8 @@ func (v *view) server(agents *agent.Registry, srv *spawneryv1alpha1.Server) *age
 	in := &agentpb.InstanceStatus{
 		Name: srv.Name, Group: srv.Spec.GroupRef.Name, Phase: srv.Status.Phase,
 		Ready:   srv.Status.Phase == string(phase.Ready),
-		Players: srv.Status.Players, Slots: srv.Status.Slots, Tps: tps, Mspt: mspt,
+		Players: srv.Status.Players, Slots: srv.Status.Slots, PlayableSlots: srv.Status.PlayableSlots,
+		Tps: tps, Mspt: mspt,
 		Retiring: srv.Spec.Retire || srv.Status.Phase == string(phase.Retiring),
 		Held:     srv.Spec.Hold,
 		Draining: srv.Status.Phase == string(phase.Draining),
@@ -227,7 +228,7 @@ func (v *view) proxy(agents *agent.Registry, p *corev1.Pod) *agentpb.InstanceSta
 	in := &agentpb.InstanceStatus{
 		Name: p.Name, Group: p.Labels[podspec.LabelGroup], Proxy: true,
 		Ready:   podReady(p),
-		Players: snap.Players, Slots: snap.Slots,
+		Players: snap.Players, Slots: snap.Slots, PlayableSlots: snap.Slots,
 		Retiring:   p.Annotations[podspec.AnnotationRetireRequested] != "",
 		Draining:   p.Annotations[podspec.AnnotationProxyDrainingSince] != "",
 		AgeSeconds: int64(v.now.Sub(p.CreationTimestamp.Time) / time.Second),

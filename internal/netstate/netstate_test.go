@@ -605,3 +605,17 @@ func TestBuildNamesTheNodeAServerAndAProxyRunOn(t *testing.T) {
 		t.Errorf("proxies = %v, want gateway-a on node-3", p)
 	}
 }
+
+func TestBuildCarriesThePlayableFigure(t *testing.T) {
+	srv := readyServer("ns", "duels-a", "lobby", 14, 100)
+	srv.Status.PlayableSlots = 12
+	src, _ := source(t, ephemeralGroup("ns", "lobby"), srv)
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if n := got.GetServers()[0].GetPlayableSlots(); n != 12 {
+		t.Errorf("playable_slots = %d, want 12", n)
+	}
+}
