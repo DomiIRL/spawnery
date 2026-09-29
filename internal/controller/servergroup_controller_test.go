@@ -5287,3 +5287,38 @@ func TestProgressingDoesNotCountAHeldServer(t *testing.T) {
 		t.Errorf("Progressing = %+v, want AtDesiredState: a held server is not being replaced", cond)
 	}
 }
+
+func TestCollectViewsResolvesThePlayableFigure(t *testing.T) {
+	f := newFixture(t)
+	f.group.Spec.PlayableSlots = ptr.To[int32](20)
+	if err := f.c.Update(f.ctx, f.group); err != nil {
+		t.Fatalf("update group: %v", err)
+	}
+	f.createServer("lobby-play")
+	f.reconcile("lobby-play")
+	pod, ok := f.pod("lobby-play")
+	if !ok {
+		t.Fatal("no pod for lobby-play")
+	}
+	f.agents.Connect(string(pod.UID), agentRoleServer())
+	if err := f.agents.ReportPlayers(string(pod.UID), 14, 100); err != nil {
+		t.Fatalf("ReportPlayers: %v", err)
+	}
+	r := groupReconciler(f)
+
+	views, _, err := r.collectViews(f.ctx, f.group)
+	if err != nil || len(views) != 1 {
+		t.Fatalf("collectViews = %v, %v; want one view", views, err)
+	}
+	if views[0].Playable != 20 {
+		t.Errorf("Playable = %d, want the spec's 20", views[0].Playable)
+	}
+
+	if err := f.agents.ReportPlayableSlots(string(pod.UID), 12); err != nil {
+		t.Fatalf("ReportPlayableSlots: %v", err)
+	}
+	views, _, _ = r.collectViews(f.ctx, f.group)
+	if views[0].Playable != 12 {
+		t.Errorf("Playable = %d, want the plugin's 12", views[0].Playable)
+	}
+}
