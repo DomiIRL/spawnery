@@ -11,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
+	"github.com/spawnery/spawnery/internal/phase"
 )
 
 const (
@@ -150,4 +152,67 @@ func TestTutorialPath(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestTutorialPlayableSlots runs after TestTutorialPath on the same network:
+// with one playable seat per server and three kept spare, the group grows to
+// its maxReplicas of three, where two twenty-seat servers had room to spare.
+//
+// No join: spawnery-join stops in the configuration state, and a backend
+// counts a player only once it reaches play, so a held join never shows up
+// in a server's report.
+func TestTutorialPlayableSlots(t *testing.T) {
+	if os.Getenv("SPAWNERY_E2E_TUTORIAL") != "1" {
+		t.Skip("set SPAWNERY_E2E_TUTORIAL=1; hack/e2e-tutorial.sh does this nightly")
+	}
+
+	key := client.ObjectKey{Namespace: tutorialNamespace, Name: tutorialServerGroup}
+	var g spawneryv1alpha1.ServerGroup
+	if err := k8s.Get(ctx, key, &g); err != nil {
+		t.Fatalf("get ServerGroup: %v", err)
+	}
+	restore := g.DeepCopy()
+	patch := client.MergeFrom(g.DeepCopy())
+	g.Spec.PlayableSlots = ptr.To[int32](1)
+	g.Spec.Scaling.SpareSlots = 3
+	if err := k8s.Patch(ctx, &g, patch); err != nil {
+		t.Fatalf("patch ServerGroup: %v", err)
+	}
+	t.Cleanup(func() {
+		var now spawneryv1alpha1.ServerGroup
+		if err := k8s.Get(ctx, key, &now); err != nil {
+			return
+		}
+		back := client.MergeFrom(now.DeepCopy())
+		now.Spec.PlayableSlots = nil
+		now.Spec.Scaling.SpareSlots = restore.Spec.Scaling.SpareSlots
+		_ = k8s.Patch(ctx, &now, back)
+	})
+
+	eventuallyIn(t, tutorialOperatorNamespace, 3*time.Minute, "three Ready servers with one playable seat each", func() (bool, string) {
+		var list spawneryv1alpha1.ServerList
+		if err := k8s.List(ctx, &list, client.InNamespace(tutorialNamespace)); err != nil {
+			return false, err.Error()
+		}
+		ready, seen := 0, ""
+		for _, s := range list.Items {
+			if s.Spec.GroupRef.Name != tutorialServerGroup || s.Status.Phase == string(phase.Failed) {
+				continue
+			}
+			seen += fmt.Sprintf(" %s=%s %d/%d playable %d;", s.Name, s.Status.Phase,
+				s.Status.Players, s.Status.Slots, s.Status.PlayableSlots)
+			if s.Status.Phase == string(phase.Ready) && s.Status.PlayableSlots == 1 && s.Status.Slots > 1 {
+				ready++
+			}
+		}
+		return ready == 3, "servers:" + seen
+	})
+
+	eventuallyIn(t, tutorialOperatorNamespace, time.Minute, "status.freeSlots to count playable seats", func() (bool, string) {
+		var now spawneryv1alpha1.ServerGroup
+		if err := k8s.Get(ctx, key, &now); err != nil {
+			return false, err.Error()
+		}
+		return now.Status.FreeSlots == 3, fmt.Sprintf("status.freeSlots=%d", now.Status.FreeSlots)
+	})
 }
