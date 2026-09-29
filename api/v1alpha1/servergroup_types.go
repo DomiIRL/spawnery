@@ -55,7 +55,8 @@ type ScalingSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	MaxReplicas int32 `json:"maxReplicas"`
 
-	// SpareSlots is the number of free player slots kept available.
+	// SpareSlots is the number of free player slots kept available, counted
+	// in playable seats when the group sets playableSlots.
 	// +kubebuilder:validation:Minimum=0
 	SpareSlots int32 `json:"spareSlots"`
 
@@ -420,8 +421,9 @@ type ServerGroupStatus struct {
 	OnlinePlayers int32 `json:"onlinePlayers"`
 
 	// FreeSlots is the number of seats a proxy can send a player to right
-	// now: the free slots of servers that are Ready, in the proxies' routing
-	// tables, accepting joins, and rendered under the group's current spec.
+	// now: the free playable seats of servers that are Ready, in the proxies'
+	// routing tables, accepting joins, and rendered under the group's current
+	// spec.
 	// It is the scaler's input, published. A server that has closed its door
 	// for a running round contributes nothing here even while its own
 	// maxPlayers minus onlinePlayers is not zero.
