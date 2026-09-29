@@ -634,3 +634,16 @@ func TestAGroupWhoseServersAreAllFullStillResolves(t *testing.T) {
 		t.Errorf("target = %q ok=%v, want duels-a: full is not unroutable", got, ok)
 	}
 }
+
+func TestAmongFullRoundsAGroupTargetPicksOneWithRoomLeft(t *testing.T) {
+	state := networkWith(nil, []*agentpb.ServerState{
+		{Name: "duels-a", Group: "duels", Players: 16, Slots: 16, PlayableSlots: 12, Registered: true},
+		{Name: "duels-b", Group: "duels", Players: 12, Slots: 16, PlayableSlots: 12, Registered: true},
+	})
+	got, ok := resolveTarget(state, &agentpb.ConnectRequest{
+		Target: &agentpb.ConnectRequest_Group{Group: "duels"},
+	})
+	if !ok || got != "duels-b" {
+		t.Errorf("target = %q ok=%v, want duels-b: duels-a is at its hard limit", got, ok)
+	}
+}
