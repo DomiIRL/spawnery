@@ -313,7 +313,7 @@ jobs:
           fi
           published=0
           operator_published=false
-          for image in paper-image purpur-image velocity-image operator-image; do
+          for image in paper-image purpur-image paper-image-26-2 purpur-image-26-2 velocity-image operator-image; do
             status=0
             nix develop -c env DRY_RUN="$dry_run" WRITE_DIGEST=1 \
               ./hack/publish.sh "$image" || status=$?

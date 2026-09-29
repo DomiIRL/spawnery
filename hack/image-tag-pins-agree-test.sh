@@ -59,9 +59,19 @@ cat > "$tmp/stale.yaml" <<'EOF'
 image: ghcr.io/spawnery/purpur:26.2-0.2.15
 EOF
 run  "a manifest pinned behind the others" 1 \
-  "$check" --image-version 0.2.34 --manifest "$tmp/stale.yaml"
+  "$check" --image-version 0.2.34 --purpur-version 26.2 --manifest "$tmp/stale.yaml"
 says "it names the found tag" "26.2-0.2.15" \
-  "$check" --image-version 0.2.34 --manifest "$tmp/stale.yaml"
+  "$check" --image-version 0.2.34 --purpur-version 26.2 --manifest "$tmp/stale.yaml"
+
+# A Minecraft bump that left a tag on the previous version, which the
+# imageVersion half alone cannot see.
+cat > "$tmp/old-minecraft.yaml" <<'EOF'
+image: ghcr.io/spawnery/purpur:26.2-0.2.34
+EOF
+run  "a tag left on the previous Minecraft version" 1 \
+  "$check" --image-version 0.2.34 --purpur-version 26.3 --manifest "$tmp/old-minecraft.yaml"
+says "it names the upstream version" "upstream version 26.2" \
+  "$check" --image-version 0.2.34 --purpur-version 26.3 --manifest "$tmp/old-minecraft.yaml"
 
 # Velocity's upstream version carries a second dot Purpur's does not
 # ("3.5.1" vs "26.2"); the split has to hold on both shapes rather than
@@ -70,7 +80,7 @@ cat > "$tmp/velocity-shape.yaml" <<'EOF'
 image: ghcr.io/spawnery/velocity:3.5.1-0.2.34
 EOF
 run "a two-dot upstream version parses like a one-dot one" 0 \
-  "$check" --image-version 0.2.34 --manifest "$tmp/velocity-shape.yaml"
+  "$check" --image-version 0.2.34 --velocity-version 3.5.1 --manifest "$tmp/velocity-shape.yaml"
 
 # The two ways this check could pass without having looked.
 cat > "$tmp/no-image.yaml" <<'EOF'

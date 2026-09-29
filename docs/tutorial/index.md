@@ -131,7 +131,7 @@ spec:
   forwardingSecretRef:
     name: velocity-forwarding-secret
   defaults:
-    minecraftVersion: "26.2"
+    minecraftVersion: "26.3"
     resources:
       requests:
         cpu: "1"
@@ -148,7 +148,7 @@ spec:
   networkRef:
     name: tutorial
   type: Ephemeral
-  image: ghcr.io/spawnery/purpur:26.2-0.11.0
+  image: ghcr.io/spawnery/purpur:26.3-0.11.0
   maxPlayers: 20
   scaling:
     minReplicas: 1
@@ -164,7 +164,7 @@ spec:
   networkRef:
     name: tutorial
   replicas: 1
-  image: ghcr.io/spawnery/velocity:3.5.1-0.11.0
+  image: ghcr.io/spawnery/velocity:4.2.0-0.11.0
   # Velocity does not need a backend's heap; overriding the Network's
   # defaults keeps the proxy off the 2Gi a Paper server needs.
   resources:
@@ -270,7 +270,7 @@ automated check joins the same address the same way, with a test-only tool
 that logs in and prints what it saw instead of rendering a world —
 
 ```json
-{"protocol":776,"username":"spawnery_probe","uuid":"bcc1dc19-a5eb-33a1-aa1b-4e3907d5e22f","compressed":true}
+{"protocol":777,"username":"spawnery_probe","uuid":"bcc1dc19-a5eb-33a1-aa1b-4e3907d5e22f","compressed":true}
 ```
 
 ## 6. Watch the group notice you

@@ -6,6 +6,8 @@ CONTAINER ?= docker
 IMAGE ?= $(shell nix eval --raw .#paper-image.imageName):$(shell nix eval --raw .#paper-image.imageTag)
 VELOCITY_IMAGE ?= $(shell nix eval --raw .#velocity-image.imageName):$(shell nix eval --raw .#velocity-image.imageTag)
 PURPUR_IMAGE ?= $(shell nix eval --raw .#purpur-image.imageName):$(shell nix eval --raw .#purpur-image.imageTag)
+IMAGE_26_2 ?= $(shell nix eval --raw .#paper-image-26-2.imageName):$(shell nix eval --raw .#paper-image-26-2.imageTag)
+PURPUR_IMAGE_26_2 ?= $(shell nix eval --raw .#purpur-image-26-2.imageName):$(shell nix eval --raw .#purpur-image-26-2.imageTag)
 OPERATOR_IMAGE ?= $(shell nix eval --raw .#operator-image.imageName):$(shell nix eval --raw .#operator-image.imageTag)
 STUBOP ?= $(shell nix build .#spawnery-stubop --no-link --print-out-paths)/bin/spawnery-stubop
 
@@ -182,8 +184,8 @@ lint:
 .PHONY: paper-pin
 # Computes what nix/paper.nix has to say about a Paper build, and writes it in.
 #
-#   make paper-pin                    the newest STABLE build of the pinned version
-#   make paper-pin ARGS="26.3"        the newest STABLE build of 26.3
+#   make paper-pin                    the newest STABLE (else BETA) build of the pinned version
+#   make paper-pin ARGS="26.3"        the same for 26.3
 #   make paper-pin ARGS="26.3 118"    exactly that build
 #   make paper-pin-check              print, compare, change nothing
 #
@@ -251,9 +253,11 @@ image-load: image
 # is what makes that table row true rather than aspirational, and it keeps
 # one command as the single gate for "did I break either image", the same way
 # `go build ./...` is for compilation.
-image-test: image-load purpur-image-load velocity-image-load
+image-test: image-load purpur-image-load velocity-image-load images-26-2-load
 	CONTAINER=$(CONTAINER) IMAGE=$(IMAGE) hack/image-test.sh
 	CONTAINER=$(CONTAINER) IMAGE=$(PURPUR_IMAGE) hack/image-test.sh
+	CONTAINER=$(CONTAINER) IMAGE=$(IMAGE_26_2) hack/image-test.sh
+	CONTAINER=$(CONTAINER) IMAGE=$(PURPUR_IMAGE_26_2) hack/image-test.sh
 	CONTAINER=$(CONTAINER) IMAGE=$(VELOCITY_IMAGE) hack/velocity-image-test.sh
 
 # The level-2 proof from design section 9. Not part of `test` or `all`, for the
@@ -281,6 +285,14 @@ purpur-image-load: purpur-image
 .PHONY: purpur-image-test
 purpur-image-test: purpur-image-load
 	CONTAINER=$(CONTAINER) IMAGE=$(PURPUR_IMAGE) hack/image-test.sh
+
+# The previous Minecraft version's two images, built until they are dropped.
+.PHONY: images-26-2-load
+images-26-2-load:
+	nix build .#paper-image-26-2 --out-link result-paper-26-2
+	nix build .#purpur-image-26-2 --out-link result-purpur-26-2
+	$(CONTAINER) load < result-paper-26-2
+	$(CONTAINER) load < result-purpur-26-2
 
 .PHONY: velocity-image
 velocity-image:
@@ -332,6 +344,10 @@ image-repro:
 	nix build .#paper-image --rebuild --no-link
 	nix build .#purpur-image --no-link
 	nix build .#purpur-image --rebuild --no-link
+	nix build .#paper-image-26-2 --no-link
+	nix build .#paper-image-26-2 --rebuild --no-link
+	nix build .#purpur-image-26-2 --no-link
+	nix build .#purpur-image-26-2 --rebuild --no-link
 	nix build .#velocity-image --no-link
 	nix build .#velocity-image --rebuild --no-link
 	nix build .#operator-image --no-link

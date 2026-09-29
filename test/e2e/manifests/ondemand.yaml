@@ -27,7 +27,7 @@ spec:
   forwardingSecretRef:
     name: velocity-forwarding-secret
   defaults:
-    minecraftVersion: "26.2"
+    minecraftVersion: "26.3"
     # docs/tutorial/network.yaml's own numbers, and they are load-bearing here
     # rather than decoration. The image sizes the heap with MaxRAMPercentage,
     # so a server with no memory limit takes three quarters of whatever machine
@@ -97,7 +97,7 @@ spec:
   networkRef:
     name: production
   type: OnDemand
-  image: ghcr.io/spawnery/purpur:26.2-0.11.0
+  image: ghcr.io/spawnery/purpur:26.3-0.11.0
   maxPlayers: 10
   maxInstances: 4
   storage:

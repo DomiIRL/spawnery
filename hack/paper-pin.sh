@@ -20,8 +20,8 @@
 # `make image-test` is what informs it.
 #
 # Usage:
-#   hack/paper-pin.sh                 # the latest build of the pinned version
-#   hack/paper-pin.sh 26.3            # the latest build of 26.3
+#   hack/paper-pin.sh                 # the latest STABLE (else BETA) build of the pinned version
+#   hack/paper-pin.sh 26.3            # the same for 26.3
 #   hack/paper-pin.sh 26.3 118        # exactly that build
 #   CHECK=1 hack/paper-pin.sh         # print, compare, change nothing
 #
@@ -55,10 +55,12 @@ current_build="$(sed -n 's/^  paperBuild = "\(.*\)";$/\1/p' "$NIX_FILE")"
 version="${1:-$current_version}"
 build="${2:-}"
 if [ -z "$build" ]; then
+	# STABLE when there is one; a version PaperMC never promoted has only BETA.
 	build="$(curl -fsS "$API/versions/$version/builds" |
-		jq -r '[.[] | select(.channel == "STABLE") | .id] | max')"
+		jq -r '([.[] | select(.channel == "STABLE") | .id] | max) //
+			([.[] | select(.channel == "BETA") | .id] | max)')"
 	[ -n "$build" ] && [ "$build" != "null" ] ||
-		fail "no STABLE build found for Paper $version"
+		fail "no STABLE or BETA build found for Paper $version"
 fi
 
 meta="$(curl -fsS "$API/versions/$version/builds/$build")" ||

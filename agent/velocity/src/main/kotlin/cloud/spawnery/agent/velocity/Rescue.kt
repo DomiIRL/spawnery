@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
  * "whatever fails in the process" of a drain; the measurement says it is more
  * than that, because without a drain it is the only thing there is.
  *
- * ## What actually reaches this, measured against velocity 3.5.1 build 615
+ * ## What actually reaches this, measured against velocity 3.5.1-615 and 4.2.0-30
  *
  * `ConnectedPlayer.handleConnectionException(server, reason, friendly, safe)`
  * returns without firing the event at all when `safe` is false. The callers:

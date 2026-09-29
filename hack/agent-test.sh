@@ -1253,7 +1253,7 @@ echo "the proxy reports its configured player limit as slots"
 #
 # BackendPlayers is what tells the operator a player is *arriving* at a
 # backend. Neither the backend nor the proxy's own getPlayersConnected() can
-# see one -- velocity 3.5.1 build 615 calls VelocityRegisteredServer.addPlayer
+# see one -- velocity 3.5.1-615 and 4.2.0-30 call VelocityRegisteredServer.addPlayer
 # from BackendPlaySessionHandler.activated() and from nowhere else, so a player
 # still in the configuration phase is counted by neither. An agent that stopped
 # sending this would leave every other assertion in this phase green while a

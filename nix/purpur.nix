@@ -17,18 +17,18 @@
 # script makes on its first download is weaker. What actually freezes the input
 # is the hash below, which is the same either way.
 rec {
-  purpurVersion = "26.2";
-  purpurBuild = "2628";
+  purpurVersion = "26.3";
+  purpurBuild = "2642";
 
   purpurJar = fetchurl {
     url = "https://api.purpurmc.org/v2/purpur/${purpurVersion}/${purpurBuild}/download";
-    hash = "sha256-dbnEn/0J8mGA+0qyhdhA2oBvebNH8v4iVq3iaR2hVJI=";
+    hash = "sha256-zAdiFPyFb1XlL3/oPhL7Q2HeCWd/XIncrwJKKlgs21A=";
   };
 
   # Mojang's server jar arrives as an argument, and the flake passes Paper's.
-  # Measured on 2026-08-31: Purpur 26.2 build 2628 names exactly the object
+  # Measured on 2026-09-29: Purpur 26.3 build 2642 names exactly the object
   # nix/paper.nix already pins --
-  # 823e2250d24b3ddac457a60c92a6a941943fcd6a -- because both forks are the same
+  # 33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c -- because both forks are the same
   # Minecraft version and there is only one such jar.
   #
   # Sharing it is safe rather than convenient, and the reason is that paperclip

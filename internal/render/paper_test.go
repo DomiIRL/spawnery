@@ -176,6 +176,26 @@ func TestPaperCarriesMaxPlayersThrough(t *testing.T) {
 	}
 }
 
+func TestPaperTurnsTheWhitelistOffUnlessAskedFor(t *testing.T) {
+	files, err := Paper(paperValues(), "s3cret", nil)
+	if err != nil {
+		t.Fatalf("Paper: %v", err)
+	}
+	if props := string(files["server.properties"]); !strings.Contains(props, "white-list=false") {
+		t.Errorf("server.properties does not contain white-list=false:\n%s", props)
+	}
+
+	files, err = Paper(paperValues(), "s3cret", map[string]string{
+		"server.properties": "white-list=true\n",
+	})
+	if err != nil {
+		t.Fatalf("Paper: %v", err)
+	}
+	if props := string(files["server.properties"]); !strings.Contains(props, "white-list=true") {
+		t.Errorf("the overlay did not turn the whitelist on:\n%s", props)
+	}
+}
+
 // An overlay reaches a field the API does not model.
 func TestPaperOverlayReachesAnUnmodelledField(t *testing.T) {
 	files, err := Paper(paperValues(), "s3cret", map[string]string{

@@ -105,6 +105,9 @@ func Paper(v Values, secret string, overlay map[string]string) (map[string][]byt
 		map[string]string{
 			"max-players": strconv.FormatInt(int64(*v.MaxPlayers), 10),
 			"motd":        valueOr(v.Motd, ""),
+			// Minecraft 26.3 turned its own default to true, which refuses
+			// every player on a server that starts with an empty whitelist.
+			"white-list": "false",
 		},
 		userProps,
 		map[string]string{
