@@ -130,7 +130,8 @@ void playableSlots(int slots);
   carries; it asks the operator nothing, so it returns nothing and cannot fail
   on the network.
 - A negative value throws `IllegalArgumentException`. On a proxy it throws
-  `IllegalStateException`: a proxy has no seats a group is sized by.
+  `UnsupportedOperationException`, as `holdReadiness` does: a proxy has no
+  seats a group is sized by.
 - `ServerInfo.playableSlots()` and `InstanceStatus.playableSlots()` read the
   effective value. Both are records; the existing constructors stay as
   overloads that pass the slots through as playable, so code building them
@@ -176,8 +177,12 @@ Every test below is seen red before the change that turns it green.
 - `agent` (Kotlin): `playableSlots` validates, is carried on the next report and
   again after a new stream; `StatusLines`/`ListLines` render the equal and the
   differing case; `StatusConversion` maps the field. `FakeApi` follows.
-- e2e: a group with `maxPlayers 3`, `playableSlots 1`, `spareSlots 1` and
-  `minReplicas 1`; one `spawnery-join` bot joins; a second server is created.
+- e2e, on the nightly tutorial run (`hack/e2e-tutorial.sh`), the only one
+  with live agents: the tutorial group (`maxPlayers 20`, two servers
+  running) patched to `playableSlots 1`, `spareSlots 3` grows to its
+  `maxReplicas` of three, each mirrors one playable seat, and
+  `status.freeSlots` reads 3. No join: the join bot stops in the
+  configuration state and is never counted by a backend.
 
 ## 10. Docs
 
