@@ -54,6 +54,8 @@ type Snapshot struct {
 	Players int32
 	// Slots is the last reported capacity.
 	Slots int32
+	// PlayableSlots is the last figure the plugin set, 0 if it set none.
+	PlayableSlots int32
 	// TPS and MSPT are what a server agent last reported about its tick rate;
 	// zero when it never did. Fresh exactly when the player count is: they
 	// arrive in the same report.
@@ -116,6 +118,7 @@ type entry struct {
 	ready          bool
 	players        int32
 	slots          int32
+	playable       int32
 	tps            float64
 	mspt           float64
 	emptySince     time.Time
@@ -334,6 +337,23 @@ func (r *Registry) ReportTicks(key string, tps, mspt float64) error {
 	}
 	e.tps = tps
 	e.mspt = mspt
+	return nil
+}
+
+// ReportPlayableSlots records the plugin's playable figure from the same
+// report as the player count.
+func (r *Registry) ReportPlayableSlots(key string, playable int32) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	e, ok := r.entries[key]
+	if !ok || !e.connected {
+		return fmt.Errorf("no live stream for %q", key)
+	}
+	if playable < 0 {
+		return fmt.Errorf("negative playable slots for %q: %d", key, playable)
+	}
+	e.playable = playable
 	return nil
 }
 
@@ -717,6 +737,7 @@ func (r *Registry) Lookup(key string) Snapshot {
 		Ready:             e.ready,
 		Players:           e.players,
 		Slots:             e.slots,
+		PlayableSlots:     e.playable,
 		TPS:               e.tps,
 		MSPT:              e.mspt,
 		PlayersReportedAt: e.lastReportAt,
