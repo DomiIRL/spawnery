@@ -903,6 +903,11 @@ func (in *ServerGroupList) DeepCopyObject() runtime.Object {
 func (in *ServerGroupSpec) DeepCopyInto(out *ServerGroupSpec) {
 	*out = *in
 	out.NetworkRef = in.NetworkRef
+	if in.PlayableSlots != nil {
+		in, out := &in.PlayableSlots, &out.PlayableSlots
+		*out = new(int32)
+		**out = **in
+	}
 	if in.Replicas != nil {
 		in, out := &in.Replicas, &out.Replicas
 		*out = new(int32)

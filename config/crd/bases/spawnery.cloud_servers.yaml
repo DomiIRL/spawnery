@@ -242,6 +242,12 @@ spec:
                   Phase is the state machine position: Pending, Starting, Ready, Draining,
                   Terminating or Failed.
                 type: string
+              playableSlots:
+                description: |-
+                  PlayableSlots is how many of Slots count as capacity: the plugin's
+                  figure, else the group's spec.playableSlots, else Slots.
+                format: int32
+                type: integer
               players:
                 description: Players is the last reported player count, throttled
                   to protect etcd.

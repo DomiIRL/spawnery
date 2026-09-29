@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1_test
 
 import (
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -412,4 +413,63 @@ func TestServerGroupImmutableFields(t *testing.T) {
 			t.Fatal("update set storageClassName, want rejection")
 		}
 	})
+}
+
+const playableSlotsRule = "spec.playableSlots must be between 1 and spec.maxPlayers"
+
+func TestPlayableSlotsIsBoundedByMaxPlayers(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	for name, tc := range map[string]struct {
+		playable *int32
+		ok       bool
+	}{
+		"absent":              {nil, true},
+		"one":                 {ptr.To[int32](1), true},
+		"equal to maxPlayers": {ptr.To[int32](100), true},
+		"zero":                {ptr.To[int32](0), false},
+		"above maxPlayers":    {ptr.To[int32](101), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			g := ephemeralGroup(ns, "playable-"+strings.ToLower(strings.ReplaceAll(name, " ", "-")))
+			g.Spec.PlayableSlots = tc.playable
+			err := c.Create(ctx, g)
+			if tc.ok && err != nil {
+				t.Fatalf("playableSlots %v was refused: %v", tc.playable, err)
+			}
+			if !tc.ok && (err == nil || !strings.Contains(err.Error(), playableSlotsRule)) {
+				t.Fatalf("playableSlots %v: err = %v, want the playableSlots rule", ptr.Deref(tc.playable, -1), err)
+			}
+		})
+	}
+}
+
+func TestLoweringMaxPlayersBelowPlayableSlotsIsRefused(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+	g := ephemeralGroup(ns, "duels")
+	g.Spec.PlayableSlots = ptr.To[int32](12)
+	if err := c.Create(ctx, g); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	g.Spec.MaxPlayers = 10
+	if err := c.Update(ctx, g); err == nil || !strings.Contains(err.Error(), playableSlotsRule) {
+		t.Fatalf("maxPlayers 10 below playableSlots 12: err = %v, want the playableSlots rule", err)
+	}
+}
+
+func TestPlayableSlotsIsAllowedOnEveryType(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+	p := persistentGroup(ns, "persistent-playable")
+	p.Spec.PlayableSlots = ptr.To[int32](10)
+	if err := c.Create(ctx, p); err != nil {
+		t.Fatalf("persistent: %v", err)
+	}
+	o := onDemandGroup(ns, "ondemand-playable")
+	o.Spec.PlayableSlots = ptr.To[int32](5)
+	if err := c.Create(ctx, o); err != nil {
+		t.Fatalf("on-demand: %v", err)
+	}
 }
