@@ -57,6 +57,8 @@ type ScalingInputs struct {
 	SpareSlots int32
 	// MaxPlayers is the capacity of a single server of this group.
 	MaxPlayers int32
+	// PlayableSlots is spec.playableSlots, 0 when unset.
+	PlayableSlots int32
 	// Stabilization is how long a server must have been empty before it may
 	// be removed for lack of demand.
 	Stabilization time.Duration
@@ -107,6 +109,14 @@ type ScalingInputs struct {
 // that builds servers and then removes them, or refuses to remove capacity
 // nothing is asking for. A third site added later gets it for free.
 func (in ScalingInputs) floor() int32 { return in.MinReplicas + in.Boost }
+
+// capacity is what one server brings before it has reported anything.
+func (in ScalingInputs) capacity() int32 {
+	if in.PlayableSlots > 0 {
+		return in.PlayableSlots
+	}
+	return in.MaxPlayers
+}
 
 // SizeDecision is what the group does about its size this pass.
 type SizeDecision struct {
@@ -205,7 +215,7 @@ type OrdinalConflict struct {
 // current generation — because that is what its CRD field documents and what
 // the rolling update needs. Two numbers, two purposes; they must not be
 // unified.
-func provisionalCapacity(v ServerView, maxPlayers int32) int32 {
+func provisionalCapacity(v ServerView, capacity int32) int32 {
 	if !v.countsTowardSize() {
 		return 0
 	}
@@ -260,15 +270,12 @@ func provisionalCapacity(v ServerView, maxPlayers int32) int32 {
 		return 0
 	}
 	if v.Slots == 0 {
-		return maxPlayers
+		return capacity
 	}
 	if v.Stale {
 		return 0
 	}
-	if free := v.Slots - v.Players; free > 0 {
-		return free
-	}
-	return 0
+	return v.freeSeats()
 }
 
 // deletable is the candidate pool: what the cache shows, minus the servers
@@ -331,10 +338,7 @@ func readyContribution(v ServerView) int32 {
 	if v.Phase != phase.Ready || v.Stale || !v.Registered || v.JoinsClosed {
 		return 0
 	}
-	if free := v.Slots - v.Players; free > 0 {
-		return free
-	}
-	return 0
+	return v.freeSeats()
 }
 
 // readyFree is the group's arrived free capacity, the total the feasibility
@@ -647,7 +651,8 @@ func condemned(in ScalingInputs) []string {
 // shrinks in the same pass.
 func decideSize(in ScalingInputs) SizeDecision {
 	alive := in.PendingCreates
-	provisional := in.PendingCreates * in.MaxPlayers
+	capacity := in.capacity()
+	provisional := in.PendingCreates * capacity
 	for _, v := range in.Views {
 		if in.PendingDeletes[v.Name] {
 			continue
@@ -655,13 +660,13 @@ func decideSize(in ScalingInputs) SizeDecision {
 		if v.countsTowardSize() {
 			alive++
 		}
-		provisional += provisionalCapacity(v, in.MaxPlayers)
+		provisional += provisionalCapacity(v, capacity)
 	}
 
 	var wanted int32
-	if in.MaxPlayers > 0 && provisional < in.SpareSlots {
+	if capacity > 0 && provisional < in.SpareSlots {
 		gap := in.SpareSlots - provisional
-		wanted = (gap + in.MaxPlayers - 1) / in.MaxPlayers
+		wanted = (gap + capacity - 1) / capacity
 	}
 
 	create := wanted

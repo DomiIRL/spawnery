@@ -2031,3 +2031,67 @@ func TestANodeDrainStillCondemnsAHeldServer(t *testing.T) {
 		t.Errorf("Condemn = %v, want the held server: its node is leaving", got.Condemn)
 	}
 }
+
+func TestAFullLobbyWithHeadroomOrdersTheNextServer(t *testing.T) {
+	lobby := ready("duels-a", 12, 100)
+	lobby.Playable = 12
+	got := DecideSize(ScalingInputs{
+		Views:       []ServerView{lobby},
+		MinReplicas: 1, MaxReplicas: 4,
+		SpareSlots: 1, MaxPlayers: 100, PlayableSlots: 12,
+	})
+	if got.Create != 1 {
+		t.Errorf("Create = %d, want 1: a lobby full at its playable seats has no room", got.Create)
+	}
+}
+
+func TestWithoutPlayableSlotsAFullLobbyStillReadsAsRoom(t *testing.T) {
+	got := DecideSize(ScalingInputs{
+		Views:       []ServerView{ready("duels-a", 12, 100)},
+		MinReplicas: 1, MaxReplicas: 4,
+		SpareSlots: 1, MaxPlayers: 100,
+	})
+	if got.Create != 0 {
+		t.Errorf("Create = %d, want 0: without the field 88 seats are free, as before", got.Create)
+	}
+}
+
+func TestTheCapacityUnitIsThePlayableFigure(t *testing.T) {
+	got := DecideSize(ScalingInputs{
+		MinReplicas: 0, MaxReplicas: 10,
+		SpareSlots: 24, MaxPlayers: 100, PlayableSlots: 12,
+	})
+	if got.Create != 2 {
+		t.Errorf("Create = %d, want 2 servers of 12 playable seats for 24 spare", got.Create)
+	}
+}
+
+func TestAPendingCreateCountsItsPlayableSeats(t *testing.T) {
+	got := DecideSize(ScalingInputs{
+		MinReplicas: 0, MaxReplicas: 10,
+		SpareSlots: 24, MaxPlayers: 100, PlayableSlots: 12,
+		PendingCreates: 1,
+	})
+	if got.Create != 1 {
+		t.Errorf("Create = %d, want 1 more: the pending one brings 12, not 100", got.Create)
+	}
+}
+
+func TestProvisionalCapacityCreditsAStartingServerItsPlayableSeats(t *testing.T) {
+	if got := provisionalCapacity(starting("a"), 12); got != 12 {
+		t.Errorf("provisionalCapacity = %d, want the group's 12", got)
+	}
+	full := ready("b", 14, 100)
+	full.Playable = 12
+	if got := provisionalCapacity(full, 12); got != 0 {
+		t.Errorf("provisionalCapacity = %d, want 0 for a server past its playable seats", got)
+	}
+}
+
+func TestReadyContributionCountsPlayableSeats(t *testing.T) {
+	v := ready("a", 9, 100)
+	v.Playable = 12
+	if got := readyContribution(v); got != 3 {
+		t.Errorf("readyContribution = %d, want 3", got)
+	}
+}

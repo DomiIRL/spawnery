@@ -45,6 +45,8 @@ type ServerView struct {
 	Players int32
 	// Slots is the reported capacity.
 	Slots int32
+	// Playable is how many of Slots count as capacity; 0 reads as Slots.
+	Playable int32
 	// EmptyFor is how long this server has been reporting zero players. Like
 	// agent.Snapshot.EmptyFor it decides nothing on its own: a server that was
 	// never empty carries zero here too, so every rule that reads it also asks
@@ -249,6 +251,34 @@ func clampReport(players, slots, maxPlayers int32) (int32, int32) {
 		players = slots
 	}
 	return players, slots
+}
+
+func playableSeats(reported int32, spec *int32, slots int32) int32 {
+	playable := slots
+	switch {
+	case reported > 0:
+		playable = reported
+	case spec != nil:
+		playable = *spec
+	}
+	if playable > slots {
+		playable = slots
+	}
+	if playable < 1 && slots > 0 {
+		playable = 1
+	}
+	return playable
+}
+
+func (v ServerView) freeSeats() int32 {
+	playable := v.Playable
+	if playable <= 0 || playable > v.Slots {
+		playable = v.Slots
+	}
+	if free := playable - v.Players; free > 0 {
+		return free
+	}
+	return 0
 }
 
 // mayHavePlayers is the question the deletion candidate selection asks: could
@@ -545,10 +575,7 @@ func AggregateGroup(views []ServerView, podHash string) GroupTotals {
 		// reach it at all. Free seats behind either are not capacity.
 		if v.Phase == phase.Ready && v.Registered && !v.JoinsClosed &&
 			!staleSpec(v, podHash) && !v.Stale {
-			free := v.Slots - v.Players
-			if free > 0 {
-				t.FreeSlots += free
-			}
+			t.FreeSlots += v.freeSeats()
 		}
 	}
 	return t
