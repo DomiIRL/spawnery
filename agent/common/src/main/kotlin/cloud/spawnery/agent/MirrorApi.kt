@@ -58,6 +58,8 @@ class MirrorApi(
      * Defaulted so the many call sites that do not care stay as they are.
      */
     private val readiness: ReadinessGate? = null,
+    /** Where a server keeps its playable figure; null on a proxy. */
+    private val playable: ((Int) -> Unit)? = null,
 ) : SpawneryApi {
     override fun self(): Self = self
 
@@ -119,6 +121,14 @@ class MirrorApi(
             "this is a proxy; a proxy has no readiness to hold",
         )
         return gate.hold(reason)
+    }
+
+    override fun playableSlots(slots: Int) {
+        val sink = playable ?: throw UnsupportedOperationException(
+            "this is a proxy; a proxy has no seats a group is sized by",
+        )
+        require(slots >= 0) { "playable slots must not be negative, got $slots" }
+        sink(slots)
     }
 
     override fun stopBoosts(group: String): CompletionStage<Int> =

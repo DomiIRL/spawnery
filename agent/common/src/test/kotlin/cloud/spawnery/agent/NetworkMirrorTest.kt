@@ -246,4 +246,16 @@ class NetworkMirrorTest {
         assertEquals(7, server.players())
         assertEquals(20, server.slots())
     }
+
+    @Test
+    fun `a server's playable figure reaches ServerInfo`() {
+        val mirror = NetworkMirror()
+        mirror.apply(
+            NetworkState.newBuilder().addServers(
+                ServerState.newBuilder().setName("duels-a").setGroup("duels").setPhase("Ready")
+                    .setPlayers(14).setSlots(100).setPlayableSlots(12),
+            ).build(),
+        )
+        assertEquals(12, mirror.servers().single().playableSlots())
+    }
 }

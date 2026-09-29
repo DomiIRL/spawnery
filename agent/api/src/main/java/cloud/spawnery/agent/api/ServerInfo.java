@@ -64,6 +64,9 @@ import java.util.Objects;
  *     automatic removes it any more; it stays until it ends by itself.
  * @param node the Kubernetes node the server's pod runs on, empty while it is
  *     not scheduled.
+ * @param playableSlots how many of {@code slots} count as capacity. Equal to
+ *     {@code slots} when nothing narrowed it, and for a report from an
+ *     operator older than this field.
  */
 public record ServerInfo(
         String name,
@@ -77,7 +80,8 @@ public record ServerInfo(
         String incarnation,
         int number,
         boolean held,
-        String node) {
+        String node,
+        int playableSlots) {
     public ServerInfo {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(group, "group");
@@ -94,6 +98,26 @@ public record ServerInfo(
         // without a null check.
         incarnation = incarnation == null ? "" : incarnation;
         node = node == null ? "" : node;
+        if (playableSlots <= 0 || playableSlots > slots) {
+            playableSlots = slots;
+        }
+    }
+
+    /** The record as it was before {@code playableSlots}, which it reads as every seat. */
+    public ServerInfo(
+            String name,
+            String group,
+            ServerPhase phase,
+            int players,
+            int slots,
+            boolean registered,
+            String state,
+            Map<String, String> attributes,
+            String incarnation,
+            int number,
+            boolean held,
+            String node) {
+        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, held, node, slots);
     }
 
     /** The record as it was before {@code node}, which it reads as not scheduled. */
@@ -109,7 +133,7 @@ public record ServerInfo(
             String incarnation,
             int number,
             boolean held) {
-        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, held, "");
+        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, held, "", slots);
     }
 
     /** The record as it was before {@code held}, which it reads as false. */
@@ -124,7 +148,7 @@ public record ServerInfo(
             Map<String, String> attributes,
             String incarnation,
             int number) {
-        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, false, "");
+        this(name, group, phase, players, slots, registered, state, attributes, incarnation, number, false, "", slots);
     }
 
     /**

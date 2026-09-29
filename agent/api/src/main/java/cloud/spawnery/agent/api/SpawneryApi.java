@@ -318,6 +318,25 @@ public interface SpawneryApi {
     CompletionStage<Void> endRound();
 
     /**
+     * Sets how many of this server's seats count as capacity, from now until
+     * changed: what its group's spare slots, free slots and a connect to the
+     * group measure. Players beyond it are still admitted up to the server's
+     * limit, and make the server full rather than overfull.
+     *
+     * <p>It asks the operator nothing. The next periodic report carries it,
+     * and every report after that, so a new session restates it without a
+     * second call.
+     *
+     * <p>Servers only; a proxy throws {@link UnsupportedOperationException}.
+     *
+     * @param slots the playable seats; 0 hands the decision back to the
+     *     group's {@code spec.playableSlots}. A figure above the server's
+     *     slots counts as its slots.
+     * @throws IllegalArgumentException if {@code slots} is negative
+     */
+    void playableSlots(int slots);
+
+    /**
      * Holds this server back from readiness until the returned hold is closed.
      *
      * <p>For a plugin whose initialisation continues after the server has

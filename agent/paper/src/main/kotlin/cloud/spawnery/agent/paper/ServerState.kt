@@ -26,6 +26,13 @@ class ServerState {
     val players: Int get() = playerCount.get()
     val slots: Int get() = slotCount.get()
 
+    private val playableCount = AtomicInteger(0)
+    val playable: Int get() = playableCount.get()
+
+    fun setPlayable(slots: Int) {
+        playableCount.set(slots)
+    }
+
     private val tpsBits = AtomicLong(0)
     private val msptBits = AtomicLong(0)
 

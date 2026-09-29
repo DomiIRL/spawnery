@@ -59,7 +59,8 @@ class ServerRole(
                     .setPlayers(state.players)
                     .setSlots(state.slots)
                     .setTps(state.tps)
-                    .setMspt(state.mspt),
+                    .setMspt(state.mspt)
+                    .setPlayableSlots(state.playable),
             )
             .build()
 
