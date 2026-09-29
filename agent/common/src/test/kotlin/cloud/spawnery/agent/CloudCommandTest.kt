@@ -913,6 +913,53 @@ class CloudCommandTest {
         )
         assertTrue(sent.any { plain(it).contains("(on-demand)") } && sent.none { it.contains("on_demand") }, "$sent")
     }
+
+    @Test
+    fun `info on a server shows playable seats beside the limit`() {
+        run(
+            "cloud info duels-a",
+            api(
+                NetworkState.newBuilder().addServers(
+                    ServerState.newBuilder().setName("duels-a").setGroup("duels").setPhase("Ready")
+                        .setPlayers(9).setSlots(100).setPlayableSlots(12).setRegistered(true),
+                ).build(),
+            ),
+        )
+        assertTrue(sent.any { plain(it).contains("Players") && plain(it).contains("9 / 12 · max 100") }, "$sent")
+    }
+
+    @Test
+    fun `info on a group lists its servers with playable seats`() {
+        run(
+            "cloud info duels",
+            api(
+                NetworkState.newBuilder()
+                    .addGroups(GroupState.newBuilder().setName("duels").setKind(GroupState.Kind.EPHEMERAL))
+                    .addServers(
+                        ServerState.newBuilder().setName("duels-a").setGroup("duels").setPhase("Ready")
+                            .setPlayers(9).setSlots(100).setPlayableSlots(12).setRegistered(true),
+                    ).build(),
+            ),
+        )
+        assertTrue(sent.any { plain(it).contains("9/12 · max 100") }, "$sent")
+    }
+
+    @Test
+    fun `status of a server with spectators shows a full bar and the limit`() {
+        run("cloud status lobby-r", api(aNetworkWithProxies()))
+        statusAnswer {
+            metricsAvailable = true
+            total = usage(400, 500, 1L shl 30, 2L shl 30, 1, 1).build()
+            addInstances(
+                cloud.spawnery.agent.pb.InstanceStatus.newBuilder().setName("lobby-r").setGroup("lobby")
+                    .setPhase("Ready").setPlayers(14).setSlots(100).setPlayableSlots(12)
+                    .setAgeSeconds(60).setUsage(usage(400, 500, 1L shl 30, 2L shl 30, 1, 1)),
+            )
+        }
+        val players = sent.first { plain(it).contains("Players") && plain(it).contains("max") }
+        assertTrue(plain(players).contains("14 / 12 · max 100"), players)
+        assertTrue(players.contains("<dark_gray></dark_gray>"), "the bar is not full: $players")
+    }
 }
 
 class CloudCompletionTest {

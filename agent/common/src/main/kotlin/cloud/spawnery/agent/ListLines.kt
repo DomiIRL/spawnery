@@ -71,11 +71,11 @@ internal fun serverInfoLines(s: ServerInfo): List<String> {
         ),
         Layout.field("Node", nodeText(s.node())),
     )
-    val fill = if (s.slots() > 0) s.players().toDouble() / s.slots() else 0.0
+    val fill = seatsFill(s.players(), s.playableSlots(), s.slots())
     lines += Layout.field(
         "Players",
         (if (s.slots() > 0) Layout.bar(fill, Layout.fillColour(fill)) + "  " else "") +
-            Style.number("${s.players()} / ${s.slots()}"),
+            Style.number(seatsText(s.players(), s.playableSlots(), s.slots(), spaced = true)),
     )
     if (s.state().isNotEmpty()) lines += Layout.field("Says", Style.name(s.state()))
     if (s.held()) lines += Layout.field("Marked", Style.bad("held"))
@@ -126,7 +126,7 @@ internal fun groupInfoLines(g: Group, servers: List<ServerInfo>, proxies: List<P
                     Layout.joined(
                         Style.name(it.name()),
                         Style.number(it.phase().toString()),
-                        Style.number("${it.players()}/${it.slots()}"),
+                        Style.number(seatsText(it.players(), it.playableSlots(), it.slots(), spaced = false)),
                         nodeText(it.node()),
                         if (it.held()) Style.bad("held") else "",
                     ),

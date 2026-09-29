@@ -140,7 +140,7 @@ private fun markers(i: InstanceStatus): String = listOfNotNull(
 private fun memberLine(i: InstanceStatus): String = Layout.joined(
     Style.name(i.name()),
     if (i.proxy()) (if (i.ready()) Style.good("ready") else Style.bad("not ready")) else Style.number(i.phase()),
-    Style.number("${i.players()}/${i.slots()}"),
+    Style.number(seatsText(i.players(), i.playableSlots(), i.slots(), spaced = false)),
     if (i.proxy()) "" else tpsText(i.tps()),
     if (i.proxy()) "" else Style.quiet("MSPT ") + Style.number(if (i.mspt().isEmpty) "–" else one(i.mspt().asDouble)),
     cpuRam(i.usage()),
@@ -161,11 +161,11 @@ private fun instanceLines(i: InstanceStatus, metrics: Boolean): List<String> {
         ),
         Layout.field("Node", nodeText(i.node())),
     )
-    val fill = if (i.slots() > 0) i.players().toDouble() / i.slots() else 0.0
+    val fill = seatsFill(i.players(), i.playableSlots(), i.slots())
     lines += Layout.field(
         "Players",
         (if (i.slots() > 0) Layout.bar(fill, Layout.fillColour(fill)) + "  " else "") +
-            Style.number("${i.players()} / ${i.slots()}"),
+            Style.number(seatsText(i.players(), i.playableSlots(), i.slots(), spaced = true)),
     )
     if (!i.proxy()) {
         val tps = i.tps()
