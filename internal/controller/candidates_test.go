@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	"github.com/spawnery/spawnery/internal/phase"
 )
 
@@ -655,5 +657,58 @@ func TestAClosedDoorIsNotFreeCapacity(t *testing.T) {
 
 	if got, want := AggregateGroup(views, "").FreeSlots, int32(80); got != want {
 		t.Errorf("FreeSlots = %d, want %d — the playing server's seats were counted", got, want)
+	}
+}
+
+func TestPlayableSeatsResolution(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		reported int32
+		spec     *int32
+		slots    int32
+		want     int32
+	}{
+		{"the plugin wins", 8, ptr.To[int32](12), 100, 8},
+		{"the spec when the plugin said nothing", 0, ptr.To[int32](12), 100, 12},
+		{"slots when neither did", 0, nil, 100, 100},
+		{"a plugin figure above the limit is the limit", 500, nil, 100, 100},
+		{"a spec figure above a lowered report is the report", 0, ptr.To[int32](12), 10, 10},
+		{"nothing reported at all", 0, ptr.To[int32](12), 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := playableSeats(tc.reported, tc.spec, tc.slots); got != tc.want {
+				t.Errorf("playableSeats(%d, %v, %d) = %d, want %d",
+					tc.reported, ptr.Deref(tc.spec, -1), tc.slots, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFreeSeatsNeverGoNegative(t *testing.T) {
+	v := ServerView{Players: 14, Slots: 100, Playable: 12}
+	if got := v.freeSeats(); got != 0 {
+		t.Errorf("freeSeats = %d, want 0 with spectators beyond the playable seats", got)
+	}
+	v.Players = 9
+	if got := v.freeSeats(); got != 3 {
+		t.Errorf("freeSeats = %d, want 3", got)
+	}
+	v.Playable = 0
+	if got := v.freeSeats(); got != 91 {
+		t.Errorf("freeSeats = %d, want 91: no playable figure means every seat", got)
+	}
+}
+
+func TestAggregateGroupCountsPlayableSeats(t *testing.T) {
+	views := []ServerView{
+		{Name: "a", Phase: phase.Ready, Registered: true, Slots: 100, Playable: 12, Players: 9},
+		{Name: "b", Phase: phase.Ready, Registered: true, Slots: 100, Playable: 12, Players: 14},
+	}
+	got := AggregateGroup(views, "")
+	if got.FreeSlots != 3 {
+		t.Errorf("FreeSlots = %d, want 3 playable seats", got.FreeSlots)
+	}
+	if got.OnlinePlayers != 23 {
+		t.Errorf("OnlinePlayers = %d, want all 23 including the spectators", got.OnlinePlayers)
 	}
 }

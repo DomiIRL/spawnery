@@ -137,4 +137,17 @@ class ServerRoleTest {
         assertEquals(Directive.None, directive)
         assertEquals(listOf("lobby-a"), mirror.servers().map { it.name() })
     }
+
+    @Test
+    fun `the report carries the plugin's playable figure, and zero once it is taken back`() {
+        val state = ServerState()
+        val role = ServerRole(state, NetworkMirror(), dormantConnector(), aFeed(), CloudEvents())
+        state.sample(players = 14, slots = 100)
+
+        assertEquals(0, role.playerCount().playerCount.playableSlots)
+        state.setPlayable(12)
+        assertEquals(12, role.playerCount().playerCount.playableSlots)
+        state.setPlayable(0)
+        assertEquals(0, role.playerCount().playerCount.playableSlots)
+    }
 }

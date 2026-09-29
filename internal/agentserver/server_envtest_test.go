@@ -935,3 +935,20 @@ func TestAServerAgentReceivesItsNetworkState(t *testing.T) {
 		t.Fatal("no NetworkState arrived in the first five messages of a server session")
 	}
 }
+
+func TestThePlayableFigureReachesTheRegistry(t *testing.T) {
+	f := newServerFixture(t)
+	pod := f.pod("lobby-play")
+	stream, closeConn := dialAgent(t, f.ctx, f.addr, f.ca, f.token(podspec.ServerServiceAccountName, []string{podspec.AgentTokenAudience}, pod))
+	defer closeConn()
+
+	mustSend(t, stream, hello(true))
+	mustSend(t, stream, &agentpb.ServerMessage{Message: &agentpb.ServerMessage_PlayerCount{
+		PlayerCount: &agentpb.PlayerCount{Players: 14, Slots: 100, PlayableSlots: 12},
+	}})
+
+	waitFor(t, func() bool { return f.agents.Lookup(string(pod.UID)).PlayableSlots == 12 })
+	if got := f.agents.Lookup(string(pod.UID)).Players; got != 14 {
+		t.Errorf("Players = %d, want 14: players beyond the playable seats are legitimate", got)
+	}
+}

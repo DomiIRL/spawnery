@@ -3104,7 +3104,7 @@ func TestTheFallbackGroupCarriesEveryCrdDefault(t *testing.T) {
 func TestTheMirroredCountIsClampedToTheGroupsCapacity(t *testing.T) {
 	r := &ServerReconciler{PlayerStatusInterval: time.Minute}
 	srv := &spawneryv1alpha1.Server{}
-	r.mirrorPlayerCount(srv, agent.Snapshot{Known: true, Players: 0, Slots: 1 << 30}, 80,
+	r.mirrorPlayerCount(srv, agent.Snapshot{Known: true, Players: 0, Slots: 1 << 30}, 80, nil,
 		metav1.NewTime(time.Now()))
 	if srv.Status.Slots != 80 {
 		t.Errorf("status.slots = %d, want the group's 80", srv.Status.Slots)
@@ -3114,10 +3114,36 @@ func TestTheMirroredCountIsClampedToTheGroupsCapacity(t *testing.T) {
 	// has no maxPlayers; clampReport would floor that to 1 and rewrite a
 	// server with fifteen players as 1/1 for as long as the object lives.
 	gone := &spawneryv1alpha1.Server{}
-	r.mirrorPlayerCount(gone, agent.Snapshot{Known: true, Players: 15, Slots: 20}, 0,
+	r.mirrorPlayerCount(gone, agent.Snapshot{Known: true, Players: 15, Slots: 20}, 0, nil,
 		metav1.NewTime(time.Now()))
 	if gone.Status.Players != 15 || gone.Status.Slots != 20 {
 		t.Errorf("status = %d/%d without a group, want the report's 15/20 unclamped",
 			gone.Status.Players, gone.Status.Slots)
+	}
+}
+
+func TestTheMirroredCountCarriesThePlayableFigure(t *testing.T) {
+	r := &ServerReconciler{PlayerStatusInterval: time.Minute}
+	srv := &spawneryv1alpha1.Server{}
+	spec := ptr.To[int32](12)
+
+	r.mirrorPlayerCount(srv, agent.Snapshot{Known: true, Players: 14, Slots: 100}, 100, spec,
+		metav1.NewTime(time.Now()))
+	if srv.Status.PlayableSlots != 12 || srv.Status.Players != 14 {
+		t.Errorf("status = %d players, %d playable; want 14 and the spec's 12",
+			srv.Status.Players, srv.Status.PlayableSlots)
+	}
+
+	r.mirrorPlayerCount(srv, agent.Snapshot{Known: true, Players: 14, Slots: 100, PlayableSlots: 8}, 100, spec,
+		metav1.NewTime(time.Now()))
+	if srv.Status.PlayableSlots != 8 {
+		t.Errorf("playable = %d, want the plugin's 8 mirrored at once", srv.Status.PlayableSlots)
+	}
+
+	gone := &spawneryv1alpha1.Server{}
+	r.mirrorPlayerCount(gone, agent.Snapshot{Known: true, Players: 15, Slots: 20}, 0, nil,
+		metav1.NewTime(time.Now()))
+	if gone.Status.PlayableSlots != 20 {
+		t.Errorf("playable = %d without a group, want the report's 20", gone.Status.PlayableSlots)
 	}
 }

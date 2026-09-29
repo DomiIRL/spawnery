@@ -703,6 +703,17 @@ spec:
                 required:
                 - name
                 type: object
+              playableSlots:
+                description: |-
+                  PlayableSlots is how many seats of each server count as capacity: what
+                  spareSlots, status.freeSlots and a connect to the group measure. Unset,
+                  every seat up to maxPlayers counts. A plugin can set its own server's
+                  figure at runtime, which wins over this one.
+
+                  maxPlayers stays the limit a server enforces, so the seats between the
+                  two are room for players the group is not sized by, such as spectators.
+                format: int32
+                type: integer
               replicas:
                 description: |-
                   Replicas is the fixed number of persistent servers. Ephemeral groups are
@@ -810,8 +821,9 @@ spec:
                     minimum: 0
                     type: integer
                   spareSlots:
-                    description: SpareSlots is the number of free player slots kept
-                      available.
+                    description: |-
+                      SpareSlots is the number of free player slots kept available, counted
+                      in playable seats when the group sets playableSlots.
                     format: int32
                     minimum: 0
                     type: integer
@@ -1933,6 +1945,9 @@ spec:
             - message: storage.size must not shrink
               rule: '!has(self.storage) || !has(oldSelf.storage) || quantity(self.storage.size).compareTo(quantity(oldSelf.storage.size))
                 >= 0'
+            - message: spec.playableSlots must be between 1 and spec.maxPlayers
+              rule: '!has(self.playableSlots) || (self.playableSlots >= 1 && self.playableSlots
+                <= self.maxPlayers)'
           status:
             description: ServerGroupStatus is the observed state of a ServerGroup.
             properties:
@@ -2045,8 +2060,9 @@ spec:
               freeSlots:
                 description: |-
                   FreeSlots is the number of seats a proxy can send a player to right
-                  now: the free slots of servers that are Ready, in the proxies' routing
-                  tables, accepting joins, and rendered under the group's current spec.
+                  now: the free playable seats of servers that are Ready, in the proxies'
+                  routing tables, accepting joins, and rendered under the group's current
+                  spec.
                   It is the scaler's input, published. A server that has closed its door
                   for a running round contributes nothing here even while its own
                   maxPlayers minus onlinePlayers is not zero.

@@ -55,7 +55,8 @@ type ScalingSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	MaxReplicas int32 `json:"maxReplicas"`
 
-	// SpareSlots is the number of free player slots kept available.
+	// SpareSlots is the number of free player slots kept available, counted
+	// in playable seats when the group sets playableSlots.
 	// +kubebuilder:validation:Minimum=0
 	SpareSlots int32 `json:"spareSlots"`
 
@@ -155,6 +156,7 @@ type StorageSpec struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || (has(self.storage.storageClassName) == has(oldSelf.storage.storageClassName) && (!has(self.storage.storageClassName) || self.storage.storageClassName == oldSelf.storage.storageClassName))",message="storage.storageClassName is immutable"
 // +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || self.storage.accessModes == oldSelf.storage.accessModes",message="storage.accessModes is immutable"
 // +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || quantity(self.storage.size).compareTo(quantity(oldSelf.storage.size)) >= 0",message="storage.size must not shrink"
+// +kubebuilder:validation:XValidation:rule="!has(self.playableSlots) || (self.playableSlots >= 1 && self.playableSlots <= self.maxPlayers)",message="spec.playableSlots must be between 1 and spec.maxPlayers"
 type ServerGroupSpec struct {
 	// NetworkRef names the Network this group belongs to.
 	NetworkRef ObjectRef `json:"networkRef"`
@@ -169,6 +171,16 @@ type ServerGroupSpec struct {
 	// MaxPlayers is the player capacity of a single server of this group.
 	// +kubebuilder:validation:Minimum=1
 	MaxPlayers int32 `json:"maxPlayers"`
+
+	// PlayableSlots is how many seats of each server count as capacity: what
+	// spareSlots, status.freeSlots and a connect to the group measure. Unset,
+	// every seat up to maxPlayers counts. A plugin can set its own server's
+	// figure at runtime, which wins over this one.
+	//
+	// maxPlayers stays the limit a server enforces, so the seats between the
+	// two are room for players the group is not sized by, such as spectators.
+	// +optional
+	PlayableSlots *int32 `json:"playableSlots,omitempty"`
 
 	// Replicas is the fixed number of persistent servers. Ephemeral groups are
 	// sized by scaling instead.
@@ -409,8 +421,9 @@ type ServerGroupStatus struct {
 	OnlinePlayers int32 `json:"onlinePlayers"`
 
 	// FreeSlots is the number of seats a proxy can send a player to right
-	// now: the free slots of servers that are Ready, in the proxies' routing
-	// tables, accepting joins, and rendered under the group's current spec.
+	// now: the free playable seats of servers that are Ready, in the proxies'
+	// routing tables, accepting joins, and rendered under the group's current
+	// spec.
 	// It is the scaler's input, published. A server that has closed its door
 	// for a running round contributes nothing here even while its own
 	// maxPlayers minus onlinePlayers is not zero.

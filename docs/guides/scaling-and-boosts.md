@@ -20,7 +20,7 @@ spec:
   networkRef:
     name: production
   type: Ephemeral
-  image: ghcr.io/spawnery/purpur:26.3-0.12.0
+  image: ghcr.io/spawnery/purpur:26.3-0.13.0
   maxPlayers: 50
   drain:
     timeoutSeconds: 60
@@ -87,6 +87,32 @@ kubectl delete boost hub-friday -n minecraft
 The group returns to its declared floor on the next pass and sheds the extra
 servers by the ordinary scale-down rule below, not by killing them.
 
+## Seats that count, and seats that do not
+
+A round-based game often wants its servers to admit more players than a round
+takes, so that spectators can still join a full round. `maxPlayers` is the
+limit a server enforces; `playableSlots` is how many of those seats count as
+capacity:
+
+```yaml
+spec:
+  maxPlayers: 100
+  playableSlots: 12
+  scaling:
+    minReplicas: 1
+    maxReplicas: 8
+    spareSlots: 12
+```
+
+A server's free seats are then `max(0, playable − players)`, where `playable`
+is the figure its plugin set with `Spawnery.api().playableSlots(n)`, else
+`spec.playableSlots`, else its slots — never more than its slots. A lobby with
+twelve players is full, and `spareSlots` orders the next server while its
+countdown runs, not after its round has started. Players beyond the twelve are
+still let in up to `maxPlayers`, and make the server full rather than
+overfull. `status.freeSlots`, `/cloud` and a connect to the group all count
+the same seats.
+
 ## The arithmetic, in the order the operator runs it
 
 Every five seconds, for each group, in this order — capacity first, then the
@@ -97,14 +123,17 @@ the same pass.
 enough servers to cover the gap:
 
 ```text
-wanted = ceil((spareSlots - provisional) / maxPlayers)   when provisional < spareSlots
+wanted = ceil((spareSlots - provisional) / capacity)     when provisional < spareSlots
 floor  = minReplicas + live boosts
 create = max(wanted, floor - alive)                      then capped at maxReplicas
 ```
 
+`capacity` is `playableSlots` if the group sets it, else `maxPlayers`: what one
+server brings before it has said anything.
+
 With the group above and 75 players on it — one server full, one with 25 free
 seats — `provisional` is 25, the gap to `spareSlots: 30` is 5, and
-`ceil(5 / 50)` is one more server. Not two: `maxPlayers` is the unit the gap is
+`ceil(5 / 50)` is one more server. Not two: `capacity` is the unit the gap is
 divided by, so a group of large servers answers a small shortfall with one
 server and a group of small ones with several.
 

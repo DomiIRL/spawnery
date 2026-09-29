@@ -360,7 +360,13 @@
           # Purpur images built beside them for the transition, and the
           # renderer writes white-list=false unless an overlay asks for it. The
           # published API is unchanged.
-          imageVersion = "0.12.0";
+          #
+          # 0.13.0 moves it because the API and the agents changed:
+          # SpawneryApi.playableSlots(int), carried on every report, and
+          # ServerInfo and InstanceStatus gain playableSlots(), each keeping
+          # its previous constructor. /cloud shows playable seats beside the
+          # limit.
+          imageVersion = "0.13.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
@@ -539,7 +545,11 @@
           # extraFiles take an image as their source, mounted as an image
           # volume, and spec.substitution passes its prefix to the entrypoint.
           # Nothing rolls.
-          operatorVersion = "0.11.0";
+          #
+          # 0.13.0 moves it with the chart and the images: spec.playableSlots
+          # and a plugin's runtime figure decide the free seats the group
+          # scales on, reports and routes a connect by. Nothing rolls.
+          operatorVersion = "0.13.0";
 
           spawnery-slp = pkgs.buildGoModule {
             pname = "spawnery-slp";

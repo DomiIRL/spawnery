@@ -40,4 +40,20 @@ class RecordCompatibilityTest {
     void aNullNodeReadsAsEmpty() {
         assertEquals("", new ProxyInfo("gateway-a", "gateway", true, false, 3, null).node());
     }
+
+    @Test
+    void theZeroTwelveConstructorsStillBuildAndReadEverySeatAsPlayable() {
+        ServerInfo server = new ServerInfo("lobby-a", "lobby", ServerPhase.READY, 1, 20, true, "", Map.of(), "", 0, false, "node-1");
+        assertEquals(20, server.playableSlots());
+        InstanceStatus instance = new InstanceStatus("lobby-a", "lobby", false, "Ready", true, 1, 20,
+                OptionalDouble.empty(), OptionalDouble.empty(), Duration.ZERO, false, false, false, NONE, "node-1");
+        assertEquals(20, instance.playableSlots());
+    }
+
+    @Test
+    void aPlayableFigureOutsideOneToSlotsReadsAsEverySeat() {
+        assertEquals(20, new ServerInfo("a", "g", ServerPhase.READY, 1, 20, true, "", Map.of(), "", 0, false, "", 0).playableSlots());
+        assertEquals(20, new ServerInfo("a", "g", ServerPhase.READY, 1, 20, true, "", Map.of(), "", 0, false, "", 50).playableSlots());
+        assertEquals(12, new ServerInfo("a", "g", ServerPhase.READY, 1, 20, true, "", Map.of(), "", 0, false, "", 12).playableSlots());
+    }
 }

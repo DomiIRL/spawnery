@@ -39,4 +39,18 @@ public interface PlayerCountOrBuilder extends
    * @return The mspt.
    */
   double getMspt();
+
+  /**
+   * <pre>
+   * Server agents only: the seats the plugin says count as capacity. 0 means
+   * it said nothing -- what a proxy and an agent older than this field send --
+   * and the group's spec.playableSlots decides. It cannot ride in slots: the
+   * registry discards a report with more players than slots, and players
+   * beyond the playable seats are legitimate.
+   * </pre>
+   *
+   * <code>int32 playable_slots = 5;</code>
+   * @return The playableSlots.
+   */
+  int getPlayableSlots();
 }

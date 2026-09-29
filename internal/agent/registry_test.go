@@ -938,3 +938,38 @@ func TestReportTicksNeedsALiveStream(t *testing.T) {
 		t.Fatal("ReportTicks accepted a pod with no stream")
 	}
 }
+
+func TestThePlayableFigureReachesTheSnapshot(t *testing.T) {
+	r, _ := newTestRegistry()
+	r.Connect("pod-uid-1", RoleServer)
+	if err := r.ReportPlayers("pod-uid-1", 14, 100); err != nil {
+		t.Fatalf("ReportPlayers: %v", err)
+	}
+	if err := r.ReportPlayableSlots("pod-uid-1", 12); err != nil {
+		t.Fatalf("ReportPlayableSlots: %v", err)
+	}
+	if got := r.Lookup("pod-uid-1"); got.PlayableSlots != 12 || got.Players != 14 {
+		t.Errorf("snapshot = %+v, want 14 players against 12 playable seats kept", got)
+	}
+}
+
+func TestANegativePlayableFigureIsRefusedAndTheLastOneStands(t *testing.T) {
+	r, _ := newTestRegistry()
+	r.Connect("pod-uid-1", RoleServer)
+	if err := r.ReportPlayableSlots("pod-uid-1", 12); err != nil {
+		t.Fatalf("ReportPlayableSlots: %v", err)
+	}
+	if err := r.ReportPlayableSlots("pod-uid-1", -1); err == nil {
+		t.Fatal("a negative playable figure was accepted")
+	}
+	if got := r.Lookup("pod-uid-1").PlayableSlots; got != 12 {
+		t.Errorf("PlayableSlots = %d, want the previous 12", got)
+	}
+}
+
+func TestPlayableSlotsNeedsALiveStream(t *testing.T) {
+	r, _ := newTestRegistry()
+	if err := r.ReportPlayableSlots("nobody", 12); err == nil {
+		t.Fatal("a report for an unknown pod was accepted")
+	}
+}

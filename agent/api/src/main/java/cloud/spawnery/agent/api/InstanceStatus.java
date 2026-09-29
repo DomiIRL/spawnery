@@ -24,12 +24,13 @@ import java.util.OptionalDouble;
  * a proxy, whose state is {@code ready} and {@code draining}. {@code tps} and
  * {@code mspt} are empty for a proxy and for a server that has not reported.
  * {@code node} is the Kubernetes node the pod runs on, empty while it is not
- * scheduled.
+ * scheduled. {@code playableSlots} is how many of {@code slots} count as
+ * capacity, equal to {@code slots} when nothing narrowed it.
  */
 public record InstanceStatus(String name, String group, boolean proxy, String phase, boolean ready,
                              int players, int slots, OptionalDouble tps, OptionalDouble mspt, Duration age,
                              boolean retiring, boolean held, boolean draining, ResourceUsage usage,
-                             String node) {
+                             String node, int playableSlots) {
     public InstanceStatus {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(group, "group");
@@ -39,12 +40,23 @@ public record InstanceStatus(String name, String group, boolean proxy, String ph
         Objects.requireNonNull(age, "age");
         Objects.requireNonNull(usage, "usage");
         node = node == null ? "" : node;
+        if (playableSlots <= 0 || playableSlots > slots) {
+            playableSlots = slots;
+        }
+    }
+
+    /** The record as it was before {@code playableSlots}, which it reads as every seat. */
+    public InstanceStatus(String name, String group, boolean proxy, String phase, boolean ready,
+                          int players, int slots, OptionalDouble tps, OptionalDouble mspt, Duration age,
+                          boolean retiring, boolean held, boolean draining, ResourceUsage usage,
+                          String node) {
+        this(name, group, proxy, phase, ready, players, slots, tps, mspt, age, retiring, held, draining, usage, node, slots);
     }
 
     /** The record as it was before {@code node}, which it reads as not scheduled. */
     public InstanceStatus(String name, String group, boolean proxy, String phase, boolean ready,
                           int players, int slots, OptionalDouble tps, OptionalDouble mspt, Duration age,
                           boolean retiring, boolean held, boolean draining, ResourceUsage usage) {
-        this(name, group, proxy, phase, ready, players, slots, tps, mspt, age, retiring, held, draining, usage, "");
+        this(name, group, proxy, phase, ready, players, slots, tps, mspt, age, retiring, held, draining, usage, "", slots);
     }
 }

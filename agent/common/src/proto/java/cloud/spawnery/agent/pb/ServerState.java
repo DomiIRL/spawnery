@@ -536,6 +536,22 @@ java.lang.String defaultValue) {
     }
   }
 
+  public static final int PLAYABLE_SLOTS_FIELD_NUMBER = 13;
+  private int playableSlots_ = 0;
+  /**
+   * <pre>
+   * How many of slots count as capacity, as the operator resolved it. 0 from
+   * an operator older than this field; read it as equal to slots.
+   * </pre>
+   *
+   * <code>int32 playable_slots = 13;</code>
+   * @return The playableSlots.
+   */
+  @java.lang.Override
+  public int getPlayableSlots() {
+    return playableSlots_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -589,6 +605,9 @@ java.lang.String defaultValue) {
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 12, node_);
     }
+    if (playableSlots_ != 0) {
+      output.writeInt32(13, playableSlots_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -641,6 +660,10 @@ java.lang.String defaultValue) {
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(12, node_);
     }
+    if (playableSlots_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt32Size(13, playableSlots_);
+    }
     return size;
   }
   @java.lang.Override
@@ -689,6 +712,8 @@ java.lang.String defaultValue) {
         != other.getHeld()) return false;
     if (!getNode()
         .equals(other.getNode())) return false;
+    if (getPlayableSlots()
+        != other.getPlayableSlots()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -728,6 +753,8 @@ java.lang.String defaultValue) {
         getHeld());
     hash = (37 * hash) + NODE_FIELD_NUMBER;
     hash = (53 * hash) + getNode().hashCode();
+    hash = (37 * hash) + PLAYABLE_SLOTS_FIELD_NUMBER;
+    hash = (53 * hash) + getPlayableSlots();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -897,6 +924,7 @@ java.lang.String defaultValue) {
       number_ = 0;
       held_ = false;
       node_ = "";
+      playableSlots_ = 0;
       return this;
     }
 
@@ -967,6 +995,9 @@ java.lang.String defaultValue) {
       if (((from_bitField0_ & 0x00000800) != 0)) {
         result.node_ = node_;
       }
+      if (((from_bitField0_ & 0x00001000) != 0)) {
+        result.playableSlots_ = playableSlots_;
+      }
     }
 
     @java.lang.Override
@@ -1028,6 +1059,9 @@ java.lang.String defaultValue) {
         node_ = other.node_;
         bitField0_ |= 0x00000800;
         onChanged();
+      }
+      if (other.getPlayableSlots() != 0) {
+        setPlayableSlots(other.getPlayableSlots());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1119,6 +1153,11 @@ java.lang.String defaultValue) {
               bitField0_ |= 0x00000800;
               break;
             } // case 98
+            case 104: {
+              playableSlots_ = input.readInt32();
+              bitField0_ |= 0x00001000;
+              break;
+            } // case 104
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2110,6 +2149,53 @@ java.lang.String defaultValue) {
       checkByteStringIsUtf8(value);
       node_ = value;
       bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+
+    private int playableSlots_ ;
+    /**
+     * <pre>
+     * How many of slots count as capacity, as the operator resolved it. 0 from
+     * an operator older than this field; read it as equal to slots.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 13;</code>
+     * @return The playableSlots.
+     */
+    @java.lang.Override
+    public int getPlayableSlots() {
+      return playableSlots_;
+    }
+    /**
+     * <pre>
+     * How many of slots count as capacity, as the operator resolved it. 0 from
+     * an operator older than this field; read it as equal to slots.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 13;</code>
+     * @param value The playableSlots to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlayableSlots(int value) {
+
+      playableSlots_ = value;
+      bitField0_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * How many of slots count as capacity, as the operator resolved it. 0 from
+     * an operator older than this field; read it as equal to slots.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 13;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlayableSlots() {
+      bitField0_ = (bitField0_ & ~0x00001000);
+      playableSlots_ = 0;
       onChanged();
       return this;
     }

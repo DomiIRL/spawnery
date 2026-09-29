@@ -100,6 +100,13 @@ final class FakeApi implements SpawneryApi {
         return CompletableFuture.failedFuture(new UnsupportedOperationException("fake"));
     }
 
+    final List<Integer> playable = new ArrayList<>();
+
+    @Override
+    public void playableSlots(int slots) {
+        playable.add(slots);
+    }
+
     @Override
     public CompletionStage<Void> announce(String state, Map<String, String> attributes) {
         return CompletableFuture.failedFuture(new UnsupportedOperationException("fake"));

@@ -21,7 +21,7 @@ internal fun toNetworkStatus(pb: StatusResult): NetworkStatus =
             InstanceStatus(
                 i.name, i.group, i.proxy, i.phase, i.ready, i.players, i.slots,
                 reported(i.tps), reported(i.mspt), Duration.ofSeconds(i.ageSeconds),
-                i.retiring, i.held, i.draining, usage(i.usage), i.node,
+                i.retiring, i.held, i.draining, usage(i.usage), i.node, i.playableSlots,
             )
         },
         usage(pb.other),

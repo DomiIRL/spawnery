@@ -149,6 +149,29 @@ table. And like `announce`, it survives a reconnection without being called
 again — the agent restates the last door state on every new session, because
 the operator's default for a session it has never seen is open.
 
+## Saying how many seats count
+
+`playableSlots(n)` tells the operator how many of this server's seats count as
+capacity, for as long as you do not change it. `playableSlots(0)` hands the
+decision back to the group's `spec.playableSlots`.
+
+```java
+Spawnery.api().playableSlots(12);
+```
+
+**It asks nothing.** The value rides on the agent's periodic report, so there
+is no stage to wait for and nothing to fail on the network; it reaches the
+operator within one report interval and is restated on every new session.
+
+**Nobody is turned away by it.** Players beyond the playable seats are still
+admitted up to the server's limit. The server then counts as full: its group
+builds another one, and a connect to the group prefers a server with room.
+
+A figure above the server's slots counts as its slots. A negative one throws
+`IllegalArgumentException`; on a proxy the call throws
+`UnsupportedOperationException`. `ServerInfo.playableSlots()` reads back what
+the operator resolved for any server.
+
 ## Saying what this server is doing
 
 `announce(state, attributes)` publishes a short description of this server that

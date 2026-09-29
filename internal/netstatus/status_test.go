@@ -113,6 +113,7 @@ func network(t *testing.T) (client.Client, *agent.Registry) {
 	lobbyA := server("lobby-a", "lobby", "uid-la", "Ready")
 	lobbyB := server("lobby-b", "lobby", "uid-lb", "Retiring")
 	lobbyB.Spec.Retire = true
+	lobbyB.Status.PlayableSlots = 12
 	roomsX := server("rooms-x", "rooms", "uid-rx", "Ready")
 	roomsX.Spec.Key = "somebody"
 
@@ -416,5 +417,23 @@ func TestStatusNamesTheNode(t *testing.T) {
 	}
 	if n := res.GetInstances()[0].GetNode(); n != "node-3" {
 		t.Errorf("gateway-a node = %q, want node-3", n)
+	}
+}
+
+func TestStatusCarriesThePlayableFigure(t *testing.T) {
+	res, err := status(t, allMeasured(), netstate.ForProxies, "lobby-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := res.GetInstances()[0].GetPlayableSlots(); n != 12 {
+		t.Errorf("playable_slots = %d, want 12", n)
+	}
+	res, err = status(t, allMeasured(), netstate.ForProxies, "gateway-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := res.GetInstances()[0]
+	if gw.GetPlayableSlots() != gw.GetSlots() {
+		t.Errorf("a proxy's playable = %d, want its slots %d", gw.GetPlayableSlots(), gw.GetSlots())
 	}
 }

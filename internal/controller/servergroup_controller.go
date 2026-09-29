@@ -941,6 +941,7 @@ func (r *ServerGroupReconciler) size(
 				MaxReplicas:   group.Spec.Scaling.MaxReplicas,
 				SpareSlots:    group.Spec.Scaling.SpareSlots,
 				MaxPlayers:    group.Spec.MaxPlayers,
+				PlayableSlots: playableSpec(group),
 				Stabilization: time.Duration(group.Spec.Scaling.ScaleDownStabilizationSeconds) * time.Second,
 
 				PodHash:        podHash,
@@ -1383,6 +1384,13 @@ func reportProgressing(group *spawneryv1alpha1.ServerGroup, views []ServerView, 
 	meta.SetStatusCondition(&group.Status.Conditions, condition)
 }
 
+func playableSpec(group *spawneryv1alpha1.ServerGroup) int32 {
+	if group.Spec.PlayableSlots == nil {
+		return 0
+	}
+	return *group.Spec.PlayableSlots
+}
+
 // collectViews reads every Server of the group plus its live player count.
 func (r *ServerGroupReconciler) collectViews(
 	ctx context.Context,
@@ -1420,6 +1428,7 @@ func (r *ServerGroupReconciler) collectViews(
 			Phase:    phase.Phase(srv.Status.Phase),
 			Players:  players,
 			Slots:    slots,
+			Playable: playableSeats(snap.PlayableSlots, group.Spec.PlayableSlots, slots),
 			EmptyFor: snap.EmptyFor,
 			Stale:    snap.PlayersStale,
 			// Read from the status, never guessed from the phase: a server that

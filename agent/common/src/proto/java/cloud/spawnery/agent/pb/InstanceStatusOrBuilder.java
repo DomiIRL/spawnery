@@ -156,4 +156,14 @@ public interface InstanceStatusOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeBytes();
+
+  /**
+   * <pre>
+   * as ServerState.playable_slots
+   * </pre>
+   *
+   * <code>int32 playable_slots = 16;</code>
+   * @return The playableSlots.
+   */
+  int getPlayableSlots();
 }

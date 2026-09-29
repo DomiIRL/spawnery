@@ -269,4 +269,22 @@ class MirrorApiTest {
         assertEquals("node-2", api.server("lobby-a").get().node())
         assertEquals("node-3", api.proxy("gateway-a").get().node())
     }
+
+    @Test
+    fun `playableSlots refuses on a proxy`() {
+        val api = MirrorApi(NetworkMirror(), proxySelf(), connector(), CloudEvents())
+
+        assertFailsWith<UnsupportedOperationException> { api.playableSlots(12) }
+    }
+
+    @Test
+    fun `playableSlots refuses a negative figure and hands the rest to the server`() {
+        val set = mutableListOf<Int>()
+        val api = MirrorApi(NetworkMirror(), serverSelf(), connector(), CloudEvents(), playable = { set += it })
+
+        assertFailsWith<IllegalArgumentException> { api.playableSlots(-1) }
+        api.playableSlots(12)
+        api.playableSlots(0)
+        assertEquals(listOf(12, 0), set)
+    }
 }

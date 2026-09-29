@@ -368,8 +368,14 @@ type PlayerCount struct {
 	// Server agents only: the server's one-minute TPS average and its mean tick
 	// duration in milliseconds. 0 means not reported -- what a proxy and an
 	// agent older than these fields send.
-	Tps           float64 `protobuf:"fixed64,3,opt,name=tps,proto3" json:"tps,omitempty"`
-	Mspt          float64 `protobuf:"fixed64,4,opt,name=mspt,proto3" json:"mspt,omitempty"`
+	Tps  float64 `protobuf:"fixed64,3,opt,name=tps,proto3" json:"tps,omitempty"`
+	Mspt float64 `protobuf:"fixed64,4,opt,name=mspt,proto3" json:"mspt,omitempty"`
+	// Server agents only: the seats the plugin says count as capacity. 0 means
+	// it said nothing -- what a proxy and an agent older than this field send --
+	// and the group's spec.playableSlots decides. It cannot ride in slots: the
+	// registry discards a report with more players than slots, and players
+	// beyond the playable seats are legitimate.
+	PlayableSlots int32 `protobuf:"varint,5,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -428,6 +434,13 @@ func (x *PlayerCount) GetTps() float64 {
 func (x *PlayerCount) GetMspt() float64 {
 	if x != nil {
 		return x.Mspt
+	}
+	return 0
+}
+
+func (x *PlayerCount) GetPlayableSlots() int32 {
+	if x != nil {
+		return x.PlayableSlots
 	}
 	return 0
 }
@@ -1566,7 +1579,8 @@ type InstanceStatus struct {
 	Held          bool           `protobuf:"varint,12,opt,name=held,proto3" json:"held,omitempty"`
 	Draining      bool           `protobuf:"varint,13,opt,name=draining,proto3" json:"draining,omitempty"`
 	Usage         *ResourceUsage `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
-	Node          string         `protobuf:"bytes,15,opt,name=node,proto3" json:"node,omitempty"` // as ServerState.node
+	Node          string         `protobuf:"bytes,15,opt,name=node,proto3" json:"node,omitempty"`                                         // as ServerState.node
+	PlayableSlots int32          `protobuf:"varint,16,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"` // as ServerState.playable_slots
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1704,6 +1718,13 @@ func (x *InstanceStatus) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *InstanceStatus) GetPlayableSlots() int32 {
+	if x != nil {
+		return x.PlayableSlots
+	}
+	return 0
 }
 
 type StatusResult struct {
@@ -3657,7 +3678,10 @@ type ServerState struct {
 	Held bool `protobuf:"varint,11,opt,name=held,proto3" json:"held,omitempty"`
 	// The Kubernetes node this server's pod runs on; empty while it is not
 	// scheduled. A name only: nothing about the node itself is ever sent.
-	Node          string `protobuf:"bytes,12,opt,name=node,proto3" json:"node,omitempty"`
+	Node string `protobuf:"bytes,12,opt,name=node,proto3" json:"node,omitempty"`
+	// How many of slots count as capacity, as the operator resolved it. 0 from
+	// an operator older than this field; read it as equal to slots.
+	PlayableSlots int32 `protobuf:"varint,13,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3774,6 +3798,13 @@ func (x *ServerState) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *ServerState) GetPlayableSlots() int32 {
+	if x != nil {
+		return x.PlayableSlots
+	}
+	return 0
 }
 
 // ProxyState is one proxy pod as the operator last saw it.
@@ -4654,12 +4685,13 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x05Hello\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12.\n" +
-	"\x13read_timeout_millis\x18\x03 \x01(\x05R\x11readTimeoutMillis\"c\n" +
+	"\x13read_timeout_millis\x18\x03 \x01(\x05R\x11readTimeoutMillis\"\x8a\x01\n" +
 	"\vPlayerCount\x12\x18\n" +
 	"\aplayers\x18\x01 \x01(\x05R\aplayers\x12\x14\n" +
 	"\x05slots\x18\x02 \x01(\x05R\x05slots\x12\x10\n" +
 	"\x03tps\x18\x03 \x01(\x01R\x03tps\x12\x12\n" +
-	"\x04mspt\x18\x04 \x01(\x01R\x04mspt\"\x80\x06\n" +
+	"\x04mspt\x18\x04 \x01(\x01R\x04mspt\x12%\n" +
+	"\x0eplayable_slots\x18\x05 \x01(\x05R\rplayableSlots\"\x80\x06\n" +
 	"\fCloudRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12C\n" +
 	"\aconnect\x18\x02 \x01(\v2'.spawnery.agent.v1alpha1.ConnectRequestH\x00R\aconnect\x12@\n" +
@@ -4734,7 +4766,7 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\aplayers\x18\x06 \x01(\x05R\aplayers\x12\x1d\n" +
 	"\n" +
 	"lowest_tps\x18\a \x01(\x01R\tlowestTps\x12<\n" +
-	"\x05usage\x18\b \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05usage\"\x91\x03\n" +
+	"\x05usage\x18\b \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05usage\"\xb8\x03\n" +
 	"\x0eInstanceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12\x14\n" +
@@ -4752,7 +4784,8 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x04held\x18\f \x01(\bR\x04held\x12\x1a\n" +
 	"\bdraining\x18\r \x01(\bR\bdraining\x12<\n" +
 	"\x05usage\x18\x0e \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05usage\x12\x12\n" +
-	"\x04node\x18\x0f \x01(\tR\x04node\"\x8a\x03\n" +
+	"\x04node\x18\x0f \x01(\tR\x04node\x12%\n" +
+	"\x0eplayable_slots\x18\x10 \x01(\x05R\rplayableSlots\"\x8a\x03\n" +
 	"\fStatusResult\x12<\n" +
 	"\x05total\x18\x01 \x01(\v2&.spawnery.agent.v1alpha1.ResourceUsageR\x05total\x12<\n" +
 	"\x06groups\x18\x02 \x03(\v2$.spawnery.agent.v1alpha1.GroupStatusR\x06groups\x12E\n" +
@@ -4875,7 +4908,7 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\n" +
 	"PERSISTENT\x10\x02\x12\t\n" +
 	"\x05PROXY\x10\x03\x12\r\n" +
-	"\tON_DEMAND\x10\x04\"\xaa\x03\n" +
+	"\tON_DEMAND\x10\x04\"\xd1\x03\n" +
 	"\vServerState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12\x14\n" +
@@ -4893,7 +4926,8 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x06number\x18\n" +
 	" \x01(\x05R\x06number\x12\x12\n" +
 	"\x04held\x18\v \x01(\bR\x04held\x12\x12\n" +
-	"\x04node\x18\f \x01(\tR\x04node\x1a=\n" +
+	"\x04node\x18\f \x01(\tR\x04node\x12%\n" +
+	"\x0eplayable_slots\x18\r \x01(\x05R\rplayableSlots\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +

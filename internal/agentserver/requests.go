@@ -490,13 +490,14 @@ func resolveTarget(state *agentpb.NetworkState, req *agentpb.ConnectRequest) (st
 			}
 		}
 	case req.GetGroup() != "":
-		best, bestFree := "", -1
+		best, bestFree, bestRoom := "", -1, -1
 		for _, srv := range state.GetServers() {
 			if srv.GetGroup() != req.GetGroup() || !srv.GetRegistered() {
 				continue
 			}
-			if free := int(srv.GetSlots() - srv.GetPlayers()); free > bestFree {
-				best, bestFree = srv.GetName(), free
+			free, room := playableFree(srv), int(srv.GetSlots()-srv.GetPlayers())
+			if free > bestFree || (free == bestFree && room > bestRoom) {
+				best, bestFree, bestRoom = srv.GetName(), free, room
 			}
 		}
 		if best != "" {
@@ -504,6 +505,14 @@ func resolveTarget(state *agentpb.NetworkState, req *agentpb.ConnectRequest) (st
 		}
 	}
 	return "", false
+}
+
+func playableFree(srv *agentpb.ServerState) int {
+	playable := srv.GetPlayableSlots()
+	if playable <= 0 || playable > srv.GetSlots() {
+		playable = srv.GetSlots()
+	}
+	return max(0, int(playable-srv.GetPlayers()))
 }
 
 // namesAPrivateServer reports whether the server a request names is a member

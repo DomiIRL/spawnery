@@ -88,6 +88,7 @@ class NetworkMirror {
                     it.number,
                     it.held,
                     it.node,
+                    it.playableSlots,
                 )
             },
             proxies = state.proxiesList.map {

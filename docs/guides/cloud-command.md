@@ -132,9 +132,10 @@ leaves private servers and on-demand groups out, as `/cloud list` does.
 say it is not scheduled yet. Nothing else about the node is shown.
 
 Every answer opens with a heading and sorts what follows into sections; bars
-show players against slots, TPS against 20, and CPU and memory against their
-limit (or their request where a container has no limit). One-line answers
-begin with ✔ or ✘.
+show players against playable seats (a server whose playable seats differ from
+its slots reads `9 / 12 · max 100`), TPS against 20, and CPU and memory against
+their limit (or their request where a container has no limit). One-line
+answers begin with ✔ or ✘.
 
 **`/cloud start <group> <count> for <duration>`** creates a `ScaleBoost`, which
 is the same object [Scaling and boosts](scaling-and-boosts.md) describes. A

@@ -113,7 +113,7 @@ class AgentPlugin : JavaPlugin(), Listener {
                     override fun network(): String = System.getenv("SPAWNERY_NETWORK") ?: ""
                     override fun slots(): Int = state.slots
                 }
-                val api = MirrorApi(mirror, self, connector, events, readiness)
+                val api = MirrorApi(mirror, self, connector, events, readiness, state::setPlayable)
                 Spawnery.install(api)
                 // Registered inside the COMMANDS lifecycle event because that
                 // is the only window Paper accepts a Brigadier node in; a

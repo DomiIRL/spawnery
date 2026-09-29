@@ -110,6 +110,25 @@ private static final long serialVersionUID = 0L;
     return mspt_;
   }
 
+  public static final int PLAYABLE_SLOTS_FIELD_NUMBER = 5;
+  private int playableSlots_ = 0;
+  /**
+   * <pre>
+   * Server agents only: the seats the plugin says count as capacity. 0 means
+   * it said nothing -- what a proxy and an agent older than this field send --
+   * and the group's spec.playableSlots decides. It cannot ride in slots: the
+   * registry discards a report with more players than slots, and players
+   * beyond the playable seats are legitimate.
+   * </pre>
+   *
+   * <code>int32 playable_slots = 5;</code>
+   * @return The playableSlots.
+   */
+  @java.lang.Override
+  public int getPlayableSlots() {
+    return playableSlots_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -136,6 +155,9 @@ private static final long serialVersionUID = 0L;
     if (java.lang.Double.doubleToRawLongBits(mspt_) != 0) {
       output.writeDouble(4, mspt_);
     }
+    if (playableSlots_ != 0) {
+      output.writeInt32(5, playableSlots_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -155,6 +177,10 @@ private static final long serialVersionUID = 0L;
     if (java.lang.Double.doubleToRawLongBits(mspt_) != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeDoubleSize(4, mspt_);
+    }
+    if (playableSlots_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt32Size(5, playableSlots_);
     }
     return size;
   }
@@ -190,6 +216,8 @@ private static final long serialVersionUID = 0L;
     if (java.lang.Double.doubleToLongBits(getMspt())
         != java.lang.Double.doubleToLongBits(
             other.getMspt())) return false;
+    if (getPlayableSlots()
+        != other.getPlayableSlots()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -211,6 +239,8 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + MSPT_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         java.lang.Double.doubleToLongBits(getMspt()));
+    hash = (37 * hash) + PLAYABLE_SLOTS_FIELD_NUMBER;
+    hash = (53 * hash) + getPlayableSlots();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -358,6 +388,7 @@ private static final long serialVersionUID = 0L;
       slots_ = 0;
       tps_ = 0D;
       mspt_ = 0D;
+      playableSlots_ = 0;
       return this;
     }
 
@@ -403,6 +434,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000008) != 0)) {
         result.mspt_ = mspt_;
       }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.playableSlots_ = playableSlots_;
+      }
     }
 
     @java.lang.Override
@@ -428,6 +462,9 @@ private static final long serialVersionUID = 0L;
       }
       if (java.lang.Double.doubleToRawLongBits(other.getMspt()) != 0) {
         setMspt(other.getMspt());
+      }
+      if (other.getPlayableSlots() != 0) {
+        setPlayableSlots(other.getPlayableSlots());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -475,6 +512,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000008;
               break;
             } // case 33
+            case 40: {
+              playableSlots_ = input.readInt32();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 40
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -634,6 +676,62 @@ private static final long serialVersionUID = 0L;
     public Builder clearMspt() {
       bitField0_ = (bitField0_ & ~0x00000008);
       mspt_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private int playableSlots_ ;
+    /**
+     * <pre>
+     * Server agents only: the seats the plugin says count as capacity. 0 means
+     * it said nothing -- what a proxy and an agent older than this field send --
+     * and the group's spec.playableSlots decides. It cannot ride in slots: the
+     * registry discards a report with more players than slots, and players
+     * beyond the playable seats are legitimate.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 5;</code>
+     * @return The playableSlots.
+     */
+    @java.lang.Override
+    public int getPlayableSlots() {
+      return playableSlots_;
+    }
+    /**
+     * <pre>
+     * Server agents only: the seats the plugin says count as capacity. 0 means
+     * it said nothing -- what a proxy and an agent older than this field send --
+     * and the group's spec.playableSlots decides. It cannot ride in slots: the
+     * registry discards a report with more players than slots, and players
+     * beyond the playable seats are legitimate.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 5;</code>
+     * @param value The playableSlots to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlayableSlots(int value) {
+
+      playableSlots_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Server agents only: the seats the plugin says count as capacity. 0 means
+     * it said nothing -- what a proxy and an agent older than this field send --
+     * and the group's spec.playableSlots decides. It cannot ride in slots: the
+     * registry discards a report with more players than slots, and players
+     * beyond the playable seats are legitimate.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlayableSlots() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      playableSlots_ = 0;
       onChanged();
       return this;
     }

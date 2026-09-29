@@ -1047,7 +1047,7 @@ func (r *ServerReconciler) applyDecision(
 	}
 
 	snap := r.Agents.Lookup(podUID(pod, podFound))
-	r.mirrorPlayerCount(srv, snap, group.Spec.MaxPlayers, now)
+	r.mirrorPlayerCount(srv, snap, group.Spec.MaxPlayers, group.Spec.PlayableSlots, now)
 
 	// Which pod this status is about. See ServerStatus.PodUID: it is what
 	// tells one run of a server apart from the next under the same name, and
@@ -1086,6 +1086,7 @@ func (r *ServerReconciler) mirrorPlayerCount(
 	srv *spawneryv1alpha1.Server,
 	snap agent.Snapshot,
 	maxPlayers int32,
+	specPlayable *int32,
 	now metav1.Time,
 ) {
 	if !snap.Known {
@@ -1093,14 +1094,17 @@ func (r *ServerReconciler) mirrorPlayerCount(
 	}
 	// Clamped like the scaler's view, because the status is not only read by
 	// people: netstate carries it into every agent's picture and the connect
-	// router picks a group's target by slots minus players. Zero is the
-	// fallback group standing in for one that is gone; it carries no
+	// router picks a group's target by playable seats minus players. Zero is
+	// the fallback group standing in for one that is gone; it carries no
 	// capacity, so there is nothing to clamp to and the report stands.
 	players, slots := snap.Players, snap.Slots
+	playable := slots
 	if maxPlayers > 0 {
 		players, slots = clampReport(players, slots, maxPlayers)
+		playable = playableSeats(snap.PlayableSlots, specPlayable, slots)
 	}
-	significant := players != srv.Status.Players || slots != srv.Status.Slots
+	significant := players != srv.Status.Players || slots != srv.Status.Slots ||
+		playable != srv.Status.PlayableSlots
 	overdue := srv.Status.PlayersUpdatedAt == nil ||
 		now.Sub(srv.Status.PlayersUpdatedAt.Time) >= r.PlayerStatusInterval
 	if !significant && !overdue {
@@ -1108,6 +1112,7 @@ func (r *ServerReconciler) mirrorPlayerCount(
 	}
 	srv.Status.Players = players
 	srv.Status.Slots = slots
+	srv.Status.PlayableSlots = playable
 	srv.Status.PlayersUpdatedAt = &now
 }
 

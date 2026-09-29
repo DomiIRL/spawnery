@@ -620,6 +620,10 @@ func (s *Server) handle(
 			m.PlayerCount.GetTps(), m.PlayerCount.GetMspt()); err != nil {
 			RejectedReports.WithLabelValues(string(agent.RoleServer)).Inc()
 			logger.V(1).Info("discarded a tick report", "reason", err.Error())
+		} else if err := s.opts.Agents.ReportPlayableSlots(id.PodUID,
+			m.PlayerCount.GetPlayableSlots()); err != nil {
+			RejectedReports.WithLabelValues(string(agent.RoleServer)).Inc()
+			logger.V(1).Info("discarded a playable figure", "reason", err.Error())
 		}
 	case *agentpb.ServerMessage_CloudRequest:
 		// Every request answered, including one this operator does not know:

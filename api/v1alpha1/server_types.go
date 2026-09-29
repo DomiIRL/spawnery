@@ -154,6 +154,11 @@ type ServerStatus struct {
 	// +optional
 	Slots int32 `json:"slots"`
 
+	// PlayableSlots is how many of Slots count as capacity: the plugin's
+	// figure, else the group's spec.playableSlots, else Slots.
+	// +optional
+	PlayableSlots int32 `json:"playableSlots"`
+
 	// PlayersUpdatedAt is when Players was last reported by the agent. Counts
 	// older than twice the report interval are treated as occupied.
 	// +optional
