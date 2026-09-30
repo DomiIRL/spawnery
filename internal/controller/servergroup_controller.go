@@ -1323,7 +1323,9 @@ func reportProgressing(group *spawneryv1alpha1.ServerGroup, views []ServerView, 
 		// is the whole question for this type: a member is coming up or it is
 		// not, and the count below sees it either way rather than skipping it
 		// here for carrying a hash nothing will replace.
-		if !group.IsOnDemand() && staleSpec(v, podHash) && !v.Hold {
+		// A failed server was replaced when it failed; it stays only for
+		// diagnosis, so it is nothing this update still waits for.
+		if !group.IsOnDemand() && staleSpec(v, podHash) && !v.Hold && v.Phase != phase.Failed {
 			older++
 			continue
 		}
