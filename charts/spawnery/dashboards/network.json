@@ -32,12 +32,12 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(spawnery_network_players, network)",
+          "query": "label_values(spawnery_group_servers, network)",
           "refId": "network"
         },
         "refresh": 2,
-        "includeAll": true,
-        "multi": true,
+        "includeAll": false,
+        "multi": false,
         "current": {}
       },
       {
@@ -49,11 +49,12 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(spawnery_group_servers{network=~\"$network\"}, group)",
+          "query": "label_values(spawnery_group_servers{network=\"$network\"}, group)",
           "refId": "group"
         },
         "refresh": 2,
         "includeAll": true,
+        "allValue": ".*",
         "multi": true,
         "current": {}
       }
@@ -93,7 +94,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(spawnery_network_players{network=~\"$network\"})",
+          "expr": "sum(spawnery_network_players{network=\"$network\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -112,7 +113,7 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none"
       }
     },
     {
@@ -135,7 +136,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(spawnery_group_servers_ready{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum(spawnery_group_servers_ready{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -154,7 +155,7 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none"
       }
     },
     {
@@ -177,7 +178,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(spawnery_group_servers{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum(spawnery_group_servers{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -196,7 +197,7 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none"
       }
     },
     {
@@ -219,7 +220,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(spawnery_group_free_slots{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum(spawnery_group_free_slots{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -238,7 +239,7 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none"
       }
     },
     {
@@ -261,7 +262,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(spawnery_proxy_players{network=~\"$network\"})",
+          "expr": "count(spawnery_proxy_players{network=\"$network\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -280,12 +281,12 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none"
       }
     },
     {
       "type": "stat",
-      "title": "Worst TPS",
+      "title": "Lowest TPS",
       "id": 7,
       "datasource": {
         "type": "prometheus",
@@ -303,7 +304,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "min(spawnery_server_tps{network=~\"$network\",group=~\"$group\"})",
+          "expr": "min(spawnery_server_tps{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -322,7 +323,7 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none"
       }
     },
     {
@@ -345,7 +346,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group) (spawnery_group_players{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum by (group) (spawnery_group_players{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "legendFormat": "{{group}}"
         }
@@ -405,7 +406,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group) (spawnery_group_players{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum by (group) (spawnery_group_players{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -416,7 +417,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group) (spawnery_group_free_slots{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum by (group) (spawnery_group_free_slots{network=\"$network\",group=~\"$group\"})",
           "refId": "B",
           "instant": true,
           "range": false,
@@ -427,7 +428,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group) (spawnery_group_servers_ready{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum by (group) (spawnery_group_servers_ready{network=\"$network\",group=~\"$group\"})",
           "refId": "C",
           "instant": true,
           "range": false,
@@ -438,7 +439,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group) (spawnery_group_servers{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum by (group) (spawnery_group_servers{network=\"$network\",group=~\"$group\"})",
           "refId": "D",
           "instant": true,
           "range": false,
@@ -449,7 +450,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "min by (group) (spawnery_server_tps{network=~\"$network\",group=~\"$group\"})",
+          "expr": "min by (group) (spawnery_server_tps{network=\"$network\",group=~\"$group\"})",
           "refId": "E",
           "instant": true,
           "range": false,
@@ -460,7 +461,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (group) (spawnery_server_mspt{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (group) (spawnery_server_mspt{network=\"$network\",group=~\"$group\"})",
           "refId": "F",
           "instant": true,
           "range": false,
@@ -563,7 +564,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server, group, node, phase) (spawnery_server_phase{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server, group, node, phase) (spawnery_server_phase{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -574,7 +575,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_players{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_players{network=\"$network\",group=~\"$group\"})",
           "refId": "B",
           "instant": true,
           "range": false,
@@ -585,7 +586,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_playable_slots{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_playable_slots{network=\"$network\",group=~\"$group\"})",
           "refId": "C",
           "instant": true,
           "range": false,
@@ -596,7 +597,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_slots{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_slots{network=\"$network\",group=~\"$group\"})",
           "refId": "D",
           "instant": true,
           "range": false,
@@ -607,7 +608,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_tps{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_tps{network=\"$network\",group=~\"$group\"})",
           "refId": "E",
           "instant": true,
           "range": false,
@@ -618,7 +619,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_mspt{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_mspt{network=\"$network\",group=~\"$group\"})",
           "refId": "F",
           "instant": true,
           "range": false,
@@ -629,7 +630,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_heap_used_bytes{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_heap_used_bytes{network=\"$network\",group=~\"$group\"})",
           "refId": "G",
           "instant": true,
           "range": false,
@@ -640,7 +641,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (spawnery_server_heap_max_bytes{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (server) (spawnery_server_heap_max_bytes{network=\"$network\",group=~\"$group\"})",
           "refId": "H",
           "instant": true,
           "range": false,
@@ -651,7 +652,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (sum by (namespace, server) (label_replace(container_memory_working_set_bytes{container!=\"\",image!=\"\"}, \"server\", \"$1\", \"pod\", \"(.*)\")) * on (namespace, server) group_left() max by (namespace, server) (spawnery_server_phase{network=~\"$network\",group=~\"$group\"}))",
+          "expr": "max by (server) (sum by (namespace, server) (label_replace(container_memory_working_set_bytes{container!=\"\",image!=\"\"}, \"server\", \"$1\", \"pod\", \"(.*)\")) * on (namespace, server) group_left() max by (namespace, server) (spawnery_server_phase{network=\"$network\",group=~\"$group\"}))",
           "refId": "I",
           "instant": true,
           "range": false,
@@ -662,7 +663,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (server) (sum by (namespace, server) (label_replace(rate(container_cpu_usage_seconds_total{container!=\"\",image!=\"\"}[5m]), \"server\", \"$1\", \"pod\", \"(.*)\")) * on (namespace, server) group_left() max by (namespace, server) (spawnery_server_phase{network=~\"$network\",group=~\"$group\"}))",
+          "expr": "max by (server) (sum by (namespace, server) (label_replace(rate(container_cpu_usage_seconds_total{container!=\"\",image!=\"\"}[5m]), \"server\", \"$1\", \"pod\", \"(.*)\")) * on (namespace, server) group_left() max by (namespace, server) (spawnery_server_phase{network=\"$network\",group=~\"$group\"}))",
           "refId": "J",
           "instant": true,
           "range": false,
@@ -692,10 +693,10 @@
               "Time 8": true,
               "Time 9": true,
               "Time 10": true,
-              "Time 11": true
+              "Time 11": true,
+              "Value #A": true
             },
             "renameByName": {
-              "Value #A": "_phase",
               "Value #B": "Players",
               "Value #C": "Playable",
               "Value #D": "Slots",
@@ -704,7 +705,7 @@
               "Value #G": "Heap used",
               "Value #H": "Heap max",
               "Value #I": "Memory",
-              "Value #J": "CPU"
+              "Value #J": "CPU (cores)"
             }
           }
         }
@@ -763,12 +764,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "CPU"
+              "options": "CPU (cores)"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "cores"
+                "value": "short"
               }
             ]
           }
@@ -817,7 +818,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "min by (group) (spawnery_server_tps{network=~\"$network\",group=~\"$group\"})",
+          "expr": "min by (group) (spawnery_server_tps{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "legendFormat": "{{group}}"
         }
@@ -864,7 +865,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (group) (spawnery_server_mspt{network=~\"$network\",group=~\"$group\"})",
+          "expr": "max by (group) (spawnery_server_mspt{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "legendFormat": "{{group}}"
         }
@@ -911,7 +912,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "spawnery_server_heap_used_bytes{network=~\"$network\",group=~\"$group\"}",
+          "expr": "spawnery_server_heap_used_bytes{network=\"$network\",group=~\"$group\"}",
           "refId": "A",
           "legendFormat": "{{server}}"
         }
@@ -958,7 +959,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (namespace, server) (label_replace(container_memory_working_set_bytes{container!=\"\",image!=\"\"}, \"server\", \"$1\", \"pod\", \"(.*)\")) * on (namespace, server) group_left() max by (namespace, server) (spawnery_server_phase{network=~\"$network\",group=~\"$group\"})",
+          "expr": "sum by (namespace, server) (label_replace(container_memory_working_set_bytes{container!=\"\",image!=\"\"}, \"server\", \"$1\", \"pod\", \"(.*)\")) * on (namespace, server) group_left() max by (namespace, server) (spawnery_server_phase{network=\"$network\",group=~\"$group\"})",
           "refId": "A",
           "legendFormat": "{{server}}"
         }
@@ -1005,7 +1006,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "spawnery_proxy_players{network=~\"$network\"}",
+          "expr": "spawnery_proxy_players{network=\"$network\"}",
           "refId": "A",
           "legendFormat": "{{proxy}} players"
         },
@@ -1014,7 +1015,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "spawnery_proxy_heap_used_bytes{network=~\"$network\"} / spawnery_proxy_heap_max_bytes{network=~\"$network\"}",
+          "expr": "spawnery_proxy_heap_used_bytes{network=\"$network\"} / spawnery_proxy_heap_max_bytes{network=\"$network\"}",
           "refId": "B",
           "legendFormat": "{{proxy}} heap used ratio"
         }

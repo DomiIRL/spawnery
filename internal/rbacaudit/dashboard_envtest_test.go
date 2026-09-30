@@ -18,10 +18,14 @@ package rbacaudit_test
 
 import (
 	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
+
+	"github.com/spawnery/spawnery/internal/testenv"
 )
 
 func TestTheDashboardRendersOnlyWhenAskedFor(t *testing.T) {
@@ -49,5 +53,64 @@ func TestTheDashboardRendersOnlyWhenAskedFor(t *testing.T) {
 	}
 	if dash["title"] == nil || dash["panels"] == nil {
 		t.Errorf("network.json has no title or panels")
+	}
+}
+
+// The operator's own namespace label names the network's namespace. Without
+// honorLabels the Prometheus Operator renames it to exported_namespace, and
+// every join with the kubelet's per-pod series comes back empty.
+func TestTheServiceMonitorKeepsTheOperatorsLabels(t *testing.T) {
+	doc, ok := renderChartWith(t, `{"metrics":{"serviceMonitor":{"enabled":true}}}`)["ServiceMonitor/spawnery-operator"]
+	if !ok {
+		t.Fatal("no ServiceMonitor rendered")
+	}
+	var sm struct {
+		Spec struct {
+			Endpoints []struct {
+				HonorLabels bool `json:"honorLabels"`
+			} `json:"endpoints"`
+		} `json:"spec"`
+	}
+	if err := yaml.Unmarshal(doc, &sm); err != nil {
+		t.Fatal(err)
+	}
+	if len(sm.Spec.Endpoints) == 0 || !sm.Spec.Endpoints[0].HonorLabels {
+		t.Fatalf("endpoints = %+v, want honorLabels: true", sm.Spec.Endpoints)
+	}
+}
+
+// A network is chosen from its groups, not its proxies: with every proxy
+// down the network would otherwise vanish from the dashboard. One network at
+// a time, because two networks usually share group names.
+func TestTheDashboardChoosesANetworkFromItsGroups(t *testing.T) {
+	raw, err := os.ReadFile(testenv.RepoPath(t, "charts/spawnery/dashboards/network.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dash struct {
+		Templating struct {
+			List []struct {
+				Name       string `json:"name"`
+				Multi      bool   `json:"multi"`
+				IncludeAll bool   `json:"includeAll"`
+				AllValue   string `json:"allValue"`
+				Query      json.RawMessage `json:"query"`
+			} `json:"list"`
+		} `json:"templating"`
+	}
+	if err := json.Unmarshal(raw, &dash); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range dash.Templating.List {
+		switch v.Name {
+		case "network":
+			if !strings.Contains(string(v.Query), "spawnery_group_servers") || v.Multi || v.IncludeAll {
+				t.Errorf("network = %+v, want a single choice from spawnery_group_servers", v)
+			}
+		case "group":
+			if v.IncludeAll && v.AllValue != ".*" {
+				t.Errorf("group allValue = %q, want .* so All also covers groups without data yet", v.AllValue)
+			}
+		}
 	}
 }

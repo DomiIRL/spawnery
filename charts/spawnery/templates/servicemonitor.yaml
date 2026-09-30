@@ -35,4 +35,9 @@ spec:
     - port: metrics
       path: /metrics
       interval: {{ .Values.metrics.serviceMonitor.interval }}
+      # The network metrics carry the network's namespace as `namespace`.
+      # Without this the Prometheus Operator overwrites it with the
+      # operator's own and keeps the original as exported_namespace, and no
+      # join with the kubelet's per-pod series ever matches.
+      honorLabels: true
 {{- end }}

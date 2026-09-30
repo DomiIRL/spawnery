@@ -187,3 +187,24 @@ func TestAnUnboundNetworkCollectorEmitsNothing(t *testing.T) {
 		t.Fatalf("an unbound collector emitted %d series", n)
 	}
 }
+
+// A pod whose agent is gone -- OOMKilled, restarting under the same UID --
+// keeps its registry entry until it is forgotten. Its last TPS and heap would
+// otherwise stand as a flat line exactly while it is broken.
+func TestNetworkCollectorDropsTheFiguresOfADisconnectedAgent(t *testing.T) {
+	c, reg := networkMetricsFixture(t)
+	reg.Disconnect("u1")
+	reg.Disconnect("p1")
+	col := &NetworkCollector{}
+	col.Bind(c, reg)
+
+	for _, name := range []string{"spawnery_server_players", "spawnery_server_tps", "spawnery_server_heap_used_bytes",
+		"spawnery_proxy_players", "spawnery_proxy_heap_used_bytes", "spawnery_network_players"} {
+		if n := testutil.CollectAndCount(col, name); n != 0 {
+			t.Errorf("%s: %d series for a disconnected agent, want 0", name, n)
+		}
+	}
+	if n := testutil.CollectAndCount(col, "spawnery_server_phase"); n != 2 {
+		t.Errorf("phase series = %d, want both servers still", n)
+	}
+}

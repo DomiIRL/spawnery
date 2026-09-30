@@ -161,7 +161,7 @@ func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) {
 			gauge(descServerPhase, 1, append(append([]string{}, l...), s.Status.Phase)...)
 		}
 		snap := agents.Lookup(s.Status.PodUID)
-		if s.Status.PodUID == "" || !snap.Known || snap.Slots == 0 {
+		if s.Status.PodUID == "" || !reporting(snap) {
 			continue
 		}
 		gauge(descServerPlayers, float64(snap.Players), l...)
@@ -188,7 +188,7 @@ func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) {
 	for i := range proxies.Items {
 		p := &proxies.Items[i]
 		snap := agents.Lookup(string(p.UID))
-		if !snap.Known || snap.Slots == 0 {
+		if !reporting(snap) {
 			continue
 		}
 		network := p.Labels[podspec.LabelNetwork]
@@ -203,4 +203,11 @@ func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) {
 	for k, n := range networkPlayers {
 		gauge(descNetworkPlayers, float64(n), k[0], k[1])
 	}
+}
+
+// reporting is whether an agent's figures describe its pod now. An entry
+// outlives its stream until it is forgotten, so a crashed server would
+// otherwise keep its last TPS and heap as a flat line.
+func reporting(snap agent.Snapshot) bool {
+	return snap.Known && snap.Connected && !snap.PlayersStale && snap.Slots > 0
 }

@@ -37,19 +37,25 @@ group does not pile up series for every server it ever had.
   (`spawnery_server_phase{phase=…} 1`).
 - **Proxies:** players and JVM heap.
 
-A server whose agent has not reported yet carries its phase and nothing
-else, so a "lowest TPS" panel is not dragged to 0 by a server that is still
-starting. An agent older than the heap fields reports no heap, and the heap
+A server whose agent has not reported yet, or whose agent is gone (crashed,
+restarting) or late, carries its phase and nothing else: a "lowest TPS"
+panel is not dragged to 0 by a server that is still starting, and a crashed
+one does not keep its last figures as a flat line. An agent older than the heap fields reports no heap, and the heap
 series are then absent rather than 0.
 
 CPU and container memory are not exported here: the kubelet's cAdvisor
 series already have them per pod, and a server's `server` label is its pod
-name. The dashboard joins them with
-`label_replace(…, "server", "$1", "pod", "(.*)")`.
+name. The dashboard joins them on `namespace` and `server` with
+`label_replace(…, "server", "$1", "pod", "(.*)")`. That needs the network's
+namespace on the operator's series as `namespace`, so the chart's
+ServiceMonitor sets `honorLabels: true`; a hand-written scrape config needs
+the equivalent, or the label arrives as `exported_namespace`.
 
 ## The dashboard
 
-`Spawnery network`, with a data source, network and group selector:
+`Spawnery network`, with a data source, one network at a time (two networks
+usually share group names, which would merge their rows) and a group
+selector:
 
 - **Network:** players, servers ready and total, free seats, proxies, lowest
   TPS; players per group over time.
