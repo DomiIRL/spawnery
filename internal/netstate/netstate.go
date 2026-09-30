@@ -33,6 +33,7 @@ import (
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
@@ -147,8 +148,10 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			FreeSlots:     g.Status.FreeSlots,
 			// From the spec and not the status: nobody derived this, somebody
 			// wrote it down.
-			Attributes:  g.Spec.Attributes,
-			DisplayName: g.Spec.DisplayName,
+			Attributes:           g.Spec.Attributes,
+			DisplayName:          g.Spec.DisplayName,
+			PlayableSlots:        ptr.Deref(g.Spec.PlayableSlots, 0),
+			EnforcePlayableSlots: g.Spec.EnforcePlayableSlots,
 		})
 	}
 

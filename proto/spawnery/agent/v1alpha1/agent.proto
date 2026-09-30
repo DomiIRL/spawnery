@@ -824,6 +824,11 @@ message GroupState {
   // operator -- then stands the name in for it, so that a picture from an
   // operator that predates the field reads the same as one that left it out.
   string display_name = 8;
+  // The group's spec.playableSlots, 0 if unset.
+  int32 playable_slots = 9;
+  // spec.enforcePlayableSlots. An operator older than the field sends
+  // neither, which reads as not enforced.
+  bool enforce_playable_slots = 10;
 }
 
 // ServerState is one backend as the operator last observed it.

@@ -3634,6 +3634,13 @@ spec:
                 required:
                 - timeoutSeconds
                 type: object
+              enforcePlayableSlots:
+                description: |-
+                  EnforcePlayableSlots refuses a login once a server holds as many players
+                  as its playable slots, except for players with the permission
+                  spawnery.join.full.<group>, who never take a seat. Read at runtime over
+                  the agent channel; changing it restarts no server.
+                type: boolean
               env:
                 description: |-
                   Env are extra environment variables for the server container, appended
