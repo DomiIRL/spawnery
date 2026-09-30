@@ -259,6 +259,11 @@ func TestDesiredServerHashDiscriminates(t *testing.T) {
 			mutate:  func(g *spawneryv1alpha1.ServerGroup) { g.Spec.PlayableSlots = ptr.To(int32(12)) },
 			changed: false,
 		},
+		{
+			name:    "enforcePlayableSlots does not change it",
+			mutate:  func(g *spawneryv1alpha1.ServerGroup) { g.Spec.EnforcePlayableSlots = true },
+			changed: false,
+		},
 	}
 
 	base := []byte("maxPlayers: 20\n")

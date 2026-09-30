@@ -487,7 +487,7 @@ func main() {
 		Proxies: proxies,
 		Servers: servers,
 		State:   state,
-		Writer:  agentserver.KubeWriter{Client: mgr.GetClient(), Clock: time.Now},
+		Writer:  agentserver.KubeWriter{Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Clock: time.Now},
 		Status: netstatus.Source{
 			Reader:  mgr.GetClient(),
 			Agents:  registry,

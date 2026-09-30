@@ -186,4 +186,25 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getDisplayNameBytes();
+
+  /**
+   * <pre>
+   * The group's spec.playableSlots, 0 if unset.
+   * </pre>
+   *
+   * <code>int32 playable_slots = 9;</code>
+   * @return The playableSlots.
+   */
+  int getPlayableSlots();
+
+  /**
+   * <pre>
+   * spec.enforcePlayableSlots. An operator older than the field sends
+   * neither, which reads as not enforced.
+   * </pre>
+   *
+   * <code>bool enforce_playable_slots = 10;</code>
+   * @return The enforcePlayableSlots.
+   */
+  boolean getEnforcePlayableSlots();
 }

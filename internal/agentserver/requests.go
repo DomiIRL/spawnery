@@ -201,6 +201,8 @@ func (s *Server) answerCloudRequest(
 		return s.answerStartServer(ctx, logger, id, req.GetId(), req.GetStartServer())
 	case req.GetStopServer() != nil:
 		return s.answerStopServer(ctx, logger, id, req.GetId(), req.GetStopServer())
+	case req.GetDeleteServer() != nil:
+		return s.answerDeleteServer(ctx, logger, id, req.GetId(), req.GetDeleteServer())
 	case req.GetUnretire() != nil:
 		return s.answerUnretire(ctx, logger, id, req.GetId(), req.GetUnretire())
 	case req.GetStatus() != nil:
@@ -847,6 +849,9 @@ func (s *Server) answerStartServer(
 	case errors.Is(err, ErrInstanceStopping):
 		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
 			"that member is still stopping; the same request starts a fresh one once it is gone")
+	case errors.Is(err, ErrWorldDeleting):
+		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
+			"that member's world is still being deleted; the same request starts a fresh one once it is gone")
 	case err != nil:
 		logger.V(1).Info("could not start an on-demand server", "reason", err.Error())
 		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
@@ -887,4 +892,47 @@ func (s *Server) answerStopServer(
 	}
 
 	return stoppedServer(reqID, &agentpb.StopServerResult{Server: req.GetServer()})
+}
+
+func deletedServer(reqID uint64, result *agentpb.DeleteServerResult) *agentpb.CloudResponse {
+	return &agentpb.CloudResponse{
+		Id:     reqID,
+		Result: &agentpb.CloudResponse_DeleteServer{DeleteServer: result},
+	}
+}
+
+// answerDeleteServer deletes a member and its world. The OnDemand bound and
+// the claim's labels, both in the writer, are what keep it to that world.
+func (s *Server) answerDeleteServer(
+	ctx context.Context,
+	logger logr.Logger,
+	id grpcauth.Identity,
+	reqID uint64,
+	req *agentpb.DeleteServerRequest,
+) *agentpb.CloudResponse {
+	deleted, err := s.opts.Writer.DeleteServer(ctx, id.Namespace, req.GetGroup(), req.GetKey())
+	switch {
+	case errors.Is(err, ErrNoSuchGroup):
+		return refuse(reqID, agentpb.RequestError_NOT_FOUND,
+			"no group by that name is on this network")
+	case errors.Is(err, ErrGroupNotOnDemand):
+		return refuse(reqID, agentpb.RequestError_REFUSED,
+			"that group is not on-demand, so it has no member to delete")
+	case errors.Is(err, instance.ErrBadKey):
+		return refuse(reqID, agentpb.RequestError_REFUSED, err.Error())
+	case errors.Is(err, ErrForeignClaim):
+		return refuse(reqID, agentpb.RequestError_REFUSED,
+			"a claim of that name exists, but this operator did not make it for that group")
+	case errors.Is(err, ErrUnkeyedWorld):
+		return refuse(reqID, agentpb.RequestError_REFUSED,
+			"that world was made before worlds carried their key, so only an admin can delete it")
+	case errors.Is(err, ErrNoSuchServer):
+		return refuse(reqID, agentpb.RequestError_NOT_FOUND,
+			"that key has neither a server nor a world")
+	case err != nil:
+		logger.V(1).Info("could not delete an on-demand server", "reason", err.Error())
+		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
+			"the operator could not write that just now")
+	}
+	return deletedServer(reqID, &agentpb.DeleteServerResult{Server: deleted.Name, World: deleted.World})
 }

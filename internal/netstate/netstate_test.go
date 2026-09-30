@@ -373,6 +373,27 @@ func TestBuildCarriesAGroupsDisplayName(t *testing.T) {
 	}
 }
 
+func TestBuildCarriesAGroupsAdmission(t *testing.T) {
+	seats := int32(12)
+	enforced := ephemeralGroup("ns", "duels")
+	enforced.Spec.PlayableSlots = &seats
+	enforced.Spec.EnforcePlayableSlots = true
+	src, _ := source(t, enforced, ephemeralGroup("ns", "lobby"))
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForServers)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	// Sorted: duels, then lobby.
+	if g := got.GetGroups()[0]; g.GetPlayableSlots() != 12 || !g.GetEnforcePlayableSlots() {
+		t.Errorf("duels = %+v, want playable slots 12 and enforcement", g)
+	}
+	if g := got.GetGroups()[1]; g.GetPlayableSlots() != 0 || g.GetEnforcePlayableSlots() {
+		t.Errorf("lobby = %+v, want neither", g)
+	}
+}
+
 func TestAGroupWithoutADisplayNameTravelsWithAnEmptyOne(t *testing.T) {
 	// The operator does not fill the name in: which name stands in for a
 	// missing display name is the reader's decision, and an agent that made

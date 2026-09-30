@@ -42,8 +42,10 @@ these are properties.
 
 The short version, for somebody who is in the middle of something:
 
-- **This operator never deletes a claim.** Not on scale-down, not on group
-  deletion, not ever. Orphans accumulate and removing one is a human act.
+- **This operator never deletes a persistent server's claim.** Not on
+  scale-down, not on group deletion, not ever. Orphans accumulate and removing
+  one is a human act. The one claim it deletes is an on-demand member's world,
+  on a plugin's `deleteServer` (see [Private servers](on-demand-servers.md)).
 - **Deleting a claim deletes a world.** There is no undelete and no
   confirmation, because the operator is not the one deleting it.
 - **A group whose storage is broken stalls rather than thrashing**, and takes
@@ -52,17 +54,21 @@ The short version, for somebody who is in the middle of something:
 
 ## Claims, and why they outlive their servers
 
-**Claims accumulate, and this operator can never remove one.** Deleting a
-`Server` — by scaling down, by hand, or through the failed-retention path
-in the next section — never deletes the `PersistentVolumeClaim` it mounted:
-`podspec.BuildDataClaim` stamps no owner reference, and nothing in this
-operator calls `Delete` on a claim anywhere. That is not merely the observed
-behaviour, it is enforced structurally: the ClusterRole
-(`config/rbac/role.yaml`) grants `persistentvolumeclaims:
-create;get;list;watch;patch` and nothing else — `patch` is `growClaim`'s,
-which touches a claim's requested size and no other field — and
-`internal/rbacaudit/required.go` documents exactly those five verbs with a
-comment explaining why `delete` and `update` are absent on purpose.
+**Claims accumulate, and this operator never removes one of a persistent
+server.** Deleting a `Server` — by scaling down, by hand, or through the
+failed-retention path in the next section — never deletes the
+`PersistentVolumeClaim` it mounted: `podspec.BuildDataClaim` stamps no owner
+reference, and the only `Delete` on a claim is `DeleteServer`'s, for an
+on-demand member's world. That is enforced where the operator's code cannot
+reach: the ClusterRole (`config/rbac/role.yaml`) grants `delete` on claims
+because RBAC cannot select the names minted at runtime, and the chart's
+`ValidatingAdmissionPolicy` `spawnery-world-deletion` admits the operator's
+deletion only of a claim that carries this operator's label, an on-demand
+key and the name `<group>-<key>-data`, and refuses it any change to those
+three labels. A persistent server's claim never carries a key, so the
+operator cannot delete it. `patch` is `growClaim`'s, which touches a claim's
+requested size and no other field, and `internal/rbacaudit/required.go`
+documents every verb.
 `internal/rbacaudit`'s tests compare the
 generated role against that table in both directions — extra grants as well as
 missing ones — so a future `delete` marker added anywhere in the codebase
@@ -135,9 +141,9 @@ as it stands rather than repeated from memory:
   and it stays for one more `failedRetentionSeconds` before the Server
   controller takes it away. The empty-ordinal state is where this settles,
   roughly an hour later at the CRD default, not where it begins. The claim and
-  the world on it are untouched throughout — nothing in this operator can
-  delete a claim, and its one write grows a claim's size, per the RBAC point
-  above. Fixing the storage changes nothing the servers start with, so it
+  the world on it are untouched throughout — the operator cannot delete a
+  persistent server's claim, and its one write to it grows its size, per the
+  RBAC point above. Fixing the storage changes nothing the servers start with, so it
   does not reset the counter by itself: a new value on the group's
   `spawnery.cloud/retry` annotation does, and brings the ordinal back.
 

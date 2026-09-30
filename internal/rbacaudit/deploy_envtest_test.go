@@ -182,6 +182,10 @@ var renderedObjectKeys = []string{
 	"RoleBinding/spawnery-operator",
 	"Service/spawnery-operator",
 	"ServiceAccount/spawnery-operator",
+	// Audited by TestTheOperatorMayDeleteOnlyAnOnDemandWorld, which applies
+	// both and deletes claims as the operator.
+	"ValidatingAdmissionPolicy/spawnery-world-deletion",
+	"ValidatingAdmissionPolicyBinding/spawnery-world-deletion",
 }
 
 // TestTheChartRendersExactlyTheseObjects is the audit's own completeness
@@ -1209,9 +1213,11 @@ func TestTheAgentPolicySelectsTheOperatorAndAdmitsManagedPods(t *testing.T) {
 // namespace at all. Everything else it renders is namespaced, and an object of
 // a namespaced kind with an empty namespace is exactly the failure below.
 var chartClusterScopedKinds = map[string]bool{
-	"ClusterRole":              true,
-	"ClusterRoleBinding":       true,
-	"CustomResourceDefinition": true,
+	"ClusterRole":                      true,
+	"ClusterRoleBinding":               true,
+	"CustomResourceDefinition":         true,
+	"ValidatingAdmissionPolicy":        true,
+	"ValidatingAdmissionPolicyBinding": true,
 }
 
 // chartNamespacedObjects is every namespaced object the chart renders with the

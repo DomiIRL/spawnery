@@ -3,6 +3,7 @@ package cloud.spawnery.agent
 import cloud.spawnery.agent.api.Group
 import cloud.spawnery.agent.pb.CloudRequest
 import cloud.spawnery.agent.pb.CloudResponse
+import cloud.spawnery.agent.pb.DeleteServerResult
 import cloud.spawnery.agent.pb.GroupState
 import cloud.spawnery.agent.pb.RequestError
 import cloud.spawnery.agent.pb.StartServerResult
@@ -246,6 +247,32 @@ class CloudConnectorTest {
             CloudResponse.newBuilder()
                 .setId(requested.single().id)
                 .setStopServer(StopServerResult.newBuilder().setServer("private-servers-c0ffee"))
+                .build(),
+        )
+
+        assertEquals(null, future.toCompletableFuture().get(1, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `a delete is sent with the group and the key`() {
+        val connector = connector()
+
+        connector.deleteServer("private-servers", "c0ffee")
+
+        val sent = requested.single().deleteServer
+        assertEquals("private-servers", sent.group)
+        assertEquals("c0ffee", sent.key)
+    }
+
+    @Test
+    fun `a delete answer completes with no value`() {
+        val connector = connector()
+        val future = connector.deleteServer("private-servers", "c0ffee")
+
+        connector.answer(
+            CloudResponse.newBuilder()
+                .setId(requested.single().id)
+                .setDeleteServer(DeleteServerResult.newBuilder().setServer("private-servers-c0ffee").setWorld(true))
                 .build(),
         )
 

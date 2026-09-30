@@ -285,6 +285,50 @@ func TestServerThatNeverBecomesPlayableFailsAtTheDeadline(t *testing.T) {
 	}
 }
 
+// failLateStarter creates a server whose pod runs but stays unready past the
+// startup deadline, so it is Failed with its pod still running.
+func failLateStarter(t *testing.T, f *fixture, name string) {
+	t.Helper()
+	f.createServer(name)
+	f.reconcile(name)
+	f.setPodRunning(name, false)
+	f.reconcile(name)
+	f.clock.Advance(6 * time.Minute) // the fixture's deadline is 5 minutes
+	f.reconcile(name)
+	if got := f.server(name).Status.Phase; got != string(phase.Failed) {
+		t.Fatalf("phase = %q past the startup deadline, want Failed", got)
+	}
+}
+
+func TestAFailedServersLatePodIsStoppedOnceItsGroupHasAReadyServer(t *testing.T) {
+	f := newFixture(t)
+	failLateStarter(t, f, "lobby-late")
+	bringUpReady(t, f, "lobby-good")
+
+	// The late pod comes up after all.
+	f.setPodRunning("lobby-late", true)
+	f.reconcile("lobby-late")
+
+	if pod, ok := f.pod("lobby-late"); ok && pod.DeletionTimestamp.IsZero() {
+		t.Error("the late pod of a failed server keeps running beside a ready server")
+	}
+	if got := f.server("lobby-late").Status.Phase; got != string(phase.Failed) {
+		t.Errorf("phase = %q, want Failed: the object stays for diagnosis", got)
+	}
+}
+
+func TestAFailedServersLatePodStaysWhileItsGroupHasNoReadyServer(t *testing.T) {
+	f := newFixture(t)
+	failLateStarter(t, f, "lobby-late")
+
+	f.setPodRunning("lobby-late", true)
+	f.reconcile("lobby-late")
+
+	if pod, ok := f.pod("lobby-late"); !ok || !pod.DeletionTimestamp.IsZero() {
+		t.Error("the only running pod of the group was stopped")
+	}
+}
+
 // TestServerThatCannotRecoverIsFailedAndDrained is the zombie the first attempt
 // at the startup-deadline fix created. Exempting a once-registered server from
 // the deadline meant a server that fell out of Ready with a permanently red
