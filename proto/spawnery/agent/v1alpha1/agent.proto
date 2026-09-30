@@ -128,6 +128,7 @@ message CloudRequest {
     StopServerRequest stop_server = 9;
     UnretireRequest unretire = 10;
     StatusRequest status = 11;
+    DeleteServerRequest delete_server = 12;
   }
 }
 
@@ -151,6 +152,7 @@ message CloudResponse {
     StopServerResult stop_server = 10;
     UnretireResult unretire = 11;
     StatusResult status = 12;
+    DeleteServerResult delete_server = 13;
   }
 }
 
@@ -535,6 +537,33 @@ message StopServerResult {
   // The server that is going, echoed so a caller sees what the operator
   // matched.
   string server = 1;
+}
+
+// DeleteServerRequest deletes a member of an OnDemand group for good: its
+// server, if one is running, and its world.
+//
+// Group and key rather than a server name, because a stopped member has no
+// server any more and its world is what the caller wants gone.
+//
+// A running member is stopped as StopServerRequest stops one -- its players
+// are moved through the proxies within the group's drain timeout -- and its
+// claim is deleted at once; Kubernetes keeps the claim until the pod no
+// longer uses it. The answer comes when both deletions are accepted.
+//
+// NOT_FOUND for a group this network does not have, and for a key with
+// neither a server nor a world; REFUSED for a group that is not OnDemand, a
+// key no name can be built from, and a claim this operator did not make.
+message DeleteServerRequest {
+  string group = 1;
+  string key = 2;
+}
+
+// DeleteServerResult says the member is going.
+message DeleteServerResult {
+  // The member's name, as StartServerResult carries it.
+  string server = 1;
+  // True when a world claim was deleted; false when there was only a server.
+  bool world = 2;
 }
 
 // CloudEvent is something that happened, on its way to somebody's chat.

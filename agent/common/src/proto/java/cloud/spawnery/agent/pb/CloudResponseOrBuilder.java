@@ -181,5 +181,20 @@ public interface CloudResponseOrBuilder extends
    */
   cloud.spawnery.agent.pb.StatusResultOrBuilder getStatusOrBuilder();
 
+  /**
+   * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+   * @return Whether the deleteServer field is set.
+   */
+  boolean hasDeleteServer();
+  /**
+   * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+   * @return The deleteServer.
+   */
+  cloud.spawnery.agent.pb.DeleteServerResult getDeleteServer();
+  /**
+   * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+   */
+  cloud.spawnery.agent.pb.DeleteServerResultOrBuilder getDeleteServerOrBuilder();
+
   cloud.spawnery.agent.pb.CloudResponse.ResultCase getResultCase();
 }

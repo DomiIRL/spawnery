@@ -112,7 +112,8 @@ var RequiredCluster = []Permission{
 	{Group: "", Resource: "persistentvolumeclaims", Verb: "list", Why: "the restricted cache over the world claims"},
 	{Group: "", Resource: "persistentvolumeclaims", Verb: "watch", Why: "the restricted cache over the world claims"},
 	{Group: "", Resource: "persistentvolumeclaims", Verb: "create", Why: "ServerReconciler creates a persistent server's claim before its pod"},
-	{Group: "", Resource: "persistentvolumeclaims", Verb: "patch", Why: "ServerReconciler grows a world's claim when spec.storage.size grows; never update, never delete"},
+	{Group: "", Resource: "persistentvolumeclaims", Verb: "patch", Why: "ServerReconciler grows a world's claim when spec.storage.size grows; never update"},
+	{Group: "", Resource: "persistentvolumeclaims", Verb: "delete", Why: "the agent writer deletes an on-demand member's world when a plugin asks for it; no other path deletes a claim"},
 
 	// PodDisruptionBudgets — one per group (ServerGroup and ProxyGroup each own
 	// one, distinguished by podspec.GroupPDBName's role suffix), kept in step

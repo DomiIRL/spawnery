@@ -7,17 +7,18 @@ import cloud.spawnery.agent.api.Target
 import cloud.spawnery.agent.api.NetworkStatus
 import cloud.spawnery.agent.pb.AcceptJoinsRequest
 import cloud.spawnery.agent.pb.AnnounceRequest
+import cloud.spawnery.agent.pb.BoostRequest
 import cloud.spawnery.agent.pb.CloudRequest
 import cloud.spawnery.agent.pb.CloudResponse
 import cloud.spawnery.agent.pb.ConnectRequest
-import cloud.spawnery.agent.pb.BoostRequest
+import cloud.spawnery.agent.pb.DeleteServerRequest
+import cloud.spawnery.agent.pb.RequestError
 import cloud.spawnery.agent.pb.RetireRequest
 import cloud.spawnery.agent.pb.StartServerRequest
+import cloud.spawnery.agent.pb.StatusRequest
 import cloud.spawnery.agent.pb.StopBoostRequest
 import cloud.spawnery.agent.pb.StopServerRequest
-import cloud.spawnery.agent.pb.StatusRequest
 import cloud.spawnery.agent.pb.UnretireRequest
-import cloud.spawnery.agent.pb.RequestError
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -149,6 +150,17 @@ class CloudConnector(
                 CloudRequest.newBuilder()
                     .setId(id)
                     .setStopServer(StopServerRequest.newBuilder().setServer(server))
+                    .build(),
+            )
+        }
+
+    /** Deletes one private server and its world. The answer carries no value. */
+    fun deleteServer(group: String, key: String): CompletionStage<Void> =
+        requests.start<Void> { id ->
+            sendRequest(
+                CloudRequest.newBuilder()
+                    .setId(id)
+                    .setDeleteServer(DeleteServerRequest.newBuilder().setGroup(group).setKey(key))
                     .build(),
             )
         }
@@ -294,6 +306,7 @@ class CloudConnector(
                 ),
             )
             response.hasStopServer() -> requests.complete(response.id, null)
+            response.hasDeleteServer() -> requests.complete(response.id, null)
             response.hasStopBoost() -> requests.complete(response.id, response.stopBoost.removed)
             response.hasAnnounce() -> requests.complete(response.id, null)
             response.hasAcceptJoins() -> requests.complete(response.id, null)

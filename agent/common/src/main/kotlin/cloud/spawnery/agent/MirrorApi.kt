@@ -107,6 +107,9 @@ class MirrorApi(
     override fun stopServer(server: String): CompletionStage<Void> =
         connector.stopServer(server)
 
+    override fun deleteServer(group: String, key: String): CompletionStage<Void> =
+        connector.deleteServer(group, key)
+
     override fun announce(state: String, attributes: Map<String, String>): CompletionStage<Void> =
         connector.announce(state, attributes)
 

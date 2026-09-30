@@ -47,16 +47,20 @@ func BuildDataClaim(
 	group *spawneryv1alpha1.ServerGroup,
 	srv *spawneryv1alpha1.Server,
 ) *corev1.PersistentVolumeClaim {
+	labels := map[string]string{
+		LabelManagedBy: ManagedByValue,
+		LabelNetwork:   group.Spec.NetworkRef.Name,
+		LabelGroup:     group.Name,
+		LabelServer:    srv.Name,
+	}
+	if srv.Spec.Key != "" {
+		labels[LabelKey] = srv.Spec.Key
+	}
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DataClaimName(srv.Name),
 			Namespace: srv.Namespace,
-			Labels: map[string]string{
-				LabelManagedBy: ManagedByValue,
-				LabelNetwork:   group.Spec.NetworkRef.Name,
-				LabelGroup:     group.Name,
-				LabelServer:    srv.Name,
-			},
+			Labels:    labels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes:      group.Spec.Storage.AccessModes,

@@ -343,3 +343,65 @@ func (f *fixture) progressing(t *testing.T, name string) *metav1.Condition {
 	}
 	return cond
 }
+
+// A deleted world must stay deleted while its member still drains: the
+// Server controller keeps reconciling a Server that carries a deletion
+// timestamp, and must not give it its claim back.
+func TestADeletingOnDemandMemberDoesNotRecreateItsWorld(t *testing.T) {
+	f := newFixture(t)
+	group := f.createOnDemandGroup(t, "private-servers", 50)
+	member := f.createOnDemandMember(t, group, "c0ffee")
+	f.reconcile(member.Name)
+	claimName := podspec.DataClaimName(member.Name)
+	claim := f.claim(claimName)
+	if claim == nil {
+		t.Fatalf("the member has no claim %s, so this test would assert nothing", claimName)
+	}
+	if len(f.server(member.Name).Finalizers) == 0 {
+		t.Fatal("the member carries no finalizer, so its deletion would not leave it draining")
+	}
+
+	patch := client.MergeFrom(claim.DeepCopy())
+	claim.Finalizers = nil
+	if err := f.c.Patch(f.ctx, claim, patch); err != nil {
+		t.Fatalf("release the claim: %v", err)
+	}
+	if err := f.c.Delete(f.ctx, claim); err != nil {
+		t.Fatalf("delete the claim: %v", err)
+	}
+	if err := f.c.Delete(f.ctx, f.server(member.Name)); err != nil {
+		t.Fatalf("delete the member: %v", err)
+	}
+
+	f.reconcile(member.Name)
+	f.reconcile(member.Name)
+
+	if f.claim(claimName) != nil {
+		t.Fatal("the Server controller recreated the world of a member being deleted")
+	}
+}
+
+// A world made before claims carried their key keeps its labels as they are:
+// the chart's admission policy refuses the operator any change to them, so a
+// patch here would fail every pass, and adding the key would put a claim in
+// deletion's reach that was not created as an on-demand world.
+func TestAnOnDemandMembersOldWorldIsNotRelabelled(t *testing.T) {
+	f := newFixture(t)
+	group := f.createOnDemandGroup(t, "private-servers", 50)
+	member := f.createOnDemandMember(t, group, "c0ffee")
+	old := podspec.BuildDataClaim(group, member)
+	delete(old.Labels, podspec.LabelKey)
+	if err := f.c.Create(f.ctx, old); err != nil {
+		t.Fatalf("create the old world: %v", err)
+	}
+
+	f.reconcile(member.Name)
+
+	claim := f.claim(podspec.DataClaimName(member.Name))
+	if claim == nil {
+		t.Fatal("the world is gone")
+	}
+	if got, ok := claim.Labels[podspec.LabelKey]; ok {
+		t.Fatalf("key label = %q: the operator relabelled a claim it did not create keyed", got)
+	}
+}
