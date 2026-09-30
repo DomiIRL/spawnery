@@ -39,6 +39,25 @@ private fun state(
 
 class NetworkMirrorTest {
     @Test
+    fun `a group's admission comes from its state`() {
+        val mirror = NetworkMirror()
+        mirror.apply(
+            NetworkState.newBuilder()
+                .addGroups(GroupState.newBuilder().setName("duels").setPlayableSlots(12).setEnforcePlayableSlots(true))
+                .build(),
+        )
+        assertEquals(GroupAdmission(playableSlots = 12, enforce = true), mirror.admission("duels"))
+    }
+
+    @Test
+    fun `absent fields mean not enforced`() {
+        val mirror = NetworkMirror()
+        mirror.apply(NetworkState.newBuilder().addGroups(GroupState.newBuilder().setName("duels")).build())
+        assertEquals(GroupAdmission(playableSlots = 0, enforce = false), mirror.admission("duels"))
+        assertEquals(null, mirror.admission("unknown"))
+    }
+
+    @Test
     fun `a mirror that has been told nothing answers empty rather than null`() {
         val mirror = NetworkMirror()
         assertEquals(emptyList(), mirror.groups())
