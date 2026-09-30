@@ -90,10 +90,10 @@ func TestTheDashboardChoosesANetworkFromItsGroups(t *testing.T) {
 	var dash struct {
 		Templating struct {
 			List []struct {
-				Name       string `json:"name"`
-				Multi      bool   `json:"multi"`
-				IncludeAll bool   `json:"includeAll"`
-				AllValue   string `json:"allValue"`
+				Name       string          `json:"name"`
+				Multi      bool            `json:"multi"`
+				IncludeAll bool            `json:"includeAll"`
+				AllValue   string          `json:"allValue"`
 				Query      json.RawMessage `json:"query"`
 			} `json:"list"`
 		} `json:"templating"`
