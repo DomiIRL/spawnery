@@ -158,6 +158,7 @@ const (
 	ReasonStartupTimeout        = "StartupTimeout"
 	ReasonFlapping              = "Flapping"
 	ReasonRetentionElapsed      = "RetentionElapsed"
+	ReasonStoppingFailedPod     = "StoppingFailedPod"
 	ReasonTerminating           = "Terminating"
 	ReasonUnknownPhase          = "UnknownPhase"
 	// ReasonRoundFinished marks the round's end, not the pod's: a Ready server
@@ -188,6 +189,8 @@ type Inputs struct {
 	// PodTerminal is true if the pod reached phase Failed or Succeeded, or a
 	// container is in CrashLoopBackOff past the operator's tolerance.
 	PodTerminal bool
+	// GroupHasReadyServer is true if another server of the same group is Ready.
+	GroupHasReadyServer bool
 
 	// StartupDeadlineReached is true if the current attempt to become playable
 	// has run past the operator's startup deadline. The clock is re-armed on
@@ -384,6 +387,19 @@ func Decide(current Phase, in Inputs) Decision {
 			return Decision{
 				Next: Terminating, DeletePod: true,
 				Reason: ReasonRetentionElapsed, Message: "failed retention elapsed",
+			}
+		}
+		// A pod that comes up after its server was failed -- the startup
+		// deadline ran out while a node was restarting, say -- would otherwise
+		// run unregistered and unused for the whole retention. The object and
+		// its events stay; a pod that ended on its own stays too, for its logs.
+		// Never registered means no proxy ever sent anyone there, whatever an
+		// agent that may not have reported yet would say.
+		if in.PodExists && in.PodRunning && !in.PodTerminal && in.GroupHasReadyServer &&
+			(!in.WasRegistered || !in.Occupied()) {
+			return Decision{
+				Next: Failed, DeletePod: true,
+				Reason: ReasonStoppingFailedPod, Message: "stopping the late pod of a failed server; the object stays for diagnosis",
 			}
 		}
 		return Decision{

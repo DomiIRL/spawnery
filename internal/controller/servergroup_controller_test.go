@@ -4518,6 +4518,13 @@ func TestProgressingSaysWhetherTheGroupHasArrived(t *testing.T) {
 			[]ServerView{view(phase.Ready, gen), view(phase.Failed, gen)},
 			metav1.ConditionFalse, spawneryv1alpha1.ReasonAtDesiredState, "",
 		},
+		{
+			// Kept for diagnosis, not waiting to be replaced: its group
+			// already replaced it when it failed.
+			"a failed server of an earlier spec",
+			[]ServerView{view(phase.Ready, gen), view(phase.Failed, "old")},
+			metav1.ConditionFalse, spawneryv1alpha1.ReasonAtDesiredState, "",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			group := &spawneryv1alpha1.ServerGroup{
