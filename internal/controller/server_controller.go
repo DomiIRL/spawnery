@@ -123,7 +123,7 @@ type ServerReconciler struct {
 // +kubebuilder:rbac:groups=spawnery.cloud,resources=servergroups,verbs=get;list;watch
 // +kubebuilder:rbac:groups=spawnery.cloud,resources=networks,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;patch;delete
-// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;patch;delete
 
 // The two event grants are not the same right twice, and only one of them is
 // cluster-wide.
@@ -426,6 +426,13 @@ func (r *ServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if current == "" {
 		current = phase.Pending
 	}
+	if current == phase.Failed && podFound {
+		ready, err := r.groupHasReadyServer(ctx, srv)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		in.GroupHasReadyServer = ready
+	}
 	decision := phase.Decide(current, in)
 
 	if err := r.applyDecision(ctx, srv, group, pod, podFound, current, decision); err != nil {
@@ -671,6 +678,22 @@ func (r *ServerReconciler) fetchPod(ctx context.Context, srv *spawneryv1alpha1.S
 	default:
 		return nil, false, err
 	}
+}
+
+// groupHasReadyServer reports whether another server of srv's group is Ready.
+func (r *ServerReconciler) groupHasReadyServer(ctx context.Context, srv *spawneryv1alpha1.Server) (bool, error) {
+	var list spawneryv1alpha1.ServerList
+	if err := r.List(ctx, &list, client.InNamespace(srv.Namespace)); err != nil {
+		return false, err
+	}
+	for i := range list.Items {
+		other := &list.Items[i]
+		if other.Name != srv.Name && other.Spec.GroupRef.Name == srv.Spec.GroupRef.Name &&
+			other.Status.Phase == string(phase.Ready) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // collectInputs is the only place that reads Kubernetes state into the pure

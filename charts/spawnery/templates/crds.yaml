@@ -3926,8 +3926,10 @@ spec:
                   rule: '!has(self.pullPolicy) || has(self.image)'
               failedRetentionSeconds:
                 default: 3600
-                description: FailedRetentionSeconds is how long a Failed server is
-                  kept for diagnosis.
+                description: |-
+                  FailedRetentionSeconds is how long a Failed server is kept for diagnosis.
+                  A pod that comes up after its server failed is stopped as soon as another
+                  server of the group is Ready; the Server object stays for the retention.
                 format: int32
                 minimum: 0
                 type: integer

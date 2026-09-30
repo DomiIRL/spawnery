@@ -379,6 +379,8 @@ type ServerGroupSpec struct {
 	TerminationGracePeriodSeconds int64 `json:"terminationGracePeriodSeconds,omitempty"`
 
 	// FailedRetentionSeconds is how long a Failed server is kept for diagnosis.
+	// A pod that comes up after its server failed is stopped as soon as another
+	// server of the group is Ready; the Server object stays for the retention.
 	// +kubebuilder:default=3600
 	// +kubebuilder:validation:Minimum=0
 	// +optional

@@ -144,9 +144,9 @@ version: 0.13.0
 # validates unchanged.
 appVersion: "0.13.0"
 
-# The floor is the CRDs', not the operator's. api/v1alpha1 carries
-# +kubebuilder:validation:XValidation rules -- five of them on ExposeSpec
-# alone -- and CEL validation reaches beta and on-by-default in 1.25.
-# Declared rather than measured: nothing in this repository installs the
-# chart on an old cluster to find out.
-kubeVersion: ">=1.25.0-0"
+# The floor is the world-deletion policy's: admissionregistration.k8s.io/v1
+# ValidatingAdmissionPolicy is GA from 1.30. The CRDs alone would need 1.25,
+# where CEL validation reaches beta and on-by-default. Declared rather than
+# measured: nothing in this repository installs the chart on an old cluster
+# to find out.
+kubeVersion: ">=1.30.0-0"

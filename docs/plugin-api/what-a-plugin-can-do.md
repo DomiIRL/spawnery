@@ -99,6 +99,12 @@ name cannot take down a lobby. Who may call is who may install a plugin in the
 namespace, as for every call on this page; the group's `maxInstances` bounds how
 many there can be.
 
+`deleteServer(group, key)` **deletes a private server for good**: it stops the
+member if it runs, as `stopServer` does, and deletes its world. It takes the
+group and the key because a stopped member is nothing but its world. It reaches
+on-demand members only, and the chart's admission policy holds the operator to
+exactly those claims.
+
 Each fails with a reason. `startServer` says `REFUSED`, `NOT_FOUND`, or
 `UNAVAILABLE` for a request that succeeds once a server that is stopping has
 gone. `stopServer` says `REFUSED` or `NOT_FOUND`, and `UNAVAILABLE` only when

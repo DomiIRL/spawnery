@@ -253,6 +253,26 @@ public interface SpawneryApi {
     CompletionStage<Void> stopServer(String server);
 
     /**
+     * Deletes one private server for good: stops it if it is running, as
+     * {@link #stopServer} does, and deletes its world. There is no undo.
+     *
+     * <p>Group and key as {@link #startServer} takes them, because a stopped
+     * server's world is all that is left of it. The stage completes when the
+     * deletion is under way; a {@link #startServer} of the same key answers
+     * {@code UNAVAILABLE} until the world is gone, and then starts an empty
+     * one.
+     *
+     * <p>It fails with {@code NOT_FOUND} for a group this network does not have
+     * or a key with neither a server nor a world, and with {@code REFUSED} for
+     * a group that is not on-demand, a key no name can be built from, or a
+     * world this operator did not make. The failure has the shape
+     * {@link #startServer} describes, the timeout and the renewed stream
+     * included; asking again is safe, and answers {@code NOT_FOUND} once the
+     * world is gone.
+     */
+    CompletionStage<Void> deleteServer(String group, String key);
+
+    /**
      * Opens or closes this server's own door.
      *
      * <p><b>Closing is not {@link #retire}, and the difference is the whole
