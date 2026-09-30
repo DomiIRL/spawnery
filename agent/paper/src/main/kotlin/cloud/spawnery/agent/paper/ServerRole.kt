@@ -1,5 +1,6 @@
 package cloud.spawnery.agent.paper
 
+import cloud.spawnery.agent.heapNow
 import cloud.spawnery.agent.AgentRole
 import cloud.spawnery.agent.CloudConnector
 import cloud.spawnery.agent.CloudEvents
@@ -52,17 +53,21 @@ class ServerRole(
             .setHello(Hello.newBuilder().setVersion(version).setReady(state.ready))
             .build()
 
-    override fun playerCount(): ServerMessage =
-        ServerMessage.newBuilder()
+    override fun playerCount(): ServerMessage {
+        val (heapUsed, heapMax) = heapNow()
+        return ServerMessage.newBuilder()
             .setPlayerCount(
                 PlayerCount.newBuilder()
                     .setPlayers(state.players)
                     .setSlots(state.slots)
                     .setTps(state.tps)
                     .setMspt(state.mspt)
-                    .setPlayableSlots(state.playable),
+                    .setPlayableSlots(state.playable)
+                    .setHeapUsedBytes(heapUsed)
+                    .setHeapMaxBytes(heapMax),
             )
             .build()
+    }
 
     /**
      * `:common`'s test double copies this `when` by hand, as

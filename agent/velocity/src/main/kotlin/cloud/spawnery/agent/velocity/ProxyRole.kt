@@ -1,5 +1,6 @@
 package cloud.spawnery.agent.velocity
 
+import cloud.spawnery.agent.heapNow
 import cloud.spawnery.agent.AgentRole
 import cloud.spawnery.agent.CloudConnector
 import cloud.spawnery.agent.CloudEvents
@@ -205,12 +206,18 @@ class ProxyRole(
      * recorded player count sat at zero. See the `PlayerCount` comment in
      * proto/spawnery/agent/v1alpha1/agent.proto.
      */
-    override fun playerCount(): ProxyMessage =
-        ProxyMessage.newBuilder()
+    override fun playerCount(): ProxyMessage {
+        val (heapUsed, heapMax) = heapNow()
+        return ProxyMessage.newBuilder()
             .setPlayerCount(
-                PlayerCount.newBuilder().setPlayers(state.players).setSlots(state.slots),
+                PlayerCount.newBuilder()
+                    .setPlayers(state.players)
+                    .setSlots(state.slots)
+                    .setHeapUsedBytes(heapUsed)
+                    .setHeapMaxBytes(heapMax),
             )
             .build()
+    }
 
     /**
      * How many of this proxy's players are on, or on their way to, each
