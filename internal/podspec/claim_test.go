@@ -95,3 +95,28 @@ func TestBuildDataClaimWithoutAStorageClass(t *testing.T) {
 		t.Fatalf("storageClassName = %v, want nil so the cluster default applies", claim.Spec.StorageClassName)
 	}
 }
+
+// The key label is what the admission policy shipped with the chart reads to
+// let the operator delete this claim, and only this kind of claim.
+func TestAnOnDemandMembersClaimCarriesItsKey(t *testing.T) {
+	group := persistentGroupFixture(t)
+	group.Name = "private-servers"
+	group.Spec.Type = spawneryv1alpha1.ServerGroupOnDemand
+	srv := serverFixture(t, "private-servers-c0ffee")
+	srv.Spec.GroupRef.Name = "private-servers"
+	srv.Spec.Ordinal = nil
+	srv.Spec.Key = "c0ffee"
+
+	claim := BuildDataClaim(group, srv)
+
+	if got := claim.Labels[LabelKey]; got != "c0ffee" {
+		t.Fatalf("key label = %q, want c0ffee", got)
+	}
+}
+
+func TestAPersistentServersClaimCarriesNoKey(t *testing.T) {
+	claim := BuildDataClaim(persistentGroupFixture(t), serverFixture(t, "survival-0"))
+	if _, ok := claim.Labels[LabelKey]; ok {
+		t.Fatalf("labels = %v: a claim without a key must stay out of the deletion policy's reach", claim.Labels)
+	}
+}

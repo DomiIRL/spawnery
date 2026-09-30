@@ -99,6 +99,11 @@ var ErrWorldDeleting = errors.New("that member's world is still being deleted")
 // group.
 var ErrForeignClaim = errors.New("that claim was not made by this operator for that group")
 
+// ErrUnkeyedWorld is a delete of a world whose claim predates the key label,
+// which the chart's admission policy requires; the label is added the next
+// time the member runs.
+var ErrUnkeyedWorld = errors.New("that world's claim does not carry its key yet")
+
 // ErrInstancesDraining is the ceiling, met, by members of which at least one
 // is already leaving.
 //
@@ -181,7 +186,7 @@ type ClusterWriter interface {
 	StopServer(ctx context.Context, namespace, name string) error
 	// DeleteServer deletes a member of an OnDemand group for good: its server
 	// if one exists, and its world claim. It returns ErrNoSuchGroup,
-	// ErrGroupNotOnDemand, instance.ErrBadKey, ErrForeignClaim, and
+	// ErrGroupNotOnDemand, instance.ErrBadKey, ErrForeignClaim, ErrUnkeyedWorld, and
 	// ErrNoSuchServer when neither a server nor a world is there.
 	DeleteServer(ctx context.Context, namespace, group, key string) (DeletedServer, error)
 	// Unretire takes a retirement back and holds the server.
@@ -663,6 +668,9 @@ func (w KubeWriter) DeleteServer(ctx context.Context, namespace, group, key stri
 	if haveClaim && (claim.Labels[podspec.LabelManagedBy] != podspec.ManagedByValue ||
 		claim.Labels[podspec.LabelGroup] != group) {
 		return DeletedServer{}, ErrForeignClaim
+	}
+	if haveClaim && claim.Labels[podspec.LabelKey] != key {
+		return DeletedServer{}, ErrUnkeyedWorld
 	}
 
 	var srv spawneryv1alpha1.Server

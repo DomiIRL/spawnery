@@ -29,6 +29,10 @@ const (
 	LabelGroup = "spawnery.cloud/group"
 	// LabelServer carries the Server name.
 	LabelServer = "spawnery.cloud/server"
+	// LabelKey carries an on-demand member's key, on its world claim only.
+	// The chart's admission policy lets the operator delete a claim only if
+	// it carries this label and the name composed from group and key.
+	LabelKey = "spawnery.cloud/key"
 	// LabelRole is "server" or "proxy".
 	LabelRole = "spawnery.cloud/role"
 	// LabelOccupied is set to "true" while players are online. The group's

@@ -380,3 +380,26 @@ func TestADeletingOnDemandMemberDoesNotRecreateItsWorld(t *testing.T) {
 		t.Fatal("the Server controller recreated the world of a member being deleted")
 	}
 }
+
+// A world made before claims carried their key gets it the next time its
+// member runs, which is what lets it be deleted afterwards.
+func TestAnOnDemandMembersOldWorldGetsItsKey(t *testing.T) {
+	f := newFixture(t)
+	group := f.createOnDemandGroup(t, "private-servers", 50)
+	member := f.createOnDemandMember(t, group, "c0ffee")
+	old := podspec.BuildDataClaim(group, member)
+	delete(old.Labels, podspec.LabelKey)
+	if err := f.c.Create(f.ctx, old); err != nil {
+		t.Fatalf("create the old world: %v", err)
+	}
+
+	f.reconcile(member.Name)
+
+	claim := f.claim(podspec.DataClaimName(member.Name))
+	if claim == nil {
+		t.Fatal("the world is gone")
+	}
+	if got := claim.Labels[podspec.LabelKey]; got != "c0ffee" {
+		t.Fatalf("key label = %q after the member ran, want c0ffee", got)
+	}
+}

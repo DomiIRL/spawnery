@@ -17,6 +17,7 @@ limitations under the License.
 package agentserver_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -575,6 +576,7 @@ func worldOf(t *testing.T, f *serverFixture, group, name string) {
 		t.Fatalf("get group %s: %v", group, err)
 	}
 	srv := &spawneryv1alpha1.Server{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: f.ns}}
+	srv.Spec.Key = strings.TrimPrefix(name, group+"-")
 	if err := f.c.Create(f.ctx, podspec.BuildDataClaim(&g, srv)); err != nil {
 		t.Fatalf("create the claim of %s: %v", name, err)
 	}
@@ -762,4 +764,28 @@ func TestStartWhileTheWorldIsBeingDeletedIsUnavailable(t *testing.T) {
 	}
 
 	wantReason(t, startOverTheWire(t, f, pod, "private-servers", "c0ffee"), agentpb.RequestError_UNAVAILABLE)
+}
+
+// A world from before the key label existed: this operator made it, but the
+// admission policy would refuse its deletion, so the writer says so first.
+func TestDeleteRefusesAWorldWithoutItsKeyLabel(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+	worldOf(t, f, "private-servers", "private-servers-c0ffee")
+	var c corev1.PersistentVolumeClaim
+	key := client.ObjectKey{Namespace: f.ns, Name: podspec.DataClaimName("private-servers-c0ffee")}
+	if err := f.c.Get(f.ctx, key, &c); err != nil {
+		t.Fatalf("get claim: %v", err)
+	}
+	patch := client.MergeFrom(c.DeepCopy())
+	delete(c.Labels, podspec.LabelKey)
+	if err := f.c.Patch(f.ctx, &c, patch); err != nil {
+		t.Fatalf("drop the key label: %v", err)
+	}
+
+	wantReason(t, deleteOverTheWire(t, f, pod, "private-servers", "c0ffee"), agentpb.RequestError_REFUSED)
+	if claimGoing(t, f, "private-servers-c0ffee") {
+		t.Fatal("a world without its key label was deleted")
+	}
 }
