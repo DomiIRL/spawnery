@@ -98,6 +98,10 @@ message PlayerCount {
   // registry discards a report with more players than slots, and players
   // beyond the playable seats are legitimate.
   int32 playable_slots = 5;
+  // Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+  // reported -- what an agent older than these fields sends.
+  int64 heap_used_bytes = 6;
+  int64 heap_max_bytes = 7;
 }
 
 // ---- requests (milestone 7b-5) ----

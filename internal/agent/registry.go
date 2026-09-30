@@ -61,6 +61,10 @@ type Snapshot struct {
 	// arrive in the same report.
 	TPS  float64
 	MSPT float64
+	// HeapUsed and HeapMax are the agent's JVM heap in bytes; 0 when it has
+	// not reported them.
+	HeapUsed int64
+	HeapMax  int64
 	// PlayersStale is true if the count is older than twice the report
 	// interval, or if the pod is unknown. Stale counts as occupied.
 	PlayersStale bool
@@ -121,6 +125,8 @@ type entry struct {
 	playable       int32
 	tps            float64
 	mspt           float64
+	heapUsed       int64
+	heapMax        int64
 	emptySince     time.Time
 	lastReportAt   time.Time
 	disconnectedAt time.Time
@@ -337,6 +343,24 @@ func (r *Registry) ReportTicks(key string, tps, mspt float64) error {
 	}
 	e.tps = tps
 	e.mspt = mspt
+	return nil
+}
+
+// ReportHeap records an agent's JVM heap, in use and at most, from the same
+// report as its player count.
+func (r *Registry) ReportHeap(key string, used, max int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	e, ok := r.entries[key]
+	if !ok || !e.connected {
+		return fmt.Errorf("no live stream for %q", key)
+	}
+	if used < 0 || max < 0 {
+		return fmt.Errorf("impossible heap report for %q: %d of %d bytes", key, used, max)
+	}
+	e.heapUsed = used
+	e.heapMax = max
 	return nil
 }
 
@@ -740,6 +764,8 @@ func (r *Registry) Lookup(key string) Snapshot {
 		PlayableSlots:     e.playable,
 		TPS:               e.tps,
 		MSPT:              e.mspt,
+		HeapUsed:          e.heapUsed,
+		HeapMax:           e.heapMax,
 		PlayersReportedAt: e.lastReportAt,
 	}
 	if !e.connected {

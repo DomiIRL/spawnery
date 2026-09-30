@@ -624,6 +624,10 @@ func (s *Server) handle(
 			m.PlayerCount.GetPlayableSlots()); err != nil {
 			RejectedReports.WithLabelValues(string(agent.RoleServer)).Inc()
 			logger.V(1).Info("discarded a playable figure", "reason", err.Error())
+		} else if err := s.opts.Agents.ReportHeap(id.PodUID,
+			m.PlayerCount.GetHeapUsedBytes(), m.PlayerCount.GetHeapMaxBytes()); err != nil {
+			RejectedReports.WithLabelValues(string(agent.RoleServer)).Inc()
+			logger.V(1).Info("discarded a heap report", "reason", err.Error())
 		}
 	case *agentpb.ServerMessage_CloudRequest:
 		// Every request answered, including one this operator does not know:
@@ -749,6 +753,10 @@ func (s *Server) handleProxy(
 			m.PlayerCount.GetPlayers(), m.PlayerCount.GetSlots()); err != nil {
 			RejectedReports.WithLabelValues(string(agent.RoleProxy)).Inc()
 			logger.V(1).Info("discarded a player count", "reason", err.Error())
+		} else if err := s.opts.Agents.ReportHeap(id.PodUID,
+			m.PlayerCount.GetHeapUsedBytes(), m.PlayerCount.GetHeapMaxBytes()); err != nil {
+			RejectedReports.WithLabelValues(string(agent.RoleProxy)).Inc()
+			logger.V(1).Info("discarded a heap report", "reason", err.Error())
 		}
 	case *agentpb.ProxyMessage_Heartbeat:
 		// Nothing. The stream is its own liveness signal and the registry's

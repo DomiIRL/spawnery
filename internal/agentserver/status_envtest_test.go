@@ -79,11 +79,15 @@ func TestStatusOverTheWireCarriesReportedTicks(t *testing.T) {
 	}
 
 	if err := stream.Send(&agentpb.ServerMessage{Message: &agentpb.ServerMessage_PlayerCount{
-		PlayerCount: &agentpb.PlayerCount{Players: 1, Slots: 20, Tps: 18.5, Mspt: 31},
+		PlayerCount: &agentpb.PlayerCount{Players: 1, Slots: 20, Tps: 18.5, Mspt: 31,
+			HeapUsedBytes: 1 << 30, HeapMaxBytes: 4 << 30},
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	resp := ask(21, "lobby-aaaa")
+	if snap := f.agents.Lookup(string(pod.UID)); snap.HeapUsed != 1<<30 || snap.HeapMax != 4<<30 {
+		t.Errorf("heap = %v/%v in the registry, want 1GiB/4GiB", snap.HeapUsed, snap.HeapMax)
+	}
 	in := resp.GetStatus().GetInstances()
 	if len(in) != 1 || in[0].GetTps() != 18.5 || in[0].GetMspt() != 31 {
 		t.Fatalf("answer = %+v, want lobby-aaaa at 18.5 TPS and 31 ms", resp)
