@@ -167,7 +167,8 @@ Spawnery.api().playableSlots(12);
 is no stage to wait for and nothing to fail on the network; it reaches the
 operator within one report interval and is restated on every new session.
 
-**Nobody is turned away by it.** Players beyond the playable seats are still
+**Nobody is turned away by it**, unless the group sets
+`enforcePlayableSlots` (below). Players beyond the playable seats are still
 admitted up to the server's limit. The server then counts as full: its group
 builds another one, and a connect to the group prefers a server with room.
 

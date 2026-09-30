@@ -62,6 +62,17 @@ which knows permissions but sees counts only as reported -- decided
 Bypass players do not take a seat, so a watching admin never takes a
 player's place.
 
+**After review:** the admitted-not-joined players are released on join,
+quit and `PlayerConnectionCloseEvent` (a connection can end during the
+configuration phase, where neither of the first two fires) and expire after
+five minutes as a backstop. The listener is registered only once the
+server's group turns enforcement on, because any `PlayerLoginEvent`
+listener makes Paper refuse its reconfiguration API on the whole server.
+The operator keeps counting every player, bypass players included: its
+free seats and scaler see a watching admin as seated, which at worst orders
+the next server one watcher early; the reported player count also decides
+whether a server is empty, so it is not bent for this.
+
 ## The refusal
 
 The login is disallowed with an Adventure **translatable component**, key

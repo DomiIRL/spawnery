@@ -178,7 +178,8 @@ type ServerGroupSpec struct {
 	// figure at runtime, which wins over this one.
 	//
 	// maxPlayers stays the limit a server enforces, so the seats between the
-	// two are room for players the group is not sized by, such as spectators.
+	// two are room for players the group is not sized by, such as spectators --
+	// unless enforcePlayableSlots makes this number the limit too.
 	// +optional
 	PlayableSlots *int32 `json:"playableSlots,omitempty"`
 

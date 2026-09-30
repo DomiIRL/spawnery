@@ -321,7 +321,8 @@ public interface SpawneryApi {
      * Sets how many of this server's seats count as capacity, from now until
      * changed: what its group's spare slots, free slots and a connect to the
      * group measure. Players beyond it are still admitted up to the server's
-     * limit, and make the server full rather than overfull.
+     * limit, and make the server full rather than overfull -- unless the group
+     * sets enforcePlayableSlots, in which case it is also the door.
      *
      * <p>It asks the operator nothing. The next periodic report carries it,
      * and every report after that, so a new session restates it without a
