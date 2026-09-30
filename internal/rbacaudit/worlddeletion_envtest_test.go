@@ -1,0 +1,101 @@
+/*
+Copyright paul_wtf.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package rbacaudit_test
+
+import (
+	"testing"
+	"time"
+
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/spawnery/spawnery/internal/podspec"
+	"github.com/spawnery/spawnery/internal/testenv"
+)
+
+// The operator may delete claims cluster-wide, which RBAC cannot narrow to
+// the claims it minted at runtime. The chart's admission policy is what does:
+// as the operator, only an on-demand member's world may be deleted.
+func TestTheOperatorMayDeleteOnlyAnOnDemandWorld(t *testing.T) {
+	subject := applyDeploymentAndDeriveSubject(t)
+	var policy admissionregistrationv1.ValidatingAdmissionPolicy
+	var policyBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+	renderedManifest(t, "ValidatingAdmissionPolicy/spawnery-world-deletion", &policy)
+	renderedManifest(t, "ValidatingAdmissionPolicyBinding/spawnery-world-deletion", &policyBinding)
+	apply(t, &policy, &policyBinding)
+
+	c, ctx := testenv.Client(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "worlds"}}
+	apply(t, ns)
+	claim := func(name string, labels map[string]string) *corev1.PersistentVolumeClaim {
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns.Name, Labels: labels},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}
+		if err := c.Create(ctx, pvc); err != nil && !apierrors.IsAlreadyExists(err) {
+			t.Fatalf("create claim %s: %v", name, err)
+		}
+		return pvc
+	}
+	managed := func(group string) map[string]string {
+		return map[string]string{podspec.LabelManagedBy: podspec.ManagedByValue, podspec.LabelGroup: group}
+	}
+	world := managed("private-servers")
+	world[podspec.LabelKey] = "c0ffee"
+	onDemand := claim("private-servers-c0ffee-data", world)
+	persistent := claim("survival-0-data", managed("survival"))
+	renamed := claim("database-data", world)
+	foreign := claim("vault-data", nil)
+
+	cfg := rest.CopyConfig(testenv.Config(t))
+	cfg.Impersonate = rest.ImpersonationConfig{UserName: subject}
+	asOperator, err := client.New(cfg, client.Options{Scheme: c.Scheme()})
+	if err != nil {
+		t.Fatalf("impersonating client: %v", err)
+	}
+	tryDelete := func(pvc *corev1.PersistentVolumeClaim) error {
+		return asOperator.Delete(ctx, pvc.DeepCopy(), client.DryRunAll)
+	}
+
+	// The policy is compiled and picked up asynchronously after its creation.
+	deadline := time.Now().Add(30 * time.Second)
+	for tryDelete(persistent) == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the operator may delete a persistent group's claim: the policy never took effect")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	if err := tryDelete(onDemand); err != nil {
+		t.Errorf("an on-demand world was refused: %v", err)
+	}
+	for _, pvc := range []*corev1.PersistentVolumeClaim{persistent, renamed, foreign} {
+		if err := tryDelete(pvc); !apierrors.IsInvalid(err) && !apierrors.IsForbidden(err) {
+			t.Errorf("deleting %s as the operator: err = %v, want a policy denial", pvc.Name, err)
+		}
+	}
+}

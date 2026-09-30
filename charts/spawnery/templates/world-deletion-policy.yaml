@@ -1,0 +1,38 @@
+# The operator holds delete on claims cluster-wide, because RBAC cannot select
+# the names it mints at runtime. This is what narrows it: as the operator, only
+# an on-demand member's world claim -- this operator's label, the member's key,
+# and the name composed from group and key -- may be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: spawnery-world-deletion
+  labels:
+    {{- include "spawnery.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["persistentvolumeclaims"]
+  matchConditions:
+    - name: the-operator
+      expression: request.userInfo.username == "system:serviceaccount:{{ .Release.Namespace }}:spawnery-operator"
+  validations:
+    - expression: >-
+        oldObject.metadata.?labels[?'spawnery.cloud/managed-by'].orValue('') == 'spawnery-operator' &&
+        oldObject.metadata.?labels[?'spawnery.cloud/key'].orValue('') != '' &&
+        oldObject.metadata.name == oldObject.metadata.labels['spawnery.cloud/group'] + '-' +
+        oldObject.metadata.labels['spawnery.cloud/key'] + '-data'
+      message: the spawnery operator deletes only the world claim of an on-demand member
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: spawnery-world-deletion
+  labels:
+    {{- include "spawnery.labels" . | nindent 4 }}
+spec:
+  policyName: spawnery-world-deletion
+  validationActions: [Deny]
