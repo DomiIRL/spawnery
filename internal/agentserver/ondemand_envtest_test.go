@@ -21,6 +21,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -553,4 +554,212 @@ func TestStoppingAServerThisNetworkDoesNotHaveIsNotFound(t *testing.T) {
 	if got := resp.GetError().GetReason(); got != agentpb.RequestError_NOT_FOUND {
 		t.Fatalf("reason = %v, want NOT_FOUND", got)
 	}
+}
+
+func deleteOverTheWire(
+	t *testing.T, f *serverFixture, pod *corev1.Pod, group, key string,
+) *agentpb.CloudResponse {
+	t.Helper()
+	return askOverTheWire(t, f, pod, &agentpb.CloudRequest{
+		Request: &agentpb.CloudRequest_DeleteServer{
+			DeleteServer: &agentpb.DeleteServerRequest{Group: group, Key: key},
+		},
+	})
+}
+
+// worldOf creates a member's data claim the way the Server controller does.
+func worldOf(t *testing.T, f *serverFixture, group, name string) {
+	t.Helper()
+	var g spawneryv1alpha1.ServerGroup
+	if err := f.c.Get(f.ctx, client.ObjectKey{Namespace: f.ns, Name: group}, &g); err != nil {
+		t.Fatalf("get group %s: %v", group, err)
+	}
+	srv := &spawneryv1alpha1.Server{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: f.ns}}
+	if err := f.c.Create(f.ctx, podspec.BuildDataClaim(&g, srv)); err != nil {
+		t.Fatalf("create the claim of %s: %v", name, err)
+	}
+}
+
+// holdClaim keeps a claim Terminating after its deletion, as pvc-protection
+// does while a pod still mounts it.
+func holdClaim(t *testing.T, f *serverFixture, name string) {
+	t.Helper()
+	key := client.ObjectKey{Namespace: f.ns, Name: podspec.DataClaimName(name)}
+	var c corev1.PersistentVolumeClaim
+	if err := f.c.Get(f.ctx, key, &c); err != nil {
+		t.Fatalf("get claim: %v", err)
+	}
+	patch := client.MergeFrom(c.DeepCopy())
+	c.Finalizers = append(c.Finalizers, "test.spawnery.cloud/hold")
+	if err := f.c.Patch(f.ctx, &c, patch); err != nil {
+		t.Fatalf("hold claim: %v", err)
+	}
+	t.Cleanup(func() {
+		var held corev1.PersistentVolumeClaim
+		if err := f.c.Get(f.ctx, key, &held); err != nil {
+			return
+		}
+		patch := client.MergeFrom(held.DeepCopy())
+		held.Finalizers = nil
+		_ = f.c.Patch(f.ctx, &held, patch)
+	})
+}
+
+func claimGoing(t *testing.T, f *serverFixture, name string) bool {
+	t.Helper()
+	var c corev1.PersistentVolumeClaim
+	err := f.c.Get(f.ctx, client.ObjectKey{Namespace: f.ns, Name: podspec.DataClaimName(name)}, &c)
+	if apierrors.IsNotFound(err) {
+		return true
+	}
+	if err != nil {
+		t.Fatalf("get claim: %v", err)
+	}
+	return !c.DeletionTimestamp.IsZero()
+}
+
+func serverGoing(t *testing.T, f *serverFixture, name string) bool {
+	t.Helper()
+	var srv spawneryv1alpha1.Server
+	err := f.c.Get(f.ctx, client.ObjectKey{Namespace: f.ns, Name: name}, &srv)
+	if apierrors.IsNotFound(err) {
+		return true
+	}
+	if err != nil {
+		t.Fatalf("get server: %v", err)
+	}
+	return !srv.DeletionTimestamp.IsZero()
+}
+
+func wantReason(t *testing.T, resp *agentpb.CloudResponse, want agentpb.RequestError_Reason) {
+	t.Helper()
+	if got := resp.GetError().GetReason(); got != want || resp.GetError() == nil {
+		t.Fatalf("reason = %v (%s), want %v", got, resp.GetError().GetMessage(), want)
+	}
+}
+
+func TestDeleteRemovesARunningMemberAndItsWorld(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+	startOverTheWire(t, f, pod, "private-servers", "c0ffee")
+	worldOf(t, f, "private-servers", "private-servers-c0ffee")
+
+	resp := deleteOverTheWire(t, f, pod, "private-servers", "c0ffee")
+	if resp.GetError() != nil {
+		t.Fatalf("refused: %s", resp.GetError().GetMessage())
+	}
+	if got := resp.GetDeleteServer(); got.GetServer() != "private-servers-c0ffee" || !got.GetWorld() {
+		t.Fatalf("result = %+v, want the member's name and world=true", got)
+	}
+	if !serverGoing(t, f, "private-servers-c0ffee") {
+		t.Error("the member is still there and not going")
+	}
+	if !claimGoing(t, f, "private-servers-c0ffee") {
+		t.Error("the world is still there and not going")
+	}
+}
+
+func TestDeleteRemovesTheWorldOfAStoppedMember(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+	worldOf(t, f, "private-servers", "private-servers-c0ffee")
+
+	resp := deleteOverTheWire(t, f, pod, "private-servers", "c0ffee")
+	if resp.GetError() != nil {
+		t.Fatalf("refused: %s", resp.GetError().GetMessage())
+	}
+	if !resp.GetDeleteServer().GetWorld() {
+		t.Error("world = false for a delete that removed a world")
+	}
+	if !claimGoing(t, f, "private-servers-c0ffee") {
+		t.Error("the world of a stopped member survived its delete")
+	}
+}
+
+func TestDeleteOfNothingIsNotFound(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+
+	wantReason(t, deleteOverTheWire(t, f, pod, "private-servers", "c0ffee"), agentpb.RequestError_NOT_FOUND)
+}
+
+// A counted group's names can collide with a key's composed name; the group
+// type is what keeps a delete away from its worlds.
+func TestDeleteRefusesAGroupThatIsNotOnDemand(t *testing.T) {
+	f := newServerFixture(t)
+	makeEphemeralGroup(t, f, "lobby")
+	pod := f.proxyPod("gateway-aaaa")
+
+	wantReason(t, deleteOverTheWire(t, f, pod, "lobby", "c0ffee"), agentpb.RequestError_REFUSED)
+}
+
+func TestDeleteOnAGroupThisNetworkDoesNotHaveIsNotFound(t *testing.T) {
+	f := newServerFixture(t)
+	pod := f.proxyPod("gateway-aaaa")
+
+	wantReason(t, deleteOverTheWire(t, f, pod, "private-servers", "c0ffee"), agentpb.RequestError_NOT_FOUND)
+}
+
+func TestDeleteRefusesAKeyNoNameCanBeBuiltFrom(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+
+	wantReason(t, deleteOverTheWire(t, f, pod, "private-servers", "NOT A KEY!"), agentpb.RequestError_REFUSED)
+}
+
+func TestDeleteLeavesAClaimItDidNotMake(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+	foreign := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: podspec.DataClaimName("private-servers-c0ffee"), Namespace: f.ns,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+			},
+		},
+	}
+	if err := f.c.Create(f.ctx, foreign); err != nil {
+		t.Fatalf("create foreign claim: %v", err)
+	}
+
+	wantReason(t, deleteOverTheWire(t, f, pod, "private-servers", "c0ffee"), agentpb.RequestError_REFUSED)
+	if claimGoing(t, f, "private-servers-c0ffee") {
+		t.Fatal("a claim this operator did not make was deleted")
+	}
+}
+
+func TestDeleteTwiceWhileGoingSucceeds(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+	startOverTheWire(t, f, pod, "private-servers", "c0ffee")
+	holdWhileStopping(t, f, "private-servers-c0ffee")
+
+	for i := 0; i < 2; i++ {
+		if resp := deleteOverTheWire(t, f, pod, "private-servers", "c0ffee"); resp.GetError() != nil {
+			t.Fatalf("delete %d refused: %s", i+1, resp.GetError().GetMessage())
+		}
+	}
+}
+
+func TestStartWhileTheWorldIsBeingDeletedIsUnavailable(t *testing.T) {
+	f := newServerFixture(t)
+	makeOnDemandGroup(t, f, "private-servers", 2)
+	pod := f.proxyPod("gateway-aaaa")
+	worldOf(t, f, "private-servers", "private-servers-c0ffee")
+	holdClaim(t, f, "private-servers-c0ffee")
+	deleteOverTheWire(t, f, pod, "private-servers", "c0ffee")
+	if !claimGoing(t, f, "private-servers-c0ffee") {
+		t.Fatal("the world is not being deleted, so this test would assert nothing")
+	}
+
+	wantReason(t, startOverTheWire(t, f, pod, "private-servers", "c0ffee"), agentpb.RequestError_UNAVAILABLE)
 }

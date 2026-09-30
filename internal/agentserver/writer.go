@@ -92,6 +92,13 @@ var ErrNotAnInstance = errors.New("that server is not an on-demand member")
 // that is about to stop.
 var ErrInstanceStopping = errors.New("that member is still stopping")
 
+// ErrWorldDeleting is a start on a key whose world is still being deleted.
+var ErrWorldDeleting = errors.New("that member's world is still being deleted")
+
+// ErrForeignClaim is a delete whose claim this operator did not make for that
+// group.
+var ErrForeignClaim = errors.New("that claim was not made by this operator for that group")
+
 // ErrInstancesDraining is the ceiling, met, by members of which at least one
 // is already leaving.
 //
@@ -172,8 +179,20 @@ type ClusterWriter interface {
 	// ErrNotAnInstance for a server that is not a member of such a group --
 	// the refusal that keeps a mistyped name from deleting a lobby.
 	StopServer(ctx context.Context, namespace, name string) error
+	// DeleteServer deletes a member of an OnDemand group for good: its server
+	// if one exists, and its world claim. It returns ErrNoSuchGroup,
+	// ErrGroupNotOnDemand, instance.ErrBadKey, ErrForeignClaim, and
+	// ErrNoSuchServer when neither a server nor a world is there.
+	DeleteServer(ctx context.Context, namespace, group, key string) (DeletedServer, error)
 	// Unretire takes a retirement back and holds the server.
 	Unretire(ctx context.Context, namespace, name string) error
+}
+
+// DeletedServer is what a delete removed.
+type DeletedServer struct {
+	Name string
+	// World is true when a world claim was deleted.
+	World bool
 }
 
 // StartedServer is the member a start request produced.
@@ -455,6 +474,15 @@ func (w KubeWriter) StartServer(
 	if !g.IsOnDemand() {
 		return StartedServer{}, ErrGroupNotOnDemand
 	}
+	// A pod created now would mount a claim on its way out.
+	var world corev1.PersistentVolumeClaim
+	err = w.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podspec.DataClaimName(name)}, &world)
+	switch {
+	case err == nil && !world.DeletionTimestamp.IsZero():
+		return StartedServer{}, ErrWorldDeleting
+	case err != nil && !apierrors.IsNotFound(err):
+		return StartedServer{}, err
+	}
 
 	var members spawneryv1alpha1.ServerList
 	if err := w.Client.List(ctx, &members, client.InNamespace(namespace)); err != nil {
@@ -599,4 +627,68 @@ func (w KubeWriter) StopServer(ctx context.Context, namespace, name string) erro
 		return err
 	}
 	return nil
+}
+
+// DeleteServer deletes a member and its world.
+//
+// Two bounds keep it to that one world: the group must be OnDemand, whose
+// members are named from their key, and the claim must carry this operator's
+// labels for that group. The Server goes the way StopServer sends it, through
+// the drain finalizer; the claim is deleted at once, and pvc-protection holds
+// it until the pod no longer mounts it, so the order needs no record here.
+func (w KubeWriter) DeleteServer(ctx context.Context, namespace, group, key string) (DeletedServer, error) {
+	name, err := instance.Name(group, key)
+	if err != nil {
+		return DeletedServer{}, err
+	}
+	var g spawneryv1alpha1.ServerGroup
+	if err := w.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: group}, &g); err != nil {
+		if apierrors.IsNotFound(err) {
+			return DeletedServer{}, ErrNoSuchGroup
+		}
+		return DeletedServer{}, err
+	}
+	if !g.IsOnDemand() {
+		return DeletedServer{}, ErrGroupNotOnDemand
+	}
+
+	var claim corev1.PersistentVolumeClaim
+	haveClaim := true
+	if err := w.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podspec.DataClaimName(name)}, &claim); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return DeletedServer{}, err
+		}
+		haveClaim = false
+	}
+	if haveClaim && (claim.Labels[podspec.LabelManagedBy] != podspec.ManagedByValue ||
+		claim.Labels[podspec.LabelGroup] != group) {
+		return DeletedServer{}, ErrForeignClaim
+	}
+
+	var srv spawneryv1alpha1.Server
+	haveServer := true
+	if err := w.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &srv); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return DeletedServer{}, err
+		}
+		haveServer = false
+	}
+	// A server of that name that is not this key's member is somebody else's.
+	if haveServer && (srv.Spec.GroupRef.Name != group || srv.Spec.Key != key) {
+		haveServer = false
+	}
+	if !haveServer && !haveClaim {
+		return DeletedServer{}, ErrNoSuchServer
+	}
+	if haveServer {
+		if err := w.Client.Delete(ctx, &srv); err != nil && !apierrors.IsNotFound(err) {
+			return DeletedServer{}, err
+		}
+	}
+	if haveClaim {
+		if err := w.Client.Delete(ctx, &claim); err != nil && !apierrors.IsNotFound(err) {
+			return DeletedServer{}, err
+		}
+	}
+	return DeletedServer{Name: name, World: haveClaim}, nil
 }
