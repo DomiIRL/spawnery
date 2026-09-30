@@ -366,7 +366,12 @@
           # ServerInfo and InstanceStatus gain playableSlots(), each keeping
           # its previous constructor. /cloud shows playable seats beside the
           # limit.
-          imageVersion = "0.13.0";
+          #
+          # 0.14.0 moves it because the API and the agents changed:
+          # SpawneryApi.deleteServer(group, key); the Paper agent refuses a
+          # login past the playable slots when the group enforces them; both
+          # agents report their JVM heap.
+          imageVersion = "0.14.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
@@ -549,7 +554,11 @@
           # 0.13.0 moves it with the chart and the images: spec.playableSlots
           # and a plugin's runtime figure decide the free seats the group
           # scales on, reports and routes a connect by. Nothing rolls.
-          operatorVersion = "0.13.0";
+          #
+          # 0.14.0 moves it with the chart and the images: DeleteServer for
+          # on-demand worlds, enforcePlayableSlots in the group state, the
+          # network metrics, and a failed server's late pod is stopped.
+          operatorVersion = "0.14.0";
 
           spawnery-slp = pkgs.buildGoModule {
             pname = "spawnery-slp";
