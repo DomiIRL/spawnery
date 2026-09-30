@@ -49,6 +49,22 @@ deletion timestamp gets no claim created or grown for it; otherwise the
 Server controller, still draining the member, would recreate the claim the
 delete just removed.
 
+## Narrowing the right (added after review, option A)
+
+The guide had promised that this operator never deletes a claim, because
+its delete right would be cluster-wide: RBAC selects by name, and these
+names are minted at runtime. Kept in the operator, the right is narrowed in
+the API server instead:
+
+- On-demand world claims carry `spawnery.cloud/key` (set at creation; the
+  Server controller adds it to an older claim the next time its member runs).
+- The chart ships `ValidatingAdmissionPolicy`/`Binding`
+  `spawnery-world-deletion`: a DELETE of a claim by the operator's
+  ServiceAccount is admitted only with `spawnery.cloud/managed-by`, a
+  non-empty `spawnery.cloud/key`, and the name `<group>-<key>-data`.
+- `DeleteServer` refuses a world without its key label (start it once).
+- The chart's `kubeVersion` floor becomes 1.30 (VAP v1 GA).
+
 ## Surface
 
 - proto: `DeleteServerRequest { string group = 1; string key = 2; }` in

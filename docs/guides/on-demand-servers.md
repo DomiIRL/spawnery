@@ -78,6 +78,9 @@ What comes back, by reason:
 | `startServer` | `NOT_FOUND` | no such group. |
 | `stopServer` | `REFUSED` | the server is not a member of an on-demand group. |
 | `stopServer` | `NOT_FOUND` | no such server — including a stop that was carried out a moment ago. |
+| `deleteServer` | `REFUSED` | the group is not `OnDemand`, the key is not a label, a claim of that name was not made by this operator for that group, or the world predates the key label (start it once, then delete it). |
+| `deleteServer` | `NOT_FOUND` | no such group, or the key has neither a server nor a world — including a delete that finished a moment ago. |
+| `startServer` | `UNAVAILABLE` | also: the key's world is still being deleted. |
 
 Every failure reaches Java as an `IllegalStateException` whose message is
 `<REASON>: <the operator's sentence>`; the Javadoc says when it arrives wrapped.
@@ -103,7 +106,7 @@ It is not a quota. *Who* may have a private server, and how many, is a question
 about a player, a purchase and a ban, and the system that holds those is the one
 that answers it. An operator that enforced it would need all three.
 
-## Stopping keeps the world, and nothing here ever deletes it
+## Stopping keeps the world; deleting removes it
 
 `stopServer` deletes the `Server`, and everything after that is the path a
 scale-down already takes: the players on it are moved through the proxies inside
@@ -111,9 +114,8 @@ scale-down already takes: the players on it are moved through the proxies inside
 "save the world" step because the world was never anywhere else. The next
 `startServer` with the same key mounts the same claim.
 
-**This operator never deletes a claim** — not on a stop, not when the group is
-deleted, not ever, and the ClusterRole has no verb that could. That has a price
-in this type that a persistent group does not pay: a group of `Persistent`
+**A stop never deletes a claim**, and neither does deleting the group. That has
+a price in this type that a persistent group does not pay: a group of `Persistent`
 servers has as many claims as `spec.replicas`, and one of these has as many as
 players who ever asked. Every claim is `spec.storage.size`, whether or not its
 owner comes back. What a claim costs, how to find the ones nobody is using and
@@ -123,10 +125,26 @@ the claims of this group are named `<group>-<key>-data` and carry the same
 labels.
 
 Deleting an instance for good — a player's own action, with nothing left behind
-— is therefore not something a plugin can ask for, and this operator will not
-grow a call for it. It is a job on your side that holds `delete` on claims and
-whose own code is the guard; that right cannot be narrowed to one group's claims
-because RBAC selects by name and these names are minted at runtime.
+— is `deleteServer(group, key)`. A running member is stopped first, exactly as
+`stopServer` stops one; its claim is deleted at once, and Kubernetes keeps it
+until the pod no longer mounts it. A stopped member is only its claim, which is
+why the call takes the group and the key rather than a server name. There is no
+undo: the volume goes with the claim under the usual `Delete` reclaim policy.
+A `startServer` of the same key answers `UNAVAILABLE` while the world is going
+and starts an empty one afterwards.
+
+This is the one place the operator deletes a claim, and it holds `delete` on
+claims cluster-wide for it, because RBAC selects by name and these names are
+minted at runtime. What narrows the right is the chart's
+`ValidatingAdmissionPolicy` `spawnery-world-deletion`: as the operator's
+ServiceAccount, the API server lets through only the deletion of a claim that
+carries this operator's `spawnery.cloud/managed-by`, an on-demand member's
+`spawnery.cloud/key`, and the name `<group>-<key>-data`. A persistent server's
+world, a database's claim or anything else in the namespace is refused there,
+whatever the operator's code does. The policy needs Kubernetes 1.30.
+
+A world created before the key label existed gets it the next time its member
+runs; until then `deleteServer` refuses it and says to start it once.
 
 ### Other ways a member ends
 
