@@ -39,9 +39,14 @@ older agent ignores both; an older operator sends neither, which reads as
 
 ## The check (Paper agent)
 
-On a login, at the point where the player's permissions are known (Bukkit's
-`PlayerLoginEvent`, or Paper's successor event if the target API has
-deprecated it), when this server's group has `enforce_playable_slots`:
+On Bukkit's `PlayerLoginEvent`, when this server's group has
+`enforce_playable_slots`. It is deprecated for removal in Paper 26.3, but it
+is the only login event that has the `Player` and so its permissions; its
+successors (`PlayerConnectionValidateLoginEvent`, `PlayerServerFullCheckEvent`)
+carry only a profile, and spawnery cannot ask a permissions plugin directly.
+When Paper removes it, the check moves to the proxy (`ServerPreConnectEvent`),
+which knows permissions but sees counts only as reported -- decided
+2026-09-30 to take the exact count now and that move later.
 
 - **Effective playable slots**: the plugin's runtime value if above 0, else
   the group's `playable_slots` if above 0, else the server's max players;
