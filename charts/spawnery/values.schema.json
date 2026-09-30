@@ -99,6 +99,15 @@
             }
           }
         },
+        "dashboard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+            "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
+          }
+        },
         "prometheusRule": {
           "type": "object",
           "additionalProperties": false,

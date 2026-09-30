@@ -16,7 +16,11 @@ limitations under the License.
 
 package main
 
-import "testing"
+import (
+	"os"
+	"regexp"
+	"testing"
+)
 
 // TestVerifyObservedTypesFitInferType exercises the check against
 // hand-built observed-type maps rather than the real metrics registry: the
@@ -81,5 +85,27 @@ func TestVerifyObservedTypesFitInferType(t *testing.T) {
 				t.Fatalf("want no error, got %v", err)
 			}
 		})
+	}
+}
+
+// Every spawnery_* name the chart's dashboard queries is a metric this
+// operator registers: a renamed metric must not leave an empty panel behind.
+func TestTheDashboardQueriesOnlyRegisteredMetrics(t *testing.T) {
+	raw, err := os.ReadFile("../../../charts/spawnery/dashboards/network.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	descs, err := describeAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := regexp.MustCompile(`spawnery_[a-z_]+`).FindAllString(string(raw), -1)
+	if len(names) == 0 {
+		t.Fatal("the dashboard names no spawnery metric at all")
+	}
+	for _, n := range names {
+		if _, ok := descs[n]; !ok {
+			t.Errorf("the dashboard queries %s, which is not registered", n)
+		}
 	}
 }

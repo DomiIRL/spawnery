@@ -25,11 +25,15 @@ A blank Description is not a gap: the schema describes only what needs it, and l
 <tr><td><code>affinity</code></td><td>object</td><td><code>{}</code></td><td></td></tr>
 <tr><td><code>networkPolicy</code></td><td>object</td><td><code>{enabled: true}</code></td><td></td></tr>
 <tr><td><code>networkPolicy.enabled</code></td><td>boolean</td><td><code>true</code></td><td></td></tr>
-<tr><td><code>metrics</code></td><td>object</td><td><code>{serviceMonitor: {enabled: false, additionalLabels: {}, interval: 30s}, prometheusRule: {enabled: false, additionalLabels: {}, caExpiryWarningDays: 90}}</code></td><td></td></tr>
+<tr><td><code>metrics</code></td><td>object</td><td><code>{serviceMonitor: {enabled: false, additionalLabels: {}, interval: 30s}, prometheusRule: {enabled: false, additionalLabels: {}, caExpiryWarningDays: 90}, dashboard: {enabled: false, labels: {grafana_dashboard: &#x27;1&#x27;}, annotations: {}}}</code></td><td></td></tr>
 <tr><td><code>metrics.serviceMonitor</code></td><td>object</td><td><code>{enabled: false, additionalLabels: {}, interval: 30s}</code></td><td></td></tr>
 <tr><td><code>metrics.serviceMonitor.enabled</code></td><td>boolean</td><td><code>false</code></td><td></td></tr>
 <tr><td><code>metrics.serviceMonitor.additionalLabels</code></td><td>object</td><td><code>{}</code></td><td></td></tr>
 <tr><td><code>metrics.serviceMonitor.interval</code></td><td>string (pattern <code>^[0-9]+(ms|s|m|h|d|w|y)$</code>)</td><td><code>30s</code></td><td>A Prometheus duration, which is not a Go one: no fractions and no compound units.</td></tr>
+<tr><td><code>metrics.dashboard</code></td><td>object</td><td><code>{enabled: false, labels: {grafana_dashboard: &#x27;1&#x27;}, annotations: {}}</code></td><td></td></tr>
+<tr><td><code>metrics.dashboard.enabled</code></td><td>boolean</td><td><code>false</code></td><td></td></tr>
+<tr><td><code>metrics.dashboard.labels</code></td><td>map[string]string</td><td><code>{grafana_dashboard: &#x27;1&#x27;}</code></td><td></td></tr>
+<tr><td><code>metrics.dashboard.annotations</code></td><td>map[string]string</td><td><code>{}</code></td><td></td></tr>
 <tr><td><code>metrics.prometheusRule</code></td><td>object</td><td><code>{enabled: false, additionalLabels: {}, caExpiryWarningDays: 90}</code></td><td></td></tr>
 <tr><td><code>metrics.prometheusRule.enabled</code></td><td>boolean</td><td><code>false</code></td><td></td></tr>
 <tr><td><code>metrics.prometheusRule.additionalLabels</code></td><td>object</td><td><code>{}</code></td><td></td></tr>
