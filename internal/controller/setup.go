@@ -145,6 +145,8 @@ func SetupAll(mgr ctrl.Manager, opts Options) error {
 		return fmt.Errorf("no API reader: the network controller cannot read forwarding secrets without one")
 	}
 
+	NetworkMetrics.Bind(mgr.GetClient(), opts.Agents)
+
 	if err := newNetworkReconciler(mgr, opts).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup network controller: %w", err)
 	}
