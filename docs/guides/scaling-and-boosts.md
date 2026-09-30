@@ -113,6 +113,27 @@ still let in up to `maxPlayers`, and make the server full rather than
 overfull. `status.freeSlots`, `/cloud` and a connect to the group all count
 the same seats.
 
+### Making the playable seats a door
+
+`enforcePlayableSlots: true` turns the count into a limit. Once a server holds
+as many players as its playable seats, a further login is refused — except
+for a player with the permission `spawnery.join.full.<group>`, who is always
+let in up to `maxPlayers` and never takes a seat, so an admin watching a round
+does not keep a player out. The flag is read at runtime and restarts nothing.
+
+The check is the server's own: its agent counts its online players exactly,
+plus those it admitted in the same moment who have not joined yet, so a rush
+on the last seat does not overshoot. It runs on Bukkit's `PlayerLoginEvent`,
+the only login event that knows the player's permissions; Paper has marked it
+for removal, and when it goes the check moves to the proxy.
+
+The refused player sees a translatable message, key `spawnery.join.full` with
+the group's display name as its argument and `This round is full.` as the
+fallback. A network with its own translations renders the key in the player's
+language; one without shows the fallback. On a server switch the player stays
+where they were; on the first join into the network the proxy sends them to the
+next server, as for any failed connect.
+
 ## The arithmetic, in the order the operator runs it
 
 Every five seconds, for each group, in this order — capacity first, then the

@@ -154,6 +154,10 @@ the operator's default for a session it has never seen is open.
 `playableSlots(n)` tells the operator how many of this server's seats count as
 capacity, for as long as you do not change it. `playableSlots(0)` hands the
 decision back to the group's `spec.playableSlots`.
+When the group sets `enforcePlayableSlots`, the same number is also the door:
+the server refuses logins past it, except for players with
+`spawnery.join.full.<group>` (see
+[scaling](../guides/scaling-and-boosts.md#making-the-playable-seats-a-door)).
 
 ```java
 Spawnery.api().playableSlots(12);
