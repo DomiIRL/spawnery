@@ -8,7 +8,7 @@ type: application
 # version bump alone. Since v0.2.14 this number is also the address people
 # install by -- `--version` against oci://ghcr.io/spawnery/charts/spawnery --
 # so it is no longer only what Flux names a packaged artifact after.
-version: 0.13.0
+version: 0.14.0
 # appVersion beschreibt den Operator, den dieses Chart ausliefert, und nicht die
 # Release-Nummer. v0.2.13 aendert nur die Agenten und einen Kommentar an einer
 # CRD, v0.2.14 gar kein Image -- sein ganzer Inhalt ist der Veroeffentlichungs-
@@ -142,7 +142,13 @@ version: 0.13.0
 # 0.13.0 moves it with the operator and the images: ServerGroup gains
 # playableSlots and Server.status playableSlots. Every existing object
 # validates unchanged.
-appVersion: "0.13.0"
+#
+# 0.14.0 moves it with the operator and the images: ServerGroup gains
+# enforcePlayableSlots; the chart gains the world-deletion admission policy
+# (and so needs Kubernetes 1.30), the operator's delete on claims, the
+# optional network dashboard, and honorLabels on the ServiceMonitor. Every
+# existing object validates unchanged.
+appVersion: "0.14.0"
 
 # The floor is the world-deletion policy's: admissionregistration.k8s.io/v1
 # ValidatingAdmissionPolicy is GA from 1.30. The CRDs alone would need 1.25,
