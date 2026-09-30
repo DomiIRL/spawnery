@@ -931,6 +931,32 @@ func TestReportTicksRefusesImpossibleValues(t *testing.T) {
 	}
 }
 
+func TestReportHeapShowsInSnapshot(t *testing.T) {
+	now := time.Unix(1000, 0)
+	r := New(func() time.Time { return now }, 5*time.Second, now)
+	r.Connect("pod-a", RoleServer)
+	if snap := r.Lookup("pod-a"); snap.HeapUsed != 0 || snap.HeapMax != 0 {
+		t.Fatalf("heap before any report = %v/%v, want 0/0", snap.HeapUsed, snap.HeapMax)
+	}
+	if err := r.ReportHeap("pod-a", 1<<30, 4<<30); err != nil {
+		t.Fatal(err)
+	}
+	if snap := r.Lookup("pod-a"); snap.HeapUsed != 1<<30 || snap.HeapMax != 4<<30 {
+		t.Fatalf("heap = %v/%v, want 1GiB/4GiB", snap.HeapUsed, snap.HeapMax)
+	}
+}
+
+func TestReportHeapRefusesNegatives(t *testing.T) {
+	now := time.Unix(1000, 0)
+	r := New(func() time.Time { return now }, 5*time.Second, now)
+	r.Connect("pod-a", RoleServer)
+	for _, c := range []struct{ used, max int64 }{{-1, 10}, {10, -1}} {
+		if err := r.ReportHeap("pod-a", c.used, c.max); err == nil {
+			t.Errorf("ReportHeap(%v, %v) accepted", c.used, c.max)
+		}
+	}
+}
+
 func TestReportTicksNeedsALiveStream(t *testing.T) {
 	now := time.Unix(1000, 0)
 	r := New(func() time.Time { return now }, 5*time.Second, now)

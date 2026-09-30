@@ -70,6 +70,15 @@ metrics:
     # multi-step procedure with a hold in the middle that waits for a human,
     # not something to be started the week it expires.
     caExpiryWarningDays: 90
+  # A Grafana dashboard of the network's players, groups, servers (TPS, MSPT,
+  # heap) and proxies, as a ConfigMap for Grafana's dashboard sidecar. The
+  # labels are the ones the sidecar selects on (kube-prometheus-stack's
+  # default is grafana_dashboard: "1"); annotations can name its folder.
+  dashboard:
+    enabled: false
+    labels:
+      grafana_dashboard: "1"
+    annotations: {}
 
 operator:
   # The production value. hack/e2e.sh overrides it for its own run.

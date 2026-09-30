@@ -53,4 +53,21 @@ public interface PlayerCountOrBuilder extends
    * @return The playableSlots.
    */
   int getPlayableSlots();
+
+  /**
+   * <pre>
+   * Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+   * reported -- what an agent older than these fields sends.
+   * </pre>
+   *
+   * <code>int64 heap_used_bytes = 6;</code>
+   * @return The heapUsedBytes.
+   */
+  long getHeapUsedBytes();
+
+  /**
+   * <code>int64 heap_max_bytes = 7;</code>
+   * @return The heapMaxBytes.
+   */
+  long getHeapMaxBytes();
 }

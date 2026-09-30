@@ -23,11 +23,27 @@ Generated from two sources that only agree with each other because this page che
 <tr><td><code>spawnery_ca_expiry_timestamp_seconds</code></td><td>gauge</td><td><em>none</em></td><td>NotAfter of the CA currently signing the serving certificate, in Unix seconds.</td></tr>
 <tr><td><code>spawnery_ca_rotation_blocked_namespaces</code></td><td>gauge</td><td><em>none</em></td><td>Namespaces holding a Network whose CA ConfigMap does not yet carry the incoming CA.</td></tr>
 <tr><td><code>spawnery_ca_rotation_phase</code></td><td>gauge</td><td><code>phase</code></td><td>1 for the CA rotation phase currently in effect, 0 for the others.</td></tr>
+<tr><td><code>spawnery_group_free_slots</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Free playable seats of the group.</td></tr>
+<tr><td><code>spawnery_group_players</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Players on the group&#39;s servers.</td></tr>
+<tr><td><code>spawnery_group_servers</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Servers of the group.</td></tr>
+<tr><td><code>spawnery_group_servers_ready</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Ready servers of the group.</td></tr>
 <tr><td><code>spawnery_network_changeovers_in_flight</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Groups of the network currently holding a changeover budget place.</td></tr>
 <tr><td><code>spawnery_network_changeovers_waiting</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Groups of the network waiting for a changeover budget place.</td></tr>
+<tr><td><code>spawnery_network_players</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Players on the network&#39;s proxies.</td></tr>
 <tr><td><code>spawnery_permissions_missing</code></td><td>gauge</td><td><code>scope</code></td><td>Permissions the operator needs and the API server says it lacks, by scope.</td></tr>
+<tr><td><code>spawnery_proxy_heap_max_bytes</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>proxy</code>, <code>node</code></td><td>The proxy&#39;s JVM max heap.</td></tr>
+<tr><td><code>spawnery_proxy_heap_used_bytes</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>proxy</code>, <code>node</code></td><td>JVM heap in use on the proxy.</td></tr>
+<tr><td><code>spawnery_proxy_players</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>proxy</code>, <code>node</code></td><td>Players on the proxy.</td></tr>
 <tr><td><code>spawnery_proxy_sessions_cut_total</code></td><td>counter</td><td><em>none</em></td><td>Proxy sessions ended because the session fell too far behind.</td></tr>
+<tr><td><code>spawnery_server_heap_max_bytes</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>The server&#39;s JVM max heap.</td></tr>
+<tr><td><code>spawnery_server_heap_used_bytes</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>JVM heap in use on the server.</td></tr>
+<tr><td><code>spawnery_server_mspt</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>The server&#39;s mean tick time in milliseconds.</td></tr>
+<tr><td><code>spawnery_server_phase</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code>, <code>phase</code></td><td>1 for the server&#39;s current phase.</td></tr>
+<tr><td><code>spawnery_server_playable_slots</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>The server&#39;s effective playable slots.</td></tr>
+<tr><td><code>spawnery_server_players</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>Players on the server, as its agent last reported.</td></tr>
 <tr><td><code>spawnery_server_sessions_cut_total</code></td><td>counter</td><td><em>none</em></td><td>Backend sessions ended because the session fell too far behind.</td></tr>
+<tr><td><code>spawnery_server_slots</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>The server&#39;s slots, as its agent last reported.</td></tr>
+<tr><td><code>spawnery_server_tps</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>server</code>, <code>node</code></td><td>The server&#39;s one-minute ticks per second.</td></tr>
 <tr><td><code>spawnery_serving_cert_expiry_timestamp_seconds</code></td><td>gauge</td><td><em>none</em></td><td>NotAfter of the operator&#39;s serving certificate, in Unix seconds.</td></tr>
 </tbody></table></div>
 

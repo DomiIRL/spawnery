@@ -1,0 +1,21 @@
+{{- if .Values.metrics.dashboard.enabled }}
+# For Grafana's dashboard sidecar, which loads every ConfigMap carrying its
+# label. The datasource is a variable of the dashboard, so any Prometheus
+# scraping this operator (metrics.serviceMonitor) fits.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spawnery-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spawnery.labels" . | nindent 4 }}
+    {{- with .Values.metrics.dashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.dashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  network.json: {{ .Files.Get "dashboards/network.json" | quote }}
+{{- end }}

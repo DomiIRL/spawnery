@@ -88,6 +88,14 @@ class ServerRoleTest {
     }
 
     @Test
+    fun `the report carries the JVM heap`() {
+        val role = ServerRole(ServerState(), NetworkMirror(), dormantConnector(), aFeed(), CloudEvents())
+        val report = role.playerCount().playerCount
+        assertTrue(report.heapUsedBytes > 0, "heap in use = ${report.heapUsedBytes}")
+        assertTrue(report.heapUsedBytes <= report.heapMaxBytes, "heap ${report.heapUsedBytes} of ${report.heapMaxBytes}")
+    }
+
+    @Test
     fun `a report interval message yields a Report directive`() {
         val role = ServerRole(ServerState(), NetworkMirror(), dormantConnector(), aFeed(), CloudEvents())
 

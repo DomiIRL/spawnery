@@ -129,6 +129,33 @@ private static final long serialVersionUID = 0L;
     return playableSlots_;
   }
 
+  public static final int HEAP_USED_BYTES_FIELD_NUMBER = 6;
+  private long heapUsedBytes_ = 0L;
+  /**
+   * <pre>
+   * Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+   * reported -- what an agent older than these fields sends.
+   * </pre>
+   *
+   * <code>int64 heap_used_bytes = 6;</code>
+   * @return The heapUsedBytes.
+   */
+  @java.lang.Override
+  public long getHeapUsedBytes() {
+    return heapUsedBytes_;
+  }
+
+  public static final int HEAP_MAX_BYTES_FIELD_NUMBER = 7;
+  private long heapMaxBytes_ = 0L;
+  /**
+   * <code>int64 heap_max_bytes = 7;</code>
+   * @return The heapMaxBytes.
+   */
+  @java.lang.Override
+  public long getHeapMaxBytes() {
+    return heapMaxBytes_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -158,6 +185,12 @@ private static final long serialVersionUID = 0L;
     if (playableSlots_ != 0) {
       output.writeInt32(5, playableSlots_);
     }
+    if (heapUsedBytes_ != 0L) {
+      output.writeInt64(6, heapUsedBytes_);
+    }
+    if (heapMaxBytes_ != 0L) {
+      output.writeInt64(7, heapMaxBytes_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -181,6 +214,14 @@ private static final long serialVersionUID = 0L;
     if (playableSlots_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(5, playableSlots_);
+    }
+    if (heapUsedBytes_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(6, heapUsedBytes_);
+    }
+    if (heapMaxBytes_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(7, heapMaxBytes_);
     }
     return size;
   }
@@ -218,6 +259,10 @@ private static final long serialVersionUID = 0L;
             other.getMspt())) return false;
     if (getPlayableSlots()
         != other.getPlayableSlots()) return false;
+    if (getHeapUsedBytes()
+        != other.getHeapUsedBytes()) return false;
+    if (getHeapMaxBytes()
+        != other.getHeapMaxBytes()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -241,6 +286,12 @@ private static final long serialVersionUID = 0L;
         java.lang.Double.doubleToLongBits(getMspt()));
     hash = (37 * hash) + PLAYABLE_SLOTS_FIELD_NUMBER;
     hash = (53 * hash) + getPlayableSlots();
+    hash = (37 * hash) + HEAP_USED_BYTES_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getHeapUsedBytes());
+    hash = (37 * hash) + HEAP_MAX_BYTES_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getHeapMaxBytes());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -389,6 +440,8 @@ private static final long serialVersionUID = 0L;
       tps_ = 0D;
       mspt_ = 0D;
       playableSlots_ = 0;
+      heapUsedBytes_ = 0L;
+      heapMaxBytes_ = 0L;
       return this;
     }
 
@@ -437,6 +490,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000010) != 0)) {
         result.playableSlots_ = playableSlots_;
       }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.heapUsedBytes_ = heapUsedBytes_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.heapMaxBytes_ = heapMaxBytes_;
+      }
     }
 
     @java.lang.Override
@@ -465,6 +524,12 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getPlayableSlots() != 0) {
         setPlayableSlots(other.getPlayableSlots());
+      }
+      if (other.getHeapUsedBytes() != 0L) {
+        setHeapUsedBytes(other.getHeapUsedBytes());
+      }
+      if (other.getHeapMaxBytes() != 0L) {
+        setHeapMaxBytes(other.getHeapMaxBytes());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -517,6 +582,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000010;
               break;
             } // case 40
+            case 48: {
+              heapUsedBytes_ = input.readInt64();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
+            case 56: {
+              heapMaxBytes_ = input.readInt64();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -732,6 +807,85 @@ private static final long serialVersionUID = 0L;
     public Builder clearPlayableSlots() {
       bitField0_ = (bitField0_ & ~0x00000010);
       playableSlots_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private long heapUsedBytes_ ;
+    /**
+     * <pre>
+     * Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+     * reported -- what an agent older than these fields sends.
+     * </pre>
+     *
+     * <code>int64 heap_used_bytes = 6;</code>
+     * @return The heapUsedBytes.
+     */
+    @java.lang.Override
+    public long getHeapUsedBytes() {
+      return heapUsedBytes_;
+    }
+    /**
+     * <pre>
+     * Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+     * reported -- what an agent older than these fields sends.
+     * </pre>
+     *
+     * <code>int64 heap_used_bytes = 6;</code>
+     * @param value The heapUsedBytes to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHeapUsedBytes(long value) {
+
+      heapUsedBytes_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+     * reported -- what an agent older than these fields sends.
+     * </pre>
+     *
+     * <code>int64 heap_used_bytes = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHeapUsedBytes() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      heapUsedBytes_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long heapMaxBytes_ ;
+    /**
+     * <code>int64 heap_max_bytes = 7;</code>
+     * @return The heapMaxBytes.
+     */
+    @java.lang.Override
+    public long getHeapMaxBytes() {
+      return heapMaxBytes_;
+    }
+    /**
+     * <code>int64 heap_max_bytes = 7;</code>
+     * @param value The heapMaxBytes to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHeapMaxBytes(long value) {
+
+      heapMaxBytes_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>int64 heap_max_bytes = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHeapMaxBytes() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      heapMaxBytes_ = 0L;
       onChanged();
       return this;
     }

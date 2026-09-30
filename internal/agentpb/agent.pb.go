@@ -376,6 +376,10 @@ type PlayerCount struct {
 	// registry discards a report with more players than slots, and players
 	// beyond the playable seats are legitimate.
 	PlayableSlots int32 `protobuf:"varint,5,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"`
+	// Both agents: the JVM heap in use and its maximum, in bytes. 0 means not
+	// reported -- what an agent older than these fields sends.
+	HeapUsedBytes int64 `protobuf:"varint,6,opt,name=heap_used_bytes,json=heapUsedBytes,proto3" json:"heap_used_bytes,omitempty"`
+	HeapMaxBytes  int64 `protobuf:"varint,7,opt,name=heap_max_bytes,json=heapMaxBytes,proto3" json:"heap_max_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -441,6 +445,20 @@ func (x *PlayerCount) GetMspt() float64 {
 func (x *PlayerCount) GetPlayableSlots() int32 {
 	if x != nil {
 		return x.PlayableSlots
+	}
+	return 0
+}
+
+func (x *PlayerCount) GetHeapUsedBytes() int64 {
+	if x != nil {
+		return x.HeapUsedBytes
+	}
+	return 0
+}
+
+func (x *PlayerCount) GetHeapMaxBytes() int64 {
+	if x != nil {
+		return x.HeapMaxBytes
 	}
 	return 0
 }
@@ -4857,13 +4875,15 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x05Hello\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12.\n" +
-	"\x13read_timeout_millis\x18\x03 \x01(\x05R\x11readTimeoutMillis\"\x8a\x01\n" +
+	"\x13read_timeout_millis\x18\x03 \x01(\x05R\x11readTimeoutMillis\"\xd8\x01\n" +
 	"\vPlayerCount\x12\x18\n" +
 	"\aplayers\x18\x01 \x01(\x05R\aplayers\x12\x14\n" +
 	"\x05slots\x18\x02 \x01(\x05R\x05slots\x12\x10\n" +
 	"\x03tps\x18\x03 \x01(\x01R\x03tps\x12\x12\n" +
 	"\x04mspt\x18\x04 \x01(\x01R\x04mspt\x12%\n" +
-	"\x0eplayable_slots\x18\x05 \x01(\x05R\rplayableSlots\"\xd5\x06\n" +
+	"\x0eplayable_slots\x18\x05 \x01(\x05R\rplayableSlots\x12&\n" +
+	"\x0fheap_used_bytes\x18\x06 \x01(\x03R\rheapUsedBytes\x12$\n" +
+	"\x0eheap_max_bytes\x18\a \x01(\x03R\fheapMaxBytes\"\xd5\x06\n" +
 	"\fCloudRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12C\n" +
 	"\aconnect\x18\x02 \x01(\v2'.spawnery.agent.v1alpha1.ConnectRequestH\x00R\aconnect\x12@\n" +
