@@ -26,10 +26,14 @@ import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerLoginEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.server.ServerLoadEvent
 import org.bukkit.plugin.java.JavaPlugin
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -51,6 +55,9 @@ class AgentPlugin : JavaPlugin(), Listener {
         }
     }
     private val mirror = NetworkMirror()
+
+    /** Admitted by [onLogin] and not yet joined. Main thread only. */
+    private val pending = mutableSetOf<UUID>()
 
     /**
      * How a plugin's connect call reaches the operator.
@@ -274,6 +281,44 @@ class AgentPlugin : JavaPlugin(), Listener {
             logger.info("not ready yet, waiting for: ${waiting.joinToString(", ")}")
         }
         readiness.serverLoaded()
+    }
+
+    // PlayerLoginEvent is deprecated for removal, but it is the only login
+    // event that has the Player and so its permissions (see
+    // docs/superpowers/specs/2026-09-30-enforce-playable-slots-design.md).
+    @Suppress("DEPRECATION")
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onLogin(event: PlayerLoginEvent) {
+        if (event.result != PlayerLoginEvent.Result.ALLOWED) return
+        val group = System.getenv("SPAWNERY_GROUP") ?: return
+        val admission = mirror.admission(group) ?: return
+        if (!admission.enforce) return
+        val permission = LoginGate.permission(group)
+        val bypass = event.player.hasPermission(permission)
+        val playable = LoginGate.effectivePlayable(state.playable, admission.playableSlots, Bukkit.getMaxPlayers())
+        val seated = Bukkit.getOnlinePlayers().count { !it.hasPermission(permission) }
+        if (!LoginGate.admits(true, bypass, seated, pending.size, playable)) {
+            val name = mirror.groups().firstOrNull { it.name() == group }?.displayName()?.takeIf { it.isNotBlank() } ?: group
+            event.disallow(PlayerLoginEvent.Result.KICK_FULL, LoginGate.refusal(name))
+            return
+        }
+        if (!bypass) pending += event.player.uniqueId
+    }
+
+    @Suppress("DEPRECATION")
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onLoginSettled(event: PlayerLoginEvent) {
+        if (event.result != PlayerLoginEvent.Result.ALLOWED) pending -= event.player.uniqueId
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onJoin(event: PlayerJoinEvent) {
+        pending -= event.player.uniqueId
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onQuit(event: PlayerQuitEvent) {
+        pending -= event.player.uniqueId
     }
 
     private companion object {
