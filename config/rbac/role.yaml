@@ -26,15 +26,6 @@ rules:
   - ""
   resources:
   - persistentvolumeclaims
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - create
