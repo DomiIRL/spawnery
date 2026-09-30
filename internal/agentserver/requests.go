@@ -925,7 +925,7 @@ func (s *Server) answerDeleteServer(
 			"a claim of that name exists, but this operator did not make it for that group")
 	case errors.Is(err, ErrUnkeyedWorld):
 		return refuse(reqID, agentpb.RequestError_REFUSED,
-			"that world was made before worlds carried their key; start it once, then delete it")
+			"that world was made before worlds carried their key, so only an admin can delete it")
 	case errors.Is(err, ErrNoSuchServer):
 		return refuse(reqID, agentpb.RequestError_NOT_FOUND,
 			"that key has neither a server nor a world")

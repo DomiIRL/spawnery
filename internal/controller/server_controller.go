@@ -285,9 +285,6 @@ func (r *ServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if err := r.growClaim(ctx, group, srv); err != nil {
 			return ctrl.Result{}, err
 		}
-		if err := r.labelWorldKey(ctx, group, srv); err != nil {
-			return ctrl.Result{}, err
-		}
 		if err := r.readResizePending(ctx, srv); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -510,33 +507,6 @@ func persistedServer(err error) error {
 // land on status.storageResizeError, and ServerGroupReconciler folds either
 // into the group's StorageResize condition without needing to know which
 // kind it was.
-// labelWorldKey puts an on-demand member's key on its world claim if the
-// claim predates the label. Without it the chart's admission policy refuses
-// the world's deletion.
-func (r *ServerReconciler) labelWorldKey(
-	ctx context.Context,
-	group *spawneryv1alpha1.ServerGroup,
-	srv *spawneryv1alpha1.Server,
-) error {
-	if srv.Spec.Key == "" || !srv.DeletionTimestamp.IsZero() {
-		return nil
-	}
-	claim := &corev1.PersistentVolumeClaim{}
-	key := types.NamespacedName{Name: podspec.DataClaimName(srv.Name), Namespace: srv.Namespace}
-	if err := r.Get(ctx, key, claim); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	if claim.Labels[podspec.LabelKey] == srv.Spec.Key || claim.Labels[podspec.LabelGroup] != group.Name {
-		return nil
-	}
-	patched := claim.DeepCopy()
-	if patched.Labels == nil {
-		patched.Labels = map[string]string{}
-	}
-	patched.Labels[podspec.LabelKey] = srv.Spec.Key
-	return r.Patch(ctx, patched, client.MergeFrom(claim))
-}
-
 func (r *ServerReconciler) growClaim(
 	ctx context.Context,
 	group *spawneryv1alpha1.ServerGroup,

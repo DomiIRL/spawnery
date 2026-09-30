@@ -90,6 +90,38 @@ func TestTheOperatorMayDeleteOnlyAnOnDemandWorld(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 
+	// The labels the rule reads cannot be forged by the operator itself: with
+	// patch on claims it could otherwise label any claim into reach first.
+	forge := func(pvc *corev1.PersistentVolumeClaim, label, value string) error {
+		var live corev1.PersistentVolumeClaim
+		if err := c.Get(ctx, client.ObjectKeyFromObject(pvc), &live); err != nil {
+			t.Fatalf("get %s: %v", pvc.Name, err)
+		}
+		patched := live.DeepCopy()
+		if patched.Labels == nil {
+			patched.Labels = map[string]string{}
+		}
+		patched.Labels[label] = value
+		return asOperator.Patch(ctx, patched, client.MergeFrom(&live), client.DryRunAll)
+	}
+	for _, tc := range []struct {
+		pvc          *corev1.PersistentVolumeClaim
+		label, value string
+	}{
+		{persistent, podspec.LabelKey, "0"},
+		{foreign, podspec.LabelManagedBy, podspec.ManagedByValue},
+		{onDemand, podspec.LabelGroup, "survival"},
+		{onDemand, podspec.LabelKey, "decaf"},
+	} {
+		if err := forge(tc.pvc, tc.label, tc.value); !apierrors.IsInvalid(err) && !apierrors.IsForbidden(err) {
+			t.Errorf("the operator set %s=%s on %s: err = %v, want a policy denial",
+				tc.label, tc.value, tc.pvc.Name, err)
+		}
+	}
+	if err := forge(onDemand, "example.com/unrelated", "yes"); err != nil {
+		t.Errorf("an update that leaves the three labels alone was refused: %v", err)
+	}
+
 	if err := tryDelete(onDemand); err != nil {
 		t.Errorf("an on-demand world was refused: %v", err)
 	}

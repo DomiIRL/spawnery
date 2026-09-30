@@ -99,10 +99,10 @@ var ErrWorldDeleting = errors.New("that member's world is still being deleted")
 // group.
 var ErrForeignClaim = errors.New("that claim was not made by this operator for that group")
 
-// ErrUnkeyedWorld is a delete of a world whose claim predates the key label,
-// which the chart's admission policy requires; the label is added the next
-// time the member runs.
-var ErrUnkeyedWorld = errors.New("that world's claim does not carry its key yet")
+// ErrUnkeyedWorld is a delete of a world whose claim predates the key label.
+// The chart's admission policy requires the label and forbids the operator
+// to add it, so such a world can only be deleted by hand.
+var ErrUnkeyedWorld = errors.New("that world's claim does not carry its key")
 
 // ErrInstancesDraining is the ceiling, met, by members of which at least one
 // is already leaving.
@@ -239,8 +239,19 @@ type KubeWriter struct {
 	// client is cached for reads, which is what makes the already-retiring
 	// check below cheap.
 	Client client.Client
+	// Reader reads claims past the manager's cache, which holds only claims
+	// carrying this operator's label: a claim somebody else made under a
+	// member's name has to be seen to be refused. Nil means Client.
+	Reader client.Reader
 	// Clock decides which boosts are still live. Nil means time.Now.
 	Clock func() time.Time
+}
+
+func (w KubeWriter) claims() client.Reader {
+	if w.Reader == nil {
+		return w.Client
+	}
+	return w.Reader
 }
 
 func (w KubeWriter) now() time.Time {
@@ -481,7 +492,7 @@ func (w KubeWriter) StartServer(
 	}
 	// A pod created now would mount a claim on its way out.
 	var world corev1.PersistentVolumeClaim
-	err = w.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podspec.DataClaimName(name)}, &world)
+	err = w.claims().Get(ctx, client.ObjectKey{Namespace: namespace, Name: podspec.DataClaimName(name)}, &world)
 	switch {
 	case err == nil && !world.DeletionTimestamp.IsZero():
 		return StartedServer{}, ErrWorldDeleting
@@ -659,7 +670,7 @@ func (w KubeWriter) DeleteServer(ctx context.Context, namespace, group, key stri
 
 	var claim corev1.PersistentVolumeClaim
 	haveClaim := true
-	if err := w.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podspec.DataClaimName(name)}, &claim); err != nil {
+	if err := w.claims().Get(ctx, client.ObjectKey{Namespace: namespace, Name: podspec.DataClaimName(name)}, &claim); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return DeletedServer{}, err
 		}

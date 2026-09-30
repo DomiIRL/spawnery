@@ -381,9 +381,11 @@ func TestADeletingOnDemandMemberDoesNotRecreateItsWorld(t *testing.T) {
 	}
 }
 
-// A world made before claims carried their key gets it the next time its
-// member runs, which is what lets it be deleted afterwards.
-func TestAnOnDemandMembersOldWorldGetsItsKey(t *testing.T) {
+// A world made before claims carried their key keeps its labels as they are:
+// the chart's admission policy refuses the operator any change to them, so a
+// patch here would fail every pass, and adding the key would put a claim in
+// deletion's reach that was not created as an on-demand world.
+func TestAnOnDemandMembersOldWorldIsNotRelabelled(t *testing.T) {
 	f := newFixture(t)
 	group := f.createOnDemandGroup(t, "private-servers", 50)
 	member := f.createOnDemandMember(t, group, "c0ffee")
@@ -399,7 +401,7 @@ func TestAnOnDemandMembersOldWorldGetsItsKey(t *testing.T) {
 	if claim == nil {
 		t.Fatal("the world is gone")
 	}
-	if got := claim.Labels[podspec.LabelKey]; got != "c0ffee" {
-		t.Fatalf("key label = %q after the member ran, want c0ffee", got)
+	if got, ok := claim.Labels[podspec.LabelKey]; ok {
+		t.Fatalf("key label = %q: the operator relabelled a claim it did not create keyed", got)
 	}
 }

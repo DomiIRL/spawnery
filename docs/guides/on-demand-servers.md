@@ -78,7 +78,7 @@ What comes back, by reason:
 | `startServer` | `NOT_FOUND` | no such group. |
 | `stopServer` | `REFUSED` | the server is not a member of an on-demand group. |
 | `stopServer` | `NOT_FOUND` | no such server — including a stop that was carried out a moment ago. |
-| `deleteServer` | `REFUSED` | the group is not `OnDemand`, the key is not a label, a claim of that name was not made by this operator for that group, or the world predates the key label (start it once, then delete it). |
+| `deleteServer` | `REFUSED` | the group is not `OnDemand`, the key is not a label, a claim of that name was not made by this operator for that group, or the world predates the key label (only an admin can delete it). |
 | `deleteServer` | `NOT_FOUND` | no such group, or the key has neither a server nor a world — including a delete that finished a moment ago. |
 | `startServer` | `UNAVAILABLE` | also: the key's world is still being deleted. |
 
@@ -141,10 +141,13 @@ ServiceAccount, the API server lets through only the deletion of a claim that
 carries this operator's `spawnery.cloud/managed-by`, an on-demand member's
 `spawnery.cloud/key`, and the name `<group>-<key>-data`. A persistent server's
 world, a database's claim or anything else in the namespace is refused there,
-whatever the operator's code does. The policy needs Kubernetes 1.30.
+whatever the operator's code does, and even with its credentials. The policy
+needs Kubernetes 1.30.
 
-A world created before the key label existed gets it the next time its member
-runs; until then `deleteServer` refuses it and says to start it once.
+The same policy refuses the operator any change to those three labels, so a
+key cannot be added to a claim later. A world created before the key label
+existed can therefore only be deleted by hand; `deleteServer` refuses it and
+says so.
 
 ### Other ways a member ends
 

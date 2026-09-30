@@ -21,7 +21,7 @@ is only a claim, and that is exactly what the caller wants gone.
    the one `stopServer` keeps: no name reaches a lobby's or an ordinal's
    world.
 2. The member's name is `instance.Name(group, key)`; a key no name can be
-   built from is `INVALID`.
+   built from is `REFUSED`, as for `startServer`.
 3. If the member's Server exists, it is deleted as `stopServer` deletes it:
    players are moved through the proxies within the group's drain timeout,
    then the pod goes.
@@ -56,13 +56,19 @@ its delete right would be cluster-wide: RBAC selects by name, and these
 names are minted at runtime. Kept in the operator, the right is narrowed in
 the API server instead:
 
-- On-demand world claims carry `spawnery.cloud/key` (set at creation; the
-  Server controller adds it to an older claim the next time its member runs).
+- On-demand world claims carry `spawnery.cloud/key`, set only when the claim
+  is created.
 - The chart ships `ValidatingAdmissionPolicy`/`Binding`
   `spawnery-world-deletion`: a DELETE of a claim by the operator's
   ServiceAccount is admitted only with `spawnery.cloud/managed-by`, a
-  non-empty `spawnery.cloud/key`, and the name `<group>-<key>-data`.
-- `DeleteServer` refuses a world without its key label (start it once).
+  non-empty `spawnery.cloud/key`, and the name `<group>-<key>-data`; an
+  UPDATE by it may not change any of those three labels. Without the second
+  rule the operator's `patch` on claims would let it label any claim into
+  reach (found in review), so a key is never added later.
+- `DeleteServer` refuses a world without its key label; such a world (made
+  before this change) is deleted by hand.
+- `DeleteServer` reads the claim past the manager's cache, which holds only
+  labelled claims, so a foreign claim is `REFUSED` rather than `NOT_FOUND`.
 - The chart's `kubeVersion` floor becomes 1.30 (VAP v1 GA).
 
 ## Surface
