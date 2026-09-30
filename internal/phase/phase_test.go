@@ -522,6 +522,37 @@ func TestDecide(t *testing.T) {
 			want:    Decision{Next: Failed, Reason: ReasonPodTerminal},
 		},
 		{
+			name:    "a failed server's pod that came up late is stopped once the group has a ready server",
+			current: Failed,
+			in:      Inputs{PodExists: true, PodRunning: true, PodReady: true, GroupHasReadyServer: true},
+			want:    Decision{Next: Failed, DeletePod: true, Reason: ReasonStoppingFailedPod},
+		},
+		{
+			name:    "a never-registered failed server's late pod is stopped without a player count",
+			current: Failed,
+			in:      Inputs{PodExists: true, PodRunning: true, GroupHasReadyServer: true, PlayersStale: true},
+			want:    Decision{Next: Failed, DeletePod: true, Reason: ReasonStoppingFailedPod},
+		},
+		{
+			name:    "a failed server's running pod stays while the group has no ready server",
+			current: Failed,
+			in:      Inputs{PodExists: true, PodRunning: true},
+			want:    Decision{Next: Failed, Reason: ReasonPodTerminal},
+		},
+		{
+			name:    "a failed server's running pod with players on it is not stopped early",
+			current: Failed,
+			in: Inputs{PodExists: true, PodRunning: true, GroupHasReadyServer: true,
+				WasRegistered: true, PlayersOnline: 2},
+			want: Decision{Next: Failed, Reason: ReasonPodTerminal},
+		},
+		{
+			name:    "a failed server whose pod already ended keeps it for its logs",
+			current: Failed,
+			in:      Inputs{PodExists: true, PodTerminal: true, GroupHasReadyServer: true},
+			want:    Decision{Next: Failed, Reason: ReasonPodTerminal},
+		},
+		{
 			name:    "failed is cleaned up after the retention",
 			current: Failed,
 			in:      Inputs{FailedRetentionElapsed: true},
