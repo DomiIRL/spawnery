@@ -3684,9 +3684,14 @@ type GroupState struct {
 	// "bingo-team". Empty for a group nobody has named, and the agent -- not the
 	// operator -- then stands the name in for it, so that a picture from an
 	// operator that predates the field reads the same as one that left it out.
-	DisplayName   string `protobuf:"bytes,8,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DisplayName string `protobuf:"bytes,8,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// The group's spec.playableSlots, 0 if unset.
+	PlayableSlots int32 `protobuf:"varint,9,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"`
+	// spec.enforcePlayableSlots. An operator older than the field sends
+	// neither, which reads as not enforced.
+	EnforcePlayableSlots bool `protobuf:"varint,10,opt,name=enforce_playable_slots,json=enforcePlayableSlots,proto3" json:"enforce_playable_slots,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *GroupState) Reset() {
@@ -3773,6 +3778,20 @@ func (x *GroupState) GetDisplayName() string {
 		return x.DisplayName
 	}
 	return ""
+}
+
+func (x *GroupState) GetPlayableSlots() int32 {
+	if x != nil {
+		return x.PlayableSlots
+	}
+	return 0
+}
+
+func (x *GroupState) GetEnforcePlayableSlots() bool {
+	if x != nil {
+		return x.EnforcePlayableSlots
+	}
+	return false
 }
 
 // ServerState is one backend as the operator last observed it.
@@ -5046,7 +5065,7 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\aplayers\x18\x03 \x03(\v2$.spawnery.agent.v1alpha1.RosterEntryR\aplayers\x12\x1f\n" +
 	"\vfeed_format\x18\x04 \x01(\tR\n" +
 	"feedFormat\x12=\n" +
-	"\aproxies\x18\x05 \x03(\v2#.spawnery.agent.v1alpha1.ProxyStateR\aproxies\"\xf5\x03\n" +
+	"\aproxies\x18\x05 \x03(\v2#.spawnery.agent.v1alpha1.ProxyStateR\aproxies\"\xd2\x04\n" +
 	"\n" +
 	"GroupState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12<\n" +
@@ -5059,7 +5078,10 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\n" +
 	"attributes\x18\a \x03(\v23.spawnery.agent.v1alpha1.GroupState.AttributesEntryR\n" +
 	"attributes\x12!\n" +
-	"\fdisplay_name\x18\b \x01(\tR\vdisplayName\x1a=\n" +
+	"\fdisplay_name\x18\b \x01(\tR\vdisplayName\x12%\n" +
+	"\x0eplayable_slots\x18\t \x01(\x05R\rplayableSlots\x124\n" +
+	"\x16enforce_playable_slots\x18\n" +
+	" \x01(\bR\x14enforcePlayableSlots\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"U\n" +

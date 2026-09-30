@@ -511,6 +511,37 @@ java.lang.String defaultValue) {
     }
   }
 
+  public static final int PLAYABLE_SLOTS_FIELD_NUMBER = 9;
+  private int playableSlots_ = 0;
+  /**
+   * <pre>
+   * The group's spec.playableSlots, 0 if unset.
+   * </pre>
+   *
+   * <code>int32 playable_slots = 9;</code>
+   * @return The playableSlots.
+   */
+  @java.lang.Override
+  public int getPlayableSlots() {
+    return playableSlots_;
+  }
+
+  public static final int ENFORCE_PLAYABLE_SLOTS_FIELD_NUMBER = 10;
+  private boolean enforcePlayableSlots_ = false;
+  /**
+   * <pre>
+   * spec.enforcePlayableSlots. An operator older than the field sends
+   * neither, which reads as not enforced.
+   * </pre>
+   *
+   * <code>bool enforce_playable_slots = 10;</code>
+   * @return The enforcePlayableSlots.
+   */
+  @java.lang.Override
+  public boolean getEnforcePlayableSlots() {
+    return enforcePlayableSlots_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -552,6 +583,12 @@ java.lang.String defaultValue) {
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(displayName_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 8, displayName_);
     }
+    if (playableSlots_ != 0) {
+      output.writeInt32(9, playableSlots_);
+    }
+    if (enforcePlayableSlots_ != false) {
+      output.writeBool(10, enforcePlayableSlots_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -592,6 +629,14 @@ java.lang.String defaultValue) {
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(displayName_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(8, displayName_);
     }
+    if (playableSlots_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt32Size(9, playableSlots_);
+    }
+    if (enforcePlayableSlots_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(10, enforcePlayableSlots_);
+    }
     return size;
   }
   @java.lang.Override
@@ -631,6 +676,10 @@ java.lang.String defaultValue) {
         other.internalGetAttributes())) return false;
     if (!getDisplayName()
         .equals(other.getDisplayName())) return false;
+    if (getPlayableSlots()
+        != other.getPlayableSlots()) return false;
+    if (getEnforcePlayableSlots()
+        != other.getEnforcePlayableSlots()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -660,6 +709,11 @@ java.lang.String defaultValue) {
     }
     hash = (37 * hash) + DISPLAY_NAME_FIELD_NUMBER;
     hash = (53 * hash) + getDisplayName().hashCode();
+    hash = (37 * hash) + PLAYABLE_SLOTS_FIELD_NUMBER;
+    hash = (53 * hash) + getPlayableSlots();
+    hash = (37 * hash) + ENFORCE_PLAYABLE_SLOTS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getEnforcePlayableSlots());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -825,6 +879,8 @@ java.lang.String defaultValue) {
       freeSlots_ = 0;
       internalGetMutableAttributes().clear();
       displayName_ = "";
+      playableSlots_ = 0;
+      enforcePlayableSlots_ = false;
       return this;
     }
 
@@ -883,6 +939,12 @@ java.lang.String defaultValue) {
       if (((from_bitField0_ & 0x00000080) != 0)) {
         result.displayName_ = displayName_;
       }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.playableSlots_ = playableSlots_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.enforcePlayableSlots_ = enforcePlayableSlots_;
+      }
     }
 
     @java.lang.Override
@@ -924,6 +986,12 @@ java.lang.String defaultValue) {
         displayName_ = other.displayName_;
         bitField0_ |= 0x00000080;
         onChanged();
+      }
+      if (other.getPlayableSlots() != 0) {
+        setPlayableSlots(other.getPlayableSlots());
+      }
+      if (other.getEnforcePlayableSlots() != false) {
+        setEnforcePlayableSlots(other.getEnforcePlayableSlots());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -995,6 +1063,16 @@ java.lang.String defaultValue) {
               bitField0_ |= 0x00000080;
               break;
             } // case 66
+            case 72: {
+              playableSlots_ = input.readInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
+            case 80: {
+              enforcePlayableSlots_ = input.readBool();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 80
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1606,6 +1684,97 @@ java.lang.String defaultValue) {
       checkByteStringIsUtf8(value);
       displayName_ = value;
       bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+
+    private int playableSlots_ ;
+    /**
+     * <pre>
+     * The group's spec.playableSlots, 0 if unset.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 9;</code>
+     * @return The playableSlots.
+     */
+    @java.lang.Override
+    public int getPlayableSlots() {
+      return playableSlots_;
+    }
+    /**
+     * <pre>
+     * The group's spec.playableSlots, 0 if unset.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 9;</code>
+     * @param value The playableSlots to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlayableSlots(int value) {
+
+      playableSlots_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The group's spec.playableSlots, 0 if unset.
+     * </pre>
+     *
+     * <code>int32 playable_slots = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlayableSlots() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      playableSlots_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private boolean enforcePlayableSlots_ ;
+    /**
+     * <pre>
+     * spec.enforcePlayableSlots. An operator older than the field sends
+     * neither, which reads as not enforced.
+     * </pre>
+     *
+     * <code>bool enforce_playable_slots = 10;</code>
+     * @return The enforcePlayableSlots.
+     */
+    @java.lang.Override
+    public boolean getEnforcePlayableSlots() {
+      return enforcePlayableSlots_;
+    }
+    /**
+     * <pre>
+     * spec.enforcePlayableSlots. An operator older than the field sends
+     * neither, which reads as not enforced.
+     * </pre>
+     *
+     * <code>bool enforce_playable_slots = 10;</code>
+     * @param value The enforcePlayableSlots to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEnforcePlayableSlots(boolean value) {
+
+      enforcePlayableSlots_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * spec.enforcePlayableSlots. An operator older than the field sends
+     * neither, which reads as not enforced.
+     * </pre>
+     *
+     * <code>bool enforce_playable_slots = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEnforcePlayableSlots() {
+      bitField0_ = (bitField0_ & ~0x00000200);
+      enforcePlayableSlots_ = false;
       onChanged();
       return this;
     }

@@ -178,9 +178,17 @@ type ServerGroupSpec struct {
 	// figure at runtime, which wins over this one.
 	//
 	// maxPlayers stays the limit a server enforces, so the seats between the
-	// two are room for players the group is not sized by, such as spectators.
+	// two are room for players the group is not sized by, such as spectators --
+	// unless enforcePlayableSlots makes this number the limit too.
 	// +optional
 	PlayableSlots *int32 `json:"playableSlots,omitempty"`
+
+	// EnforcePlayableSlots refuses a login once a server holds as many players
+	// as its playable slots, except for players with the permission
+	// spawnery.join.full.<group>, who never take a seat. Read at runtime over
+	// the agent channel; changing it restarts no server.
+	// +optional
+	EnforcePlayableSlots bool `json:"enforcePlayableSlots,omitempty"`
 
 	// Replicas is the fixed number of persistent servers. Ephemeral groups are
 	// sized by scaling instead.

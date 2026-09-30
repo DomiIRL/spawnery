@@ -52,6 +52,9 @@ class AgentPlugin : JavaPlugin(), Listener {
     }
     private val mirror = NetworkMirror()
 
+    /** Registered the first time this server's group enforces its playable slots. */
+    private var loginGate: LoginGateListener? = null
+
     /**
      * How a plugin's connect call reaches the operator.
      *
@@ -199,6 +202,7 @@ class AgentPlugin : JavaPlugin(), Listener {
                 // ever reads what this wrote.
                 server.scheduler.runTaskTimer(this, Runnable {
                     state.sample(Bukkit.getOnlinePlayers().size, Bukkit.getMaxPlayers())
+                    registerLoginGateOnce()
                     // Paper's own one-minute average; it caps at 20.
                     state.sampleTicks(Bukkit.getTPS()[0], Bukkit.getAverageTickTime())
                     // The feed's window closes here, on the main thread, and
@@ -262,6 +266,16 @@ class AgentPlugin : JavaPlugin(), Listener {
     // its own ServerLoadEvent handler is ordered against this one by plugin
     // registration order otherwise. The agent reads the finished startup and
     // changes nothing about the event, which is what MONITOR is for.
+    private fun registerLoginGateOnce() {
+        if (loginGate != null) return
+        val group = System.getenv("SPAWNERY_GROUP") ?: return
+        if (mirror.admission(group)?.enforce != true) return
+        val gate = LoginGateListener(group, mirror, state)
+        server.pluginManager.registerEvents(gate, this)
+        loginGate = gate
+        logger.info("group $group enforces its playable slots; login check registered")
+    }
+
     @EventHandler(priority = EventPriority.MONITOR)
     fun onServerLoad(event: ServerLoadEvent) {
         if (event.type != ServerLoadEvent.LoadType.STARTUP) return

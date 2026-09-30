@@ -35,6 +35,13 @@ import java.util.UUID
  * `servers()` in a loop should pay for a volatile read, not for rebuilding
  * every record each time.
  */
+/**
+ * Whether a group's servers refuse a login past their playable slots, and the
+ * group's own figure for them. Kept for the agent's login check and not
+ * published through the plugin API.
+ */
+data class GroupAdmission(val playableSlots: Int, val enforce: Boolean)
+
 class NetworkMirror {
     private data class Snapshot(
         val groups: List<Group>,
@@ -47,6 +54,7 @@ class NetworkMirror {
          * the field -- [Feed] reads both as "use my own default".
          */
         val feedFormat: String,
+        val admissions: Map<String, GroupAdmission> = emptyMap(),
     )
 
     @Volatile
@@ -56,6 +64,7 @@ class NetworkMirror {
     fun apply(state: NetworkState) {
         snapshot = Snapshot(
             feedFormat = state.feedFormat,
+            admissions = state.groupsList.associate { it.name to GroupAdmission(it.playableSlots, it.enforcePlayableSlots) },
             groups = state.groupsList.map {
                 Group(
                     it.name,
@@ -124,6 +133,8 @@ class NetworkMirror {
      * `format` parameter for why that matters.
      */
     fun feedFormat(): String = snapshot.feedFormat
+
+    fun admission(group: String): GroupAdmission? = snapshot.admissions[group]
 }
 
 internal fun kindOf(kind: GroupState.Kind): Group.Kind =
