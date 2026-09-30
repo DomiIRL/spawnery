@@ -74,6 +74,7 @@ private static final long serialVersionUID = 0L;
     STOP_SERVER(10),
     UNRETIRE(11),
     STATUS(12),
+    DELETE_SERVER(13),
     RESULT_NOT_SET(0);
     private final int value;
     private ResultCase(int value) {
@@ -102,6 +103,7 @@ private static final long serialVersionUID = 0L;
         case 10: return STOP_SERVER;
         case 11: return UNRETIRE;
         case 12: return STATUS;
+        case 13: return DELETE_SERVER;
         case 0: return RESULT_NOT_SET;
         default: return null;
       }
@@ -469,6 +471,37 @@ private static final long serialVersionUID = 0L;
     return cloud.spawnery.agent.pb.StatusResult.getDefaultInstance();
   }
 
+  public static final int DELETE_SERVER_FIELD_NUMBER = 13;
+  /**
+   * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+   * @return Whether the deleteServer field is set.
+   */
+  @java.lang.Override
+  public boolean hasDeleteServer() {
+    return resultCase_ == 13;
+  }
+  /**
+   * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+   * @return The deleteServer.
+   */
+  @java.lang.Override
+  public cloud.spawnery.agent.pb.DeleteServerResult getDeleteServer() {
+    if (resultCase_ == 13) {
+       return (cloud.spawnery.agent.pb.DeleteServerResult) result_;
+    }
+    return cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance();
+  }
+  /**
+   * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+   */
+  @java.lang.Override
+  public cloud.spawnery.agent.pb.DeleteServerResultOrBuilder getDeleteServerOrBuilder() {
+    if (resultCase_ == 13) {
+       return (cloud.spawnery.agent.pb.DeleteServerResult) result_;
+    }
+    return cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance();
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -518,6 +551,9 @@ private static final long serialVersionUID = 0L;
     }
     if (resultCase_ == 12) {
       output.writeMessage(12, (cloud.spawnery.agent.pb.StatusResult) result_);
+    }
+    if (resultCase_ == 13) {
+      output.writeMessage(13, (cloud.spawnery.agent.pb.DeleteServerResult) result_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -570,6 +606,10 @@ private static final long serialVersionUID = 0L;
     if (resultCase_ == 12) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(12, (cloud.spawnery.agent.pb.StatusResult) result_);
+    }
+    if (resultCase_ == 13) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(13, (cloud.spawnery.agent.pb.DeleteServerResult) result_);
     }
     return size;
   }
@@ -643,6 +683,10 @@ private static final long serialVersionUID = 0L;
         if (!getStatus()
             .equals(other.getStatus())) return false;
         break;
+      case 13:
+        if (!getDeleteServer()
+            .equals(other.getDeleteServer())) return false;
+        break;
       case 0:
       default:
     }
@@ -704,6 +748,10 @@ private static final long serialVersionUID = 0L;
       case 12:
         hash = (37 * hash) + STATUS_FIELD_NUMBER;
         hash = (53 * hash) + getStatus().hashCode();
+        break;
+      case 13:
+        hash = (37 * hash) + DELETE_SERVER_FIELD_NUMBER;
+        hash = (53 * hash) + getDeleteServer().hashCode();
         break;
       case 0:
       default:
@@ -882,6 +930,9 @@ private static final long serialVersionUID = 0L;
       if (statusBuilder_ != null) {
         statusBuilder_.clear();
       }
+      if (deleteServerBuilder_ != null) {
+        deleteServerBuilder_.clear();
+      }
       resultCase_ = 0;
       result_ = null;
       return this;
@@ -970,6 +1021,10 @@ private static final long serialVersionUID = 0L;
           statusBuilder_ != null) {
         result.result_ = statusBuilder_.build();
       }
+      if (resultCase_ == 13 &&
+          deleteServerBuilder_ != null) {
+        result.result_ = deleteServerBuilder_.build();
+      }
     }
 
     @java.lang.Override
@@ -1030,6 +1085,10 @@ private static final long serialVersionUID = 0L;
         }
         case STATUS: {
           mergeStatus(other.getStatus());
+          break;
+        }
+        case DELETE_SERVER: {
+          mergeDeleteServer(other.getDeleteServer());
           break;
         }
         case RESULT_NOT_SET: {
@@ -1144,6 +1203,13 @@ private static final long serialVersionUID = 0L;
               resultCase_ = 12;
               break;
             } // case 98
+            case 106: {
+              input.readMessage(
+                  internalGetDeleteServerFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              resultCase_ = 13;
+              break;
+            } // case 106
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2768,6 +2834,148 @@ private static final long serialVersionUID = 0L;
       resultCase_ = 12;
       onChanged();
       return statusBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        cloud.spawnery.agent.pb.DeleteServerResult, cloud.spawnery.agent.pb.DeleteServerResult.Builder, cloud.spawnery.agent.pb.DeleteServerResultOrBuilder> deleteServerBuilder_;
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     * @return Whether the deleteServer field is set.
+     */
+    @java.lang.Override
+    public boolean hasDeleteServer() {
+      return resultCase_ == 13;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     * @return The deleteServer.
+     */
+    @java.lang.Override
+    public cloud.spawnery.agent.pb.DeleteServerResult getDeleteServer() {
+      if (deleteServerBuilder_ == null) {
+        if (resultCase_ == 13) {
+          return (cloud.spawnery.agent.pb.DeleteServerResult) result_;
+        }
+        return cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance();
+      } else {
+        if (resultCase_ == 13) {
+          return deleteServerBuilder_.getMessage();
+        }
+        return cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance();
+      }
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    public Builder setDeleteServer(cloud.spawnery.agent.pb.DeleteServerResult value) {
+      if (deleteServerBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        result_ = value;
+        onChanged();
+      } else {
+        deleteServerBuilder_.setMessage(value);
+      }
+      resultCase_ = 13;
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    public Builder setDeleteServer(
+        cloud.spawnery.agent.pb.DeleteServerResult.Builder builderForValue) {
+      if (deleteServerBuilder_ == null) {
+        result_ = builderForValue.build();
+        onChanged();
+      } else {
+        deleteServerBuilder_.setMessage(builderForValue.build());
+      }
+      resultCase_ = 13;
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    public Builder mergeDeleteServer(cloud.spawnery.agent.pb.DeleteServerResult value) {
+      if (deleteServerBuilder_ == null) {
+        if (resultCase_ == 13 &&
+            result_ != cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance()) {
+          result_ = cloud.spawnery.agent.pb.DeleteServerResult.newBuilder((cloud.spawnery.agent.pb.DeleteServerResult) result_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          result_ = value;
+        }
+        onChanged();
+      } else {
+        if (resultCase_ == 13) {
+          deleteServerBuilder_.mergeFrom(value);
+        } else {
+          deleteServerBuilder_.setMessage(value);
+        }
+      }
+      resultCase_ = 13;
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    public Builder clearDeleteServer() {
+      if (deleteServerBuilder_ == null) {
+        if (resultCase_ == 13) {
+          resultCase_ = 0;
+          result_ = null;
+          onChanged();
+        }
+      } else {
+        if (resultCase_ == 13) {
+          resultCase_ = 0;
+          result_ = null;
+        }
+        deleteServerBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    public cloud.spawnery.agent.pb.DeleteServerResult.Builder getDeleteServerBuilder() {
+      return internalGetDeleteServerFieldBuilder().getBuilder();
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    @java.lang.Override
+    public cloud.spawnery.agent.pb.DeleteServerResultOrBuilder getDeleteServerOrBuilder() {
+      if ((resultCase_ == 13) && (deleteServerBuilder_ != null)) {
+        return deleteServerBuilder_.getMessageOrBuilder();
+      } else {
+        if (resultCase_ == 13) {
+          return (cloud.spawnery.agent.pb.DeleteServerResult) result_;
+        }
+        return cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance();
+      }
+    }
+    /**
+     * <code>.spawnery.agent.v1alpha1.DeleteServerResult delete_server = 13;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        cloud.spawnery.agent.pb.DeleteServerResult, cloud.spawnery.agent.pb.DeleteServerResult.Builder, cloud.spawnery.agent.pb.DeleteServerResultOrBuilder> 
+        internalGetDeleteServerFieldBuilder() {
+      if (deleteServerBuilder_ == null) {
+        if (!(resultCase_ == 13)) {
+          result_ = cloud.spawnery.agent.pb.DeleteServerResult.getDefaultInstance();
+        }
+        deleteServerBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            cloud.spawnery.agent.pb.DeleteServerResult, cloud.spawnery.agent.pb.DeleteServerResult.Builder, cloud.spawnery.agent.pb.DeleteServerResultOrBuilder>(
+                (cloud.spawnery.agent.pb.DeleteServerResult) result_,
+                getParentForChildren(),
+                isClean());
+        result_ = null;
+      }
+      resultCase_ = 13;
+      onChanged();
+      return deleteServerBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:spawnery.agent.v1alpha1.CloudResponse)
