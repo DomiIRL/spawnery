@@ -520,7 +520,7 @@ class AgentPlugin @Inject constructor(
         }
     }
 
-    @Subscribe
+    @Subscribe(priority = Short.MIN_VALUE)
     fun onServerPreConnect(event: ServerPreConnectEvent) {
         val transfers = transfers ?: return
         if (!event.result.isAllowed || event.player.currentServer.isEmpty) return
