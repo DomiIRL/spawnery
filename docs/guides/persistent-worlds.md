@@ -173,8 +173,8 @@ spec:
   storage:
     size: 10Gi
     keep:
-      - worlds/world
-      - plugins/Challenges/internal
+      - world
+      - plugins/ExampleGame/state
 ```
 
 - An entry is a path relative to `/data`. Each segment may use `*` and `?`, and
@@ -183,13 +183,18 @@ spec:
   directories of the plugins, not single dimensions or files inside them. The
   datapacks of a world are part of it and persist with the save on purpose, so
   new chunks generate like the old ones.
-- A mount point, the directories above it and `lost+found` are never deleted,
-  read-only or writable.
+- A mount point, the directories above it and the root `lost+found` are never
+  deleted, read-only or writable.
+- Everything under `config/` comes from the renderer and `configOverlay`, so it
+  is deleted unless `config` is listed. `paper-world-defaults.yml` is rendered
+  only when a `configOverlay` names it: set per-world defaults there, or list
+  `config` and accept that it is then never refreshed.
 - Unset, nothing is deleted.
 
 Two refusals stop the start before anything is deleted, with a message naming
-the path. A `level.dat` that no entry keeps is one: the list is wrong rather
-than the world disposable. A source that carries a path the list keeps is the
+the path. Something no entry keeps that is a `level.dat*` file, a `region`
+directory or an `.mca` file is one: the list is wrong rather than the world
+disposable. A source that carries a path the list keeps is the
 other: the copy would replace saved state with the shipped file on every start,
 so keep one or ship the other.
 

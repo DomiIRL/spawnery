@@ -22,23 +22,31 @@ each start first deletes everything on the claim that no entry matches, then
 renders and copies as before. Unset, nothing is deleted and the pod is
 byte-for-byte what it was.
 
-Example, for a Challenges server:
+Example, for a server with a world and one plugin that keeps state:
 
 ```yaml
 storage:
   size: 5Gi
   keep:
-    - worlds/world
-    - plugins/Challenges/internal
+    - world
+    - plugins/ExampleGame/state
 ```
 
-`worlds/world` includes the world's datapacks. They persist with the save on
+`world` includes the world's datapacks. They persist with the save on
 purpose, so chunks generated later come out like the ones already there.
 Guidance is to list the level directory and each plugin's state directory, not
 single dimensions or files inside them: a world's name and number are the
 game's choice.
 
 ## 3. Decisions
+
+- **Everything under `config/` is the renderer's.** With `keep` set and `config`
+  not listed, `/data/config` is deleted before the renderer runs.
+  `paper-global.yml` is rendered again, but `paper-world-defaults.yml` is
+  rendered only when a `configOverlay` names it, so a hand-edited one reverts
+  to Paper's defaults on every start. Set per-world defaults through
+  `configOverlay`, or list `config` in `keep`, with the consequence that it is
+  then never refreshed.
 
 - **An allowlist, not a denylist.** What a plugin writes cannot be enumerated,
   so a denylist rots with every plugin update. The allowlist names the few
@@ -51,7 +59,8 @@ game's choice.
   symlinks, honours mount points and refuses before deleting is
   `internal/prune`, tested as a table, not a `find` pipeline. The entrypoint
   only calls `spawnery-config --prune`.
-- **A `level.dat` guard.** A level.dat that no entry keeps refuses the start:
+- **A world guard.** Anything no entry keeps that is, or holds, a `level.dat*`
+  file, a `region` directory or an `.mca` file refuses the start:
   the list forgot a world, and silently deleting one is the one mistake that
   cannot be undone.
 - **No overlap between a source and the list.** A source (`extraFiles`,
@@ -94,7 +103,8 @@ entrypoint is untouched. Working directory is the data directory.
 2. Walk top-down without following symlinks. An entry that matches an entry of
    the list, or is a mount point, is kept and not entered. An entry that is an
    ancestor of something a pattern could match, or of a mount point, is
-   entered. `lost+found` is skipped at every level the walk visits. Everything
+   entered. The root `lost+found` is skipped; a nested one is pruned like any other
+   unmatched path. Everything
    else is queued for deletion.
 3. Refuse, before deleting anything, when a queued path is or contains a
    `level.dat`, or when a `--pair` source carries a path the list would keep at
