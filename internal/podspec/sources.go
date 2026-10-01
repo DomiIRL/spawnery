@@ -17,6 +17,8 @@ limitations under the License.
 package podspec
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
@@ -24,6 +26,9 @@ import (
 
 // EnvSubstitutionPrefix carries spec.substitution.prefix to the entrypoint.
 const EnvSubstitutionPrefix = "SPAWNERY_SUBSTITUTION_PREFIX"
+
+// EnvKeep carries spec.storage.keep to the entrypoint, one entry per line.
+const EnvKeep = "SPAWNERY_KEEP"
 
 // sourceVolume renders a plugin or file source: a read-only claim, or a
 // read-only image volume for an image source.
@@ -46,4 +51,11 @@ func substitutionEnv(s *spawneryv1alpha1.Substitution) []corev1.EnvVar {
 		return nil
 	}
 	return []corev1.EnvVar{{Name: EnvSubstitutionPrefix, Value: s.Prefix}}
+}
+
+func keepEnv(s *spawneryv1alpha1.StorageSpec) []corev1.EnvVar {
+	if s == nil || len(s.Keep) == 0 {
+		return nil
+	}
+	return []corev1.EnvVar{{Name: EnvKeep, Value: strings.Join(s.Keep, "\n")}}
 }

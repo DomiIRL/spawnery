@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
 )
@@ -62,6 +63,32 @@ func TestSubstitutionReachesTheContainerAsItsPrefix(t *testing.T) {
 	}
 	if bare := build(t, nil); envHas(bare, EnvSubstitutionPrefix) {
 		t.Error("a group without substitution got the prefix variable")
+	}
+}
+
+func TestKeepReachesTheContainerOneEntryPerLine(t *testing.T) {
+	storage := &spawneryv1alpha1.StorageSpec{Size: resource.MustParse("1Gi"), Keep: []string{"worlds/world", "plugins/Challenges/internal"}}
+	pod := build(t, func(_ *spawneryv1alpha1.Network, g *spawneryv1alpha1.ServerGroup) {
+		g.Spec.Storage = storage
+	})
+	var got string
+	for _, e := range pod.Spec.Containers[0].Env {
+		if e.Name == EnvKeep {
+			got = e.Value
+		}
+	}
+	if got != "worlds/world\nplugins/Challenges/internal" {
+		t.Errorf("%s = %q", EnvKeep, got)
+	}
+
+	storage.Keep = nil
+	if bare := build(t, func(_ *spawneryv1alpha1.Network, g *spawneryv1alpha1.ServerGroup) {
+		g.Spec.Storage = storage
+	}); envHas(bare, EnvKeep) {
+		t.Error("a group without keep got the variable")
+	}
+	if envHas(build(t, nil), EnvKeep) {
+		t.Error("a group without storage got the variable")
 	}
 }
 

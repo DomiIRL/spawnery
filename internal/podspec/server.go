@@ -444,12 +444,12 @@ func BuildServerPod(
 		// readability decision -- it keeps the operator's own set at a fixed
 		// position in every pod, so `kubectl describe pod` still reads
 		// straight down for a group that sets twenty of its own.
-		Env: append(append([]corev1.EnvVar{
+		Env: append(append(append([]corev1.EnvVar{
 			{Name: "SPAWNERY_NETWORK", Value: net.Name},
 			{Name: "SPAWNERY_GROUP", Value: group.Name},
 			{Name: "SPAWNERY_SERVER", Value: srv.Name},
 			{Name: EnvOperatorEndpoint, Value: agentEndpoint},
-		}, substitutionEnv(group.Spec.Substitution)...), group.Spec.Env...),
+		}, substitutionEnv(group.Spec.Substitution)...), keepEnv(group.Spec.Storage)...), group.Spec.Env...),
 		VolumeMounts: mounts,
 		// Readiness only. A liveness probe would restart the container and
 		// kick every player on it — the state machine handles a red readiness
