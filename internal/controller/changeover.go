@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,41 +36,80 @@ import (
 // ChangeoverView is what AdmitChangeovers needs of one group to decide
 // whether it may change over.
 type ChangeoverView struct {
-	Kind    string // "ServerGroup" or "ProxyGroup"
-	Name    string
-	State   spawneryv1alpha1.ChangeoverState
-	Failing bool
+	Kind       string // "ServerGroup" or "ProxyGroup"
+	Name       string
+	State      spawneryv1alpha1.ChangeoverState
+	Failing    bool
+	Stage      int32
+	Persistent bool // gated by stage, takes no budget place: it never surges
 }
 
 func changeoverKey(kind, name string) string { return kind + "/" + name }
 
+func changeoverInFlight(g ChangeoverView) bool {
+	return !g.Failing && (g.State == spawneryv1alpha1.ChangeoverWaiting || g.State == spawneryv1alpha1.ChangeoverBegun)
+}
+
+// earliestStageBefore is the lowest stage below stage with a group in flight,
+// and that stage's groups by name.
+func earliestStageBefore(groups []ChangeoverView, stage int32) (int32, []string, bool) {
+	found := false
+	var lowest int32
+	for _, g := range groups {
+		if changeoverInFlight(g) && g.Stage < stage && (!found || g.Stage < lowest) {
+			lowest, found = g.Stage, true
+		}
+	}
+	if !found {
+		return 0, nil, false
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, g := range groups {
+		if changeoverInFlight(g) && g.Stage == lowest && !seen[g.Name] {
+			seen[g.Name] = true
+			names = append(names, g.Name)
+		}
+	}
+	sort.Strings(names)
+	return lowest, names, true
+}
+
 // AdmitChangeovers returns the groups, keyed "Kind/Name", that may change over
-// now. budget < 1 means no cap.
+// now. budget < 1 means no cap; the stage gate applies either way.
 func AdmitChangeovers(groups []ChangeoverView, budget int32) map[string]bool {
 	admitted := map[string]bool{}
 	var waiting []ChangeoverView
 	var holders int32
 	for _, g := range groups {
-		if g.State == spawneryv1alpha1.ChangeoverNone || g.State == spawneryv1alpha1.ChangeoverDeferred || g.Failing {
+		if !changeoverInFlight(g) {
 			continue
 		}
-		if budget < 1 || g.State == spawneryv1alpha1.ChangeoverBegun {
+		if g.State == spawneryv1alpha1.ChangeoverBegun {
 			admitted[changeoverKey(g.Kind, g.Name)] = true
-			if g.State == spawneryv1alpha1.ChangeoverBegun {
+			if !g.Persistent {
 				holders++
 			}
 			continue
 		}
+		if _, _, gated := earliestStageBefore(groups, g.Stage); gated {
+			continue
+		}
+		if g.Persistent || budget < 1 {
+			admitted[changeoverKey(g.Kind, g.Name)] = true
+			continue
+		}
 		waiting = append(waiting, g)
 	}
-	if budget < 1 {
-		return admitted
-	}
 	sort.Slice(waiting, func(i, j int) bool {
-		if waiting[i].Name != waiting[j].Name {
-			return waiting[i].Name < waiting[j].Name
+		a, b := waiting[i], waiting[j]
+		if a.Stage != b.Stage {
+			return a.Stage < b.Stage
 		}
-		return waiting[i].Kind < waiting[j].Kind
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Kind < b.Kind
 	})
 	for _, g := range waiting {
 		if holders >= budget {
@@ -78,6 +119,27 @@ func AdmitChangeovers(groups []ChangeoverView, budget int32) map[string]bool {
 		holders++
 	}
 	return admitted
+}
+
+// ChangeoverWait is why a group that must change over was not admitted; the
+// zero value means it was.
+type ChangeoverWait struct {
+	Reason  string
+	Message string
+}
+
+func describeWait(groups []ChangeoverView, budget int32, self ChangeoverView) ChangeoverWait {
+	if stage, names, ok := earliestStageBefore(groups, self.Stage); ok {
+		return ChangeoverWait{
+			Reason:  spawneryv1alpha1.ReasonWaitingForEarlierStage,
+			Message: fmt.Sprintf("waiting for stage %d: %s", stage, strings.Join(names, ", ")),
+		}
+	}
+	return ChangeoverWait{
+		Reason: spawneryv1alpha1.ReasonWaitingForChangeoverBudget,
+		Message: "waiting for a changeover place; changing over: " +
+			strings.Join(changeoverHolders(groups, AdmitChangeovers(groups, budget), self.Kind, self.Name), ", "),
+	}
 }
 
 func changeoverFailing(conditions []metav1.Condition) bool {

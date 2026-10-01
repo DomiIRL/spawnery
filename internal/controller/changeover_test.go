@@ -125,6 +125,90 @@ func TestAdmitChangeovers(t *testing.T) {
 			0,
 			map[string]bool{},
 		},
+		{
+			"a later stage waits for an earlier one in flight, budget unset",
+			[]ChangeoverView{
+				{Kind: "ProxyGroup", Name: "edge", State: spawneryv1alpha1.ChangeoverBegun, Stage: -10},
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting},
+			},
+			0,
+			map[string]bool{"ProxyGroup/edge": true},
+		},
+		{
+			"a waiting earlier stage gates as much as a begun one",
+			[]ChangeoverView{
+				{Kind: "ProxyGroup", Name: "edge", State: spawneryv1alpha1.ChangeoverWaiting, Stage: -10},
+				{Kind: "ServerGroup", Name: "arena", State: spawneryv1alpha1.ChangeoverWaiting},
+			},
+			1,
+			map[string]bool{"ProxyGroup/edge": true},
+		},
+		{
+			"a deferred earlier stage gates nothing",
+			[]ChangeoverView{
+				{Kind: "ProxyGroup", Name: "edge", State: spawneryv1alpha1.ChangeoverDeferred, Stage: -10},
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting},
+			},
+			1,
+			map[string]bool{"ServerGroup/lobby": true},
+		},
+		{
+			"a failing earlier stage gates nothing",
+			[]ChangeoverView{
+				{Kind: "ProxyGroup", Name: "edge", State: spawneryv1alpha1.ChangeoverBegun, Stage: -10, Failing: true},
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting},
+			},
+			1,
+			map[string]bool{"ServerGroup/lobby": true},
+		},
+		{
+			"one stage changes over together within the budget, ordered by name",
+			[]ChangeoverView{
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 5},
+				{Kind: "ServerGroup", Name: "arena", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 5},
+				{Kind: "ServerGroup", Name: "build", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 5},
+			},
+			2,
+			map[string]bool{"ServerGroup/arena": true, "ServerGroup/build": true},
+		},
+		{
+			"the budget goes by stage before name",
+			[]ChangeoverView{
+				{Kind: "ServerGroup", Name: "arena", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 1},
+				{Kind: "ServerGroup", Name: "zeta", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 1},
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 0},
+			},
+			1,
+			map[string]bool{"ServerGroup/lobby": true},
+		},
+		{
+			"a begun later stage is not paused by an earlier stage turning stale",
+			[]ChangeoverView{
+				{Kind: "ProxyGroup", Name: "edge", State: spawneryv1alpha1.ChangeoverWaiting, Stage: -10},
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverBegun},
+			},
+			2,
+			map[string]bool{"ProxyGroup/edge": true, "ServerGroup/lobby": true},
+		},
+		{
+			"a persistent group gates a later stage but takes no budget place",
+			[]ChangeoverView{
+				{Kind: "ServerGroup", Name: "world", State: spawneryv1alpha1.ChangeoverBegun, Persistent: true},
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting},
+				{Kind: "ServerGroup", Name: "arena", State: spawneryv1alpha1.ChangeoverWaiting, Stage: 10},
+			},
+			1,
+			map[string]bool{"ServerGroup/world": true, "ServerGroup/lobby": true},
+		},
+		{
+			"a waiting persistent group is admitted past a full budget",
+			[]ChangeoverView{
+				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverBegun},
+				{Kind: "ServerGroup", Name: "world", State: spawneryv1alpha1.ChangeoverWaiting, Persistent: true},
+			},
+			1,
+			map[string]bool{"ServerGroup/lobby": true, "ServerGroup/world": true},
+		},
 	}
 
 	for _, tc := range cases {
@@ -132,6 +216,33 @@ func TestAdmitChangeovers(t *testing.T) {
 			got := AdmitChangeovers(tc.groups, tc.budget)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("AdmitChangeovers(%+v, %d) = %v, want %v", tc.groups, tc.budget, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDescribeWait(t *testing.T) {
+	edge := ChangeoverView{Kind: "ProxyGroup", Name: "edge", State: spawneryv1alpha1.ChangeoverBegun, Stage: -10}
+	edge2 := ChangeoverView{Kind: "ProxyGroup", Name: "edge-b", State: spawneryv1alpha1.ChangeoverWaiting, Stage: -10}
+	deeper := ChangeoverView{Kind: "ProxyGroup", Name: "outer", State: spawneryv1alpha1.ChangeoverBegun, Stage: -20}
+	arena := ChangeoverView{Kind: "ServerGroup", Name: "arena", State: spawneryv1alpha1.ChangeoverBegun}
+	lobby := ChangeoverView{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting}
+	for _, tc := range []struct {
+		name   string
+		groups []ChangeoverView
+		budget int32
+		want   ChangeoverWait
+	}{
+		{"an earlier stage names that stage and its groups", []ChangeoverView{edge2, edge, lobby}, 0,
+			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForEarlierStage, "waiting for stage -10: edge, edge-b"}},
+		{"the lowest earlier stage is the one named", []ChangeoverView{edge, deeper, lobby}, 0,
+			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForEarlierStage, "waiting for stage -20: outer"}},
+		{"no earlier stage: the budget is named", []ChangeoverView{arena, lobby}, 1,
+			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForChangeoverBudget, "waiting for a changeover place; changing over: arena"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := describeWait(tc.groups, tc.budget, lobby); got != tc.want {
+				t.Errorf("describeWait = %+v, want %+v", got, tc.want)
 			}
 		})
 	}
