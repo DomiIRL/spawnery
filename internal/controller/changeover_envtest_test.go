@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -586,6 +587,91 @@ func TestARefusedWaitingProxyGroupGivesUpItsPlace(t *testing.T) {
 	}
 	if got := f.proxyGroup("zulu").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
 		t.Fatalf("zulu status.changeover = %q, want Begun", got)
+	}
+}
+
+func TestAServerGroupWaitsForTheProxyStageUntilItsNewPodsStand(t *testing.T) {
+	f := newFixture(t)
+	gr := groupReconciler(f)
+	pr := proxyGroupReconciler(f)
+	f.reconcileNamedGroup(t, gr, "lobby")
+	f.readyAllServersOf(t, "lobby")
+	stale := f.readyProxyGroup(t, pr, "gateway", func(g *spawneryv1alpha1.ProxyGroup) { g.Spec.ChangeoverStage = -10 })
+
+	f.setProxyImage(t, "gateway", nextProxyImage)
+	f.setImage(t, "lobby", nextImage)
+	f.reconcileProxyGroup(pr, "gateway")
+	f.reconcileNamedGroup(t, gr, "lobby")
+
+	if n := len(f.serverNamesOfGroup(t, "lobby")); n != 1 {
+		t.Fatalf("lobby has %d servers, want 1: the proxy stage is in flight", n)
+	}
+	if c := f.progressing(t, "lobby"); c.Reason != spawneryv1alpha1.ReasonWaitingForEarlierStage ||
+		c.Message != "waiting for stage -10: gateway" {
+		t.Fatalf("lobby Progressing = %s %q", c.Reason, c.Message)
+	}
+
+	pods := f.proxyPods("gateway")
+	if len(pods) != 4 {
+		t.Fatalf("gateway has %d pods, want 4", len(pods))
+	}
+	for i := range pods {
+		if slices.Contains(stale, pods[i].Name) {
+			f.reportProxyPlayers(t, pods[i], 1)
+		} else {
+			f.markProxyPodReady(t, &pods[i])
+		}
+	}
+	f.reconcileProxyGroup(pr, "gateway")
+	f.reconcileProxyGroup(pr, "gateway")
+	for _, name := range stale {
+		pod, ok := f.pod(name)
+		if !ok {
+			t.Fatalf("stale proxy %s is gone; it should still be draining its player", name)
+		}
+		if _, marked := drainingSince(pod); !marked {
+			t.Fatalf("stale proxy %s is not draining", name)
+		}
+	}
+	if got := f.proxyGroup("gateway").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+		t.Fatalf("gateway status.changeover = %q, want Deferred while its old pods drain", got)
+	}
+
+	f.reconcileNamedGroup(t, gr, "lobby")
+	if n := len(f.serverNamesOfGroup(t, "lobby")); n != 2 {
+		t.Fatalf("lobby has %d servers, want 2: the proxy stage stands", n)
+	}
+}
+
+func TestAProxyStageGatesWithTheBudgetUnset(t *testing.T) {
+	f := newFixture(t)
+	gr := groupReconciler(f)
+	pr := proxyGroupReconciler(f)
+	f.reconcileNamedGroup(t, gr, "lobby")
+	f.readyAllServersOf(t, "lobby")
+	f.readyProxyGroup(t, pr, "gateway", func(g *spawneryv1alpha1.ProxyGroup) { g.Spec.ChangeoverStage = 10 })
+
+	f.setImage(t, "lobby", nextImage)
+	f.reconcileNamedGroup(t, gr, "lobby")
+	f.setProxyImage(t, "gateway", nextProxyImage)
+	f.reconcileProxyGroup(pr, "gateway")
+
+	if n := len(f.proxyPods("gateway")); n != 2 {
+		t.Fatalf("gateway has %d pods, want 2: stage 10 waits for lobby", n)
+	}
+	g := f.proxyGroup("gateway")
+	if g.Status.Changeover != spawneryv1alpha1.ChangeoverWaiting {
+		t.Fatalf("gateway status.changeover = %q, want Waiting", g.Status.Changeover)
+	}
+	if c := meta.FindStatusCondition(g.Status.Conditions, spawneryv1alpha1.ConditionChangingOver); c == nil ||
+		c.Status != metav1.ConditionTrue || c.Message != "waiting for stage 0: lobby" {
+		t.Fatalf("gateway ChangingOver = %+v, want True waiting for stage 0: lobby", c)
+	}
+
+	f.finishChangeover(t, gr, "lobby")
+	f.reconcileProxyGroup(pr, "gateway")
+	if n := len(f.proxyPods("gateway")); n != 4 {
+		t.Fatalf("gateway has %d pods, want 4 once lobby is through", n)
 	}
 }
 

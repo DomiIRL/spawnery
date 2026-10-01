@@ -325,32 +325,31 @@ func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates, repl
 }
 
 // proxyChangeover is a proxy group's own changeover state, whether it may
-// surge, and, when it may not, the groups holding the places.
+// surge, and, when it may not, why.
 func proxyChangeover(
 	ctx context.Context, c client.Reader, network *spawneryv1alpha1.Network,
 	group *spawneryv1alpha1.ProxyGroup, wantHash string, pendingCreates int32,
-) (spawneryv1alpha1.ChangeoverState, bool, []string, error) {
+) (spawneryv1alpha1.ChangeoverState, bool, ChangeoverWait, error) {
 	pods := &corev1.PodList{}
 	if err := c.List(ctx, pods, client.InNamespace(group.Namespace),
 		client.MatchingLabels(podspec.ProxyLabels(network.Name, group.Name))); err != nil {
-		return "", false, nil, err
+		return "", false, ChangeoverWait{}, err
 	}
 	own := ownProxyChangeover(pods.Items, wantHash, pendingCreates, group.Spec.Replicas, group.Status.Changeover)
-	budget := network.ChangeoverBudget()
-	if budget == 0 || own != spawneryv1alpha1.ChangeoverWaiting {
-		return own, true, nil, nil
+	if own != spawneryv1alpha1.ChangeoverWaiting {
+		return own, true, ChangeoverWait{}, nil
 	}
 	siblings, err := changeoverSiblings(ctx, c, group.Namespace, network.Name, "ProxyGroup", group.Name)
 	if err != nil {
-		return "", false, nil, err
+		return "", false, ChangeoverWait{}, err
 	}
-	groups := append(slices.Clip(siblings), ChangeoverView{
+	self := ChangeoverView{
 		Kind: "ProxyGroup", Name: group.Name, State: own,
-		Failing: changeoverFailing(group.Status.Conditions),
-	})
-	admitted := AdmitChangeovers(groups, budget)
-	if admitted[changeoverKey("ProxyGroup", group.Name)] {
-		return own, true, nil, nil
+		Failing: changeoverFailing(group.Status.Conditions), Stage: group.Spec.ChangeoverStage,
 	}
-	return own, false, changeoverHolders(groups, admitted, "ProxyGroup", group.Name), nil
+	budget := network.ChangeoverBudget()
+	if !changeoverRefused(siblings, budget, self) {
+		return own, true, ChangeoverWait{}, nil
+	}
+	return own, false, describeWait(append(slices.Clip(siblings), self), budget, self), nil
 }

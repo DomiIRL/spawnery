@@ -959,12 +959,12 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 	// events, and only the second is a fact about the whole installation.
 	key := group.Namespace + "/" + group.Name
 	pendingCreates, _, _ := r.Expectations.pending(key)
-	own, surgeAllowed, waitingFor, err := proxyChangeover(ctx, r, network, group, wantHash, int32(len(pendingCreates)))
+	own, surgeAllowed, wait, err := proxyChangeover(ctx, r, network, group, wantHash, int32(len(pendingCreates)))
 	if err != nil {
 		return err
 	}
 	group.Status.Changeover = own
-	reportChangingOver(group, pods, wantHash, waitingFor)
+	reportChangingOver(group, pods, wantHash, wait)
 
 	decision := DecideRollout(views, group.Spec.Replicas, surgeAllowed)
 
@@ -1527,7 +1527,7 @@ func (r *ProxyGroupReconciler) reportNodeDraining(
 // creates lacks one -- podspec stamps it on every proxy pod -- so the only way
 // to be here is a pod somebody else made under this group's name, and a pod
 // whose shape cannot be compared is not a pod whose shape agrees.
-func reportChangingOver(group *spawneryv1alpha1.ProxyGroup, pods []corev1.Pod, wantHash string, waitingFor []string) {
+func reportChangingOver(group *spawneryv1alpha1.ProxyGroup, pods []corev1.Pod, wantHash string, wait ChangeoverWait) {
 	stale := 0
 	for i := range pods {
 		if pods[i].Labels[podspec.LabelPodHash] != wantHash {
@@ -1548,8 +1548,8 @@ func reportChangingOver(group *spawneryv1alpha1.ProxyGroup, pods []corev1.Pod, w
 				"being replaced; if every group in the cluster says this at "+
 				"once, an operator upgrade changed the pod render rather than anyone "+
 				"editing a spec", stale, len(pods))
-		if len(waitingFor) > 0 {
-			cond.Message = "waiting for a changeover place; changing over: " + strings.Join(waitingFor, ", ")
+		if wait.Message != "" {
+			cond.Message = wait.Message
 		}
 	}
 	meta.SetStatusCondition(&group.Status.Conditions, cond)
