@@ -34,7 +34,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spawnery/spawnery/internal/prune"
 	"github.com/spawnery/spawnery/internal/render"
+	"github.com/spawnery/spawnery/internal/sourcetree"
 	"github.com/spawnery/spawnery/internal/substitute"
 )
 
@@ -47,6 +49,10 @@ func main() {
 func run(args []string, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "--substitute" {
 		return runSubstitute(args[1:], stderr)
+	}
+
+	if len(args) > 0 && args[0] == "--prune" {
+		return runPrune(args[1:], stderr)
 	}
 
 	fs := flag.NewFlagSet("spawnery-config", flag.ContinueOnError)
@@ -96,7 +102,7 @@ func run(args []string, stderr io.Writer) int {
 }
 
 // pairs collects repeated --pair FROM=INTO flags.
-type pairs []substitute.Pair
+type pairs []sourcetree.Pair
 
 func (p *pairs) String() string { return fmt.Sprint(*p) }
 
@@ -105,7 +111,7 @@ func (p *pairs) Set(v string) error {
 	if !ok || from == "" || into == "" {
 		return fmt.Errorf("want FROM=INTO, got %q", v)
 	}
-	*p = append(*p, substitute.Pair{From: from, Into: into})
+	*p = append(*p, sourcetree.Pair{From: from, Into: into})
 	return nil
 }
 
@@ -126,6 +132,29 @@ func runSubstitute(args []string, stderr io.Writer) int {
 	}
 	if err := substitute.Trees(ps, prefix, os.LookupEnv); err != nil {
 		_, _ = fmt.Fprintf(stderr, "spawnery-config: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// runPrune deletes what spec.storage.keep does not list from the working
+// directory; see internal/prune.
+func runPrune(args []string, stderr io.Writer) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "spawnery-config: --prune needs the keep entries, one per line")
+		return 2
+	}
+	keep := strings.Split(args[0], "\n")
+	fs := flag.NewFlagSet("spawnery-config --prune", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	mountinfo := fs.String("mountinfo", "/proc/self/mountinfo", "the mount table to read the mount points below the working directory from")
+	var ps pairs
+	fs.Var(&ps, "pair", "a source and where it is copied, FROM=INTO; repeatable")
+	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if err := prune.Run(".", keep, *mountinfo, ps, stderr); err != nil {
+		_, _ = fmt.Fprintf(stderr, "spawnery: %v\nspawnery: refusing to start\n", err)
 		return 1
 	}
 	return 0

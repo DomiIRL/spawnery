@@ -134,6 +134,23 @@ type StorageSpec struct {
 	// +kubebuilder:default={ReadWriteOnce}
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+
+	// Keep lists the paths on the data claim, relative to /data, that survive
+	// a start. When set, each start first deletes everything on the claim that
+	// no entry matches, then renders and copies as before. Unset, everything
+	// is kept.
+	//
+	// An entry is a path whose segments may use * and ? (path.Match per
+	// segment). A matched directory is kept whole. Mount points, their parent
+	// directories and the root lost+found are never deleted. The start is
+	// refused when something no entry keeps is a level.dat* file, a region
+	// directory or an .mca file.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=256
+	// +kubebuilder:validation:items:XValidation:rule="!self.startsWith('/') && !self.contains('[') && !self.contains(']') && !self.contains('\\\\') && !self.contains('\\n') && !self.contains('\\r') && self.split('/').all(s, s != '' && s != '.' && s != '..')",message="a keep entry is a relative path without [ ] \\, line breaks or empty, . and .. segments"
+	// +optional
+	Keep []string `json:"keep,omitempty"`
 }
 
 // ServerGroupSpec describes a group of Minecraft servers.

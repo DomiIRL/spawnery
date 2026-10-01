@@ -172,3 +172,61 @@ func TestSubstituteFailsWithoutLeakingAValue(t *testing.T) {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 }
+
+// emptyMountinfo writes a mount table with no mounts.
+func emptyMountinfo(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "mountinfo")
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestPruneNeedsTheKeepEntries(t *testing.T) {
+	var stderr bytes.Buffer
+	if code := run([]string{"--prune"}, &stderr); code != 2 {
+		t.Errorf("exit code is %d, want 2 for a usage error", code)
+	}
+}
+
+func TestPruneDeletesWhatIsNotKept(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"keep/a", "junk/b"} {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(f)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+	var stderr bytes.Buffer
+	if code := run([]string{"--prune", "keep", "--mountinfo", emptyMountinfo(t)}, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "junk")); err == nil {
+		t.Error("junk survived")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "keep", "a")); err != nil {
+		t.Error("keep/a is gone")
+	}
+}
+
+func TestPruneRefusesALevelDatItWouldDelete(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "old", "level.dat"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	var stderr bytes.Buffer
+	if code := run([]string{"--prune", "world", "--mountinfo", emptyMountinfo(t)}, &stderr); code != 1 {
+		t.Errorf("exit code is %d, want 1 for a refusal", code)
+	}
+	if !strings.Contains(stderr.String(), "old/level.dat") && !strings.Contains(stderr.String(), "old") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}

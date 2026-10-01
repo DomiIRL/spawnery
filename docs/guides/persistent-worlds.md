@@ -155,6 +155,63 @@ an hour apart, what is broken is the storage and not the server, and only a
 human can fix a storage class, a quota, or a stuck `WaitForFirstConsumer`
 binding.
 
+## What survives a start
+
+A claim keeps everything a server ever wrote, and the entrypoint only adds to
+it: it renders the configuration and copies `extraFiles` and `extraPlugins` in,
+and never deletes. A plugin removed from the source stays on every claim, a
+file nobody ships any more stays as it was, a config that carried a secret
+stays too, and a world shipped by the source mixes with the stale files of the
+last one.
+
+`spec.storage.keep` turns that around into a list of what survives. Set, every
+start first deletes everything on the claim that no entry matches, then renders
+and copies as before:
+
+```yaml
+spec:
+  storage:
+    size: 10Gi
+    keep:
+      - world
+      - plugins/ExampleGame/state
+```
+
+- An entry is a path relative to `/data`. Each segment may use `*` and `?`, and
+  never `[`, `]` or `\`; `/x`, `a//b` and `..` are refused by the API.
+- A matched directory is kept whole. List the level directory and the state
+  directories of the plugins, not single dimensions or files inside them. The
+  datapacks of a world are part of it and persist with the save on purpose, so
+  new chunks generate like the old ones.
+- A mount point, the directories above it and the root `lost+found` are never
+  deleted, read-only or writable.
+- Everything under `config/` comes from the renderer and `configOverlay`, so it
+  is deleted unless `config` is listed. `paper-world-defaults.yml` is rendered
+  only when a `configOverlay` names it: set per-world defaults there, or list
+  `config` and accept that it is then never refreshed.
+- Unset, nothing is deleted.
+
+Two refusals stop the start before anything is deleted, with a message naming
+the path. Something no entry keeps that is a `level.dat*` file, a `region`
+directory or an `.mca` file is one: the list is wrong rather than the world
+disposable. A source that carries a path the list keeps is the
+other: the copy would replace saved state with the shipped file on every start,
+so keep one or ship the other.
+
+There is no dry-run field. Every path the start removes is logged as
+`spawnery: keep: removing <path>`, so the first start after a change shows what
+the list does.
+
+The list is part of the pod. Changing it on a persistent group rolls the group.
+On an on-demand group nothing rolls: a running member keeps its pod and its old
+list, and gets the new list, and the current image, at its next start, because
+the server is created from the group as it is then.
+
+Upgrade the operator and the chart before a group uses `keep`, and the image
+with them. An operator older than the field drops it from the spec, and an
+image older than the field ignores `SPAWNERY_KEEP`. Both keep everything, so the
+group runs without the cleanup it asks for and nothing says so.
+
 ## The failure clock, and why `Degraded` is late
 
 **`Degraded` is late, and that is worth knowing before it fires.** At the

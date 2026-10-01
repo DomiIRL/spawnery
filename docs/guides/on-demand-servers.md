@@ -124,6 +124,11 @@ why removing one is a human act are in
 the claims of this group are named `<group>-<key>-data` and carry the same
 labels.
 
+What a start does to a claim's content is the same too: it adds to it. A group
+that wants stale plugins, configs and worlds gone on every start lists what
+survives in `spec.storage.keep`; see
+[What survives a start](persistent-worlds.md#what-survives-a-start).
+
 Deleting an instance for good — a player's own action, with nothing left behind
 — is `deleteServer(group, key)`. A running member is stopped first, exactly as
 `stopServer` stops one; its claim is deleted at once, and Kubernetes keeps it

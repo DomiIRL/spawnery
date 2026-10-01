@@ -23,6 +23,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
@@ -483,5 +485,78 @@ func TestPlayableSlotsIsAllowedOnEveryType(t *testing.T) {
 	o.Spec.PlayableSlots = ptr.To[int32](5)
 	if err := c.Create(ctx, o); err != nil {
 		t.Fatalf("on-demand: %v", err)
+	}
+}
+
+func TestServerGroupStorageKeepAccepted(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+	keep := []string{"world", "plugins/ExampleGame/state", "world/level.dat*", "a?"}
+
+	od := onDemandGroup(ns, "keeps-on-demand")
+	od.Spec.Storage.Keep = keep
+	if err := c.Create(ctx, od); err != nil {
+		t.Fatalf("create on-demand group with keep: %v", err)
+	}
+	p := persistentGroup(ns, "keeps-persistent")
+	p.Spec.Storage.Keep = keep
+	if err := c.Create(ctx, p); err != nil {
+		t.Fatalf("create persistent group with keep: %v", err)
+	}
+}
+
+func TestServerGroupStorageKeepRefusesBadEntries(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	tests := map[string][]string{
+		"absolute":       {"/x"},
+		"parent segment": {"a/../b"},
+		"dot segment":    {"a/./b"},
+		"empty segment":  {"a//b"},
+		"trailing slash": {"a/"},
+		"bracket":        {"a[b"},
+		"closing":        {"a]b"},
+		"backslash":      {`a\b`},
+		"too long":       {strings.Repeat("a", 257)},
+		"newline":        {"a\nb"},
+		"carriage":       {"a\rb"},
+		"one bad entry":  {"world", "a//b"},
+	}
+	for name, keep := range tests {
+		t.Run(name, func(t *testing.T) {
+			g := onDemandGroup(ns, "keep-"+strings.ReplaceAll(name, " ", "-"))
+			g.Spec.Storage.Keep = keep
+			err := c.Create(ctx, g)
+			if err == nil {
+				t.Fatalf("keep %q was accepted", keep)
+			}
+			if name != "too long" && !strings.Contains(err.Error(), "a keep entry is a relative path") {
+				t.Errorf("err = %v, want the keep entry message", err)
+			}
+		})
+	}
+}
+
+// keep is omitempty, so an empty list cannot be sent through the typed client.
+func TestServerGroupStorageKeepRefusesAnEmptyList(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	raw, err := runtime.DefaultUnstructuredConverter.ToUnstructured(onDemandGroup(ns, "keeps-nothing"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &unstructured.Unstructured{Object: raw}
+	u.SetGroupVersionKind(spawneryv1alpha1.GroupVersion.WithKind("ServerGroup"))
+	if err := unstructured.SetNestedSlice(u.Object, []any{}, "spec", "storage", "keep"); err != nil {
+		t.Fatal(err)
+	}
+	err = c.Create(ctx, u)
+	if err == nil {
+		t.Fatal("an empty keep list was accepted")
+	}
+	if !strings.Contains(err.Error(), "spec.storage.keep") {
+		t.Errorf("err = %v, want it to name spec.storage.keep", err)
 	}
 }

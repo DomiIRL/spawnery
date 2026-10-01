@@ -27,10 +27,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-)
 
-// Pair is a source tree and where the entrypoint copied it.
-type Pair struct{ From, Into string }
+	"github.com/spawnery/spawnery/internal/sourcetree"
+)
 
 var placeholder = regexp.MustCompile(`\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}`)
 
@@ -42,20 +41,9 @@ var textExtensions = map[string]bool{
 // Trees fills, in every text file below each Into that also exists below its
 // From, the placeholders whose name begins with prefix. A missing variable is
 // an error naming the file and the placeholder, never a value.
-func Trees(pairs []Pair, prefix string, lookup func(string) (string, bool)) error {
+func Trees(pairs []sourcetree.Pair, prefix string, lookup func(string) (string, bool)) error {
 	for _, p := range pairs {
-		err := filepath.WalkDir(p.From, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) && path == p.From {
-					return fs.SkipAll
-				}
-				return err
-			}
-			if d.IsDir() && d.Name() == "lost+found" && filepath.Dir(path) == filepath.Clean(p.From) {
-				// mkfs's own directory on an ext4 claim, root-owned and 0700;
-				// the entrypoint skips it by name for the same reason.
-				return fs.SkipDir
-			}
+		err := p.Walk(func(path string, d fs.DirEntry) error {
 			if d.IsDir() || !d.Type().IsRegular() || !textExtensions[strings.ToLower(filepath.Ext(path))] {
 				return nil
 			}
