@@ -128,7 +128,8 @@ failing. Then:
 4. **Failing does not block.** A group whose `BackingOff` or `Degraded` is True
    neither holds a place nor gates a later stage. Where the order carries a
    dependency, this means a proxy that cannot start does not hold the network
-   still; the dependency is a preference, not a guarantee.
+   still; the dependency is a preference, not a guarantee. A group at its
+   `maxReplicas` ceiling whose cold start is refused gates nothing either.
 
 ### 3.3 Persistent groups
 
@@ -136,8 +137,9 @@ A persistent group rolls one ordinal at a time and never surges. It takes
 part in stages and not in the budget:
 
 - Its state is `Waiting` while it has a stale ordinal and none is down,
-  `Begun` once one is down (`takedownInFlight`) or a current server stands
-  beside stale ones, and empty when no stale ordinal is left. It has no
+  `Begun` once a stale ordinal below `replicas` is down (a surplus ordinal or
+  a current one leaving does not count) and for as long as stale ordinals
+  remain, and empty when no stale ordinal is left. It has no
   `Deferred`: nothing of it waits for players without also being replaced.
 - It publishes that state in `status.changeover`, which it does not today.
 - `DecidePersistentSize` gets `ChangeoverRefused bool`. When set, the stale

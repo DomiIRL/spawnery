@@ -142,9 +142,9 @@ spec:
 Optional, minimum `1`. Unset means no cap — today's behaviour, unchanged.
 
 A group is changing over from the moment it has a stale server (a stale pod,
-for a proxy group) until the last one is gone, including one that is draining
-or terminating, and it holds its place for that whole window — never paused
-halfway. A group that must change over but has not begun waits its turn;
+for a proxy group) until it is `Deferred` (see [Stages](#stages)) or its last
+stale server or pod is gone, and it holds its place for that window — never
+paused halfway. A group that must change over but has not begun waits its turn;
 groups are admitted by stage, then by name (see [Stages](#stages) below).
 While it waits, nothing about it changes except the roll: its stale servers
 keep running and keep taking players, and only the cold start (for a proxy
@@ -215,7 +215,10 @@ is still changing over; groups of one stage change over together, within the
 budget. The gate applies whether or not a budget is set — an unset budget
 caps nothing, but it does not reorder anything either. A group whose
 changeover is failing (`BackingOff` or `Degraded`) gates nothing, the same as
-for the budget.
+for the budget, and so does one whose cold start the `maxReplicas` ceiling
+refuses; its `ScalingLimited` condition says why. A group gated by its stage
+that builds a server for player demand has begun, and is not paused, the same
+as with the budget.
 
 A group stops gating once its new generation stands, regardless of what its
 old one is still doing. `status.changeover` reports this as `Deferred`:
