@@ -31,6 +31,19 @@ PAPER_HOME="${SPAWNERY_PAPER_HOME:-/opt/paper}"
 # image/entrypoint_test.go twice.
 SERVER_JAR="${SPAWNERY_SERVER_JAR:-$PAPER_HOME/paper.jar}"
 
+MOUNTINFO="${SPAWNERY_MOUNTINFO:-/proc/self/mountinfo}"
+FILE_SOURCE="${SPAWNERY_FILE_SOURCE:-/var/run/spawnery/files}"
+PLUGIN_SOURCE="${SPAWNERY_PLUGIN_SOURCE:-/var/run/spawnery/plugins}"
+
+# spec.storage.keep: delete what the claim holds beyond the keep list. First,
+# so that everything below writes into a claim that is already clean and a
+# refusal leaves it untouched. It cannot run at stop: the JVM is PID 1 and a
+# hard kill runs no hook.
+if [ -n "${SPAWNERY_KEEP:-}" ]; then
+	spawnery-config --prune "$SPAWNERY_KEEP" --mountinfo "$MOUNTINFO" \
+		--pair "$FILE_SOURCE=." --pair "$PLUGIN_SOURCE=plugins" || exit 1
+fi
+
 # Mojang's EULA. Running this image is accepting it, and the README says so
 # rather than leaving it buried here.
 printf 'eula=true\n' >eula.txt
@@ -49,7 +62,6 @@ spawnery-config --flavor paper
 # A read-only spec.mounts entry under /data is a writer the scans below cannot
 # see: a copy onto it dies with a bare "Read-only file system". mountinfo writes
 # a space in a path as \040, which printf %b turns back.
-MOUNTINFO="${SPAWNERY_MOUNTINFO:-/proc/self/mountinfo}"
 readonly_mounts_below_here() {
 	[ -r "$MOUNTINFO" ] || return 0
 	here=$(pwd -P)
@@ -97,7 +109,6 @@ refuse_mounted() {
 #
 # lost+found and the two globs are the plugin copy's reasoning exactly; see
 # the comment on PLUGIN_SOURCE below for the measurements behind both.
-FILE_SOURCE="${SPAWNERY_FILE_SOURCE:-/var/run/spawnery/files}"
 if [ -d "$FILE_SOURCE" ]; then
 	# The renderer's own files, and the directory extraPlugins owns. A Paper
 	# server does not refuse velocity.toml or lang/: nothing writes them here,
@@ -181,7 +192,6 @@ fi
 # cannot displace the one the operator shipped -- otherwise somebody pinning an
 # older agent would leave the operator talking to a version it never published,
 # with every object in the cluster saying the right thing.
-PLUGIN_SOURCE="${SPAWNERY_PLUGIN_SOURCE:-/var/run/spawnery/plugins}"
 if [ -d "$PLUGIN_SOURCE" ]; then
 	refuse_mounted "$PLUGIN_SOURCE" plugins extraPlugins || exit 1
 	mkdir -p plugins

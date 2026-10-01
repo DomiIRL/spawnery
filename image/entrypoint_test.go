@@ -52,7 +52,8 @@ func stubTools(t *testing.T, configExit int) string {
 	}
 
 	configScript := fmt.Sprintf("#!/bin/sh\nprintf 'SPAWNERY_CONFIG_ARGV: %%s\\n' \"$*\"\n"+
-		"if [ \"$1\" = --substitute ]; then exit \"${STUB_SUBSTITUTE_EXIT:-0}\"; fi\nexit %d\n", configExit)
+		"if [ \"$1\" = --substitute ]; then exit \"${STUB_SUBSTITUTE_EXIT:-0}\"; fi\n"+
+		"if [ \"$1\" = --prune ]; then exit \"${STUB_PRUNE_EXIT:-0}\"; fi\nexit %d\n", configExit)
 	if err := os.WriteFile(filepath.Join(dir, "spawnery-config"), []byte(configScript), 0o755); err != nil {
 		t.Fatalf("write spawnery-config stub: %v", err)
 	}
@@ -866,5 +867,43 @@ func TestEntrypointStopsIfSubstitutionRefuses(t *testing.T) {
 	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_SUBSTITUTION_PREFIX=SECRET_", "STUB_SUBSTITUTE_EXIT=1")
 	if err == nil || strings.Contains(out, "JAVA_ARGV") {
 		t.Errorf("the JVM started after a refusal:\n%s", out)
+	}
+}
+
+func TestPruneRunsOnlyWithKeepEntriesAndFirst(t *testing.T) {
+	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=worlds/world\nplugins/Challenges/internal")
+	if err != nil {
+		t.Fatalf("entrypoint: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "SPAWNERY_CONFIG_ARGV: --prune worlds/world\nplugins/Challenges/internal --mountinfo ") {
+		t.Errorf("no prune call:\n%s", out)
+	}
+	if strings.Index(out, "--prune") > strings.Index(out, "--flavor paper") {
+		t.Error("prune ran after the renderer")
+	}
+	out, err = runEntrypoint(t, t.TempDir(), 0)
+	if err != nil {
+		t.Fatalf("entrypoint: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "--prune") {
+		t.Errorf("prune ran without keep entries:\n%s", out)
+	}
+}
+
+func TestPruneRunsBeforeTheEulaIsWritten(t *testing.T) {
+	dir := t.TempDir()
+	out, err := runEntrypoint(t, dir, 0, "SPAWNERY_KEEP=worlds", "STUB_PRUNE_EXIT=1")
+	if err == nil {
+		t.Fatalf("entrypoint succeeded after a refusing prune:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "eula.txt")); err == nil {
+		t.Error("eula.txt was written before prune ran")
+	}
+}
+
+func TestEntrypointStopsIfPruneRefuses(t *testing.T) {
+	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=worlds", "STUB_PRUNE_EXIT=1")
+	if err == nil || strings.Contains(out, "JAVA_ARGV") || strings.Contains(out, "--flavor paper") {
+		t.Errorf("the start went on after a refusal:\n%s", out)
 	}
 }
