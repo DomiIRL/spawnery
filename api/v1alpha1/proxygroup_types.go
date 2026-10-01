@@ -239,8 +239,9 @@ type ProxyGroupSpec struct {
 	// incident rather than during one. The value reaches the pod as
 	// terminationGracePeriodSeconds, so it is part of the rendered pod the
 	// group's hash covers -- which means raising a drain timeout, the thing an
-	// operator does in the middle of an incident, adds a surge pod and a full
-	// replacement cycle on top of whatever prompted it.
+	// operator does in the middle of an incident, rolls the group blue/green
+	// on top of whatever prompted it: a replacement for every proxy, not just
+	// one.
 	//
 	// Raising it while a drain is already in flight otherwise behaves: the
 	// marked pod keeps its mark, being now stale as well as draining, and the
@@ -314,7 +315,7 @@ type ProxyGroupSpec struct {
 	// and JAVA_TOOL_OPTIONS is the same seam: the Velocity entrypoint execs
 	// java with its own flag list too. It is in podspec.DesiredProxyHash for
 	// the same reason -- editing it rolls the group through the ordinary
-	// surge-1 path, and with the same limit: a valueFrom reference is
+	// blue/green path, and with the same limit: a valueFrom reference is
 	// digested, the value behind it is not.
 	// +optional
 	// +listType=map

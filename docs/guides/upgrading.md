@@ -14,8 +14,8 @@ kubectl get pods -n <ns> -l spawnery.cloud/role=proxy -L spawnery.cloud/pod-hash
 Two distinct values inside one group means that group is mid-roll; one value
 everywhere means done or never started.
 
-**The group's status will not tell you.** The surge pod comes up before any
-old pod is withdrawn, so `readyReplicas` holds at `replicas` and the phase
+**The group's status will not tell you.** The replacement pods come up before
+any old pod is withdrawn, so `readyReplicas` holds at `replicas` and the phase
 reads `Ready` throughout, exactly as when nothing is happening.
 
 ## What an upgrade rolls, with no spec edited
@@ -35,9 +35,10 @@ different namespace, or restarting it with a different `--operator-namespace`
 or `POD_NAMESPACE`, rolls the whole fleet with no image, no rendering change
 and no spec edit involved.
 
-Every group starts within a reconcile of the new operator coming up, one pod
-at a time per group, and all groups at once unless the Network caps
-concurrent changeovers. Each replaced pod takes no new connections and is
+Every group starts within a reconcile of the new operator coming up: a server
+group one pod at a time, a proxy group blue/green across every stale pod at
+once, and every group at once unless the Network caps concurrent
+changeovers. Each replaced pod takes no new connections and is
 stopped once its players have left, however long that takes; nobody is
 disconnected unless the group sets `spec.update.maxStaleSeconds`, the pod's
 node is leaving, or its player count cannot be read for
