@@ -684,8 +684,8 @@ func TestAProxyGroupWithTransferDefaultsItsDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildProxyPod: %v", err)
 	}
-	if got := proxyEnv(pod, EnvTransferForceAfterSeconds); got != "300" {
-		t.Errorf("%s = %q, want 300", EnvTransferForceAfterSeconds, got)
+	if got := proxyEnv(pod, EnvTransferForceAfterSeconds); got != "120" {
+		t.Errorf("%s = %q, want 120", EnvTransferForceAfterSeconds, got)
 	}
 }
 

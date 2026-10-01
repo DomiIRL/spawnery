@@ -283,7 +283,7 @@ ProxyGroupSpec describes the Velocity layer of a network.
 <tr><td><code>update</code></td><td>object</td><td align="center"></td><td></td><td>Update bounds how long a draining proxy may wait for its players.</td></tr>
 <tr><td><code>update.maxStaleSeconds</code></td><td>integer (int32) (&gt;= 0)</td><td align="center"></td><td></td><td>MaxStaleSeconds disconnects the players left on a draining proxy after this many seconds. 0, the default, means a drain waits for its players: the proxy takes no new connections and stops once empty.</td></tr>
 <tr><td><code>update.transfer</code></td><td>object</td><td align="center"></td><td></td><td>Transfer moves players to another proxy instead of waiting for them.</td></tr>
-<tr><td><code>update.transfer.forceAfterSeconds</code></td><td>integer (int32) (&gt;= 0)</td><td align="center"></td><td></td><td>ForceAfterSeconds is how long a leaving proxy waits before it transfers players who have not changed server. Default 300.</td></tr>
+<tr><td><code>update.transfer.forceAfterSeconds</code></td><td>integer (int32) (&gt;= 0)</td><td align="center"></td><td></td><td>ForceAfterSeconds is how long a leaving proxy waits before it transfers players who have not changed server, counted from when its agent first sees it leaving. Default 120; keep it below drain.timeoutSeconds and any maxStaleSeconds.</td></tr>
 </tbody></table></div>
 
 ### status

@@ -1901,7 +1901,9 @@ spec:
                       forceAfterSeconds:
                         description: |-
                           ForceAfterSeconds is how long a leaving proxy waits before it
-                          transfers players who have not changed server. Default 300.
+                          transfers players who have not changed server, counted from when its
+                          agent first sees it leaving. Default 120; keep it below
+                          drain.timeoutSeconds and any maxStaleSeconds.
                         format: int32
                         minimum: 0
                         type: integer

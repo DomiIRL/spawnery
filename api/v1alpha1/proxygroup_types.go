@@ -215,7 +215,9 @@ type ProxyUpdateSpec struct {
 // its door. Setting it rolls the group once.
 type ProxyTransferSpec struct {
 	// ForceAfterSeconds is how long a leaving proxy waits before it
-	// transfers players who have not changed server. Default 300.
+	// transfers players who have not changed server, counted from when its
+	// agent first sees it leaving. Default 120; keep it below
+	// drain.timeoutSeconds and any maxStaleSeconds.
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	ForceAfterSeconds *int32 `json:"forceAfterSeconds,omitempty"`
@@ -503,8 +505,10 @@ func (g *ProxyGroup) MaxStale() time.Duration {
 }
 
 // defaultTransferForceAfter is spec.update.transfer.forceAfterSeconds when
-// transfer is set but the field itself is not.
-const defaultTransferForceAfter = 300 * time.Second
+// transfer is set but the field itself is not. Well below the default drain
+// timeout of 300 s, because the agent learns it is leaving up to one resync
+// after the drain clock starts.
+const defaultTransferForceAfter = 120 * time.Second
 
 // TransferForceAfter is spec.update.transfer.forceAfterSeconds and whether
 // transfer is on at all. (0, false) when spec.update.transfer is unset.

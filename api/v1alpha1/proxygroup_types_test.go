@@ -57,7 +57,7 @@ func TestTransferForceAfter(t *testing.T) {
 	}{
 		{"no update", nil, 0, false},
 		{"update without transfer", &ProxyUpdateSpec{}, 0, false},
-		{"transfer with defaults", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{}}, 300 * time.Second, true},
+		{"transfer with defaults", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{}}, 120 * time.Second, true},
 		{"transfer at once", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{ForceAfterSeconds: ptr.To[int32](0)}}, 0, true},
 		{"transfer after 90", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{ForceAfterSeconds: ptr.To[int32](90)}}, 90 * time.Second, true},
 	} {
