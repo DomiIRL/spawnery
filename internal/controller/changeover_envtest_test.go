@@ -197,6 +197,113 @@ func TestARollingUpdateGroupReleasesItsPlaceOnceDeferred(t *testing.T) {
 	}
 }
 
+func TestALaterStageWaitsWithTheBudgetUnset(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.createEphemeralGroupLike(t, "arena")
+	for _, name := range []string{"arena", "lobby"} {
+		f.reconcileNamedGroup(t, r, name)
+		f.readyAllServersOf(t, name)
+	}
+	f.setStage(t, "arena", 10)
+	f.setImage(t, "arena", nextImage)
+	f.setImage(t, "lobby", nextImage)
+
+	f.reconcileNamedGroup(t, r, "lobby")
+	f.reconcileNamedGroup(t, r, "arena")
+
+	if n := len(f.serverNamesOfGroup(t, "arena")); n != 1 {
+		t.Fatalf("arena has %d servers, want 1: stage 10 waits for lobby", n)
+	}
+	if c := f.progressing(t, "arena"); c.Reason != spawneryv1alpha1.ReasonWaitingForEarlierStage ||
+		c.Message != "waiting for stage 0: lobby" {
+		t.Fatalf("arena Progressing = %s %q", c.Reason, c.Message)
+	}
+
+	f.finishChangeover(t, r, "lobby")
+	f.reconcileNamedGroup(t, r, "arena")
+	if n := len(f.serverNamesOfGroup(t, "arena")); n != 2 {
+		t.Fatalf("arena has %d servers, want 2 once lobby is through", n)
+	}
+}
+
+func TestARollingUpdateGroupReleasesTheNextStageOnceDeferred(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.createEphemeralGroupLike(t, "arena")
+	for _, name := range []string{"arena", "lobby"} {
+		f.reconcileNamedGroup(t, r, name)
+		f.readyAllServersOf(t, name)
+	}
+	stale := f.serverNamesOfGroup(t, "lobby")
+	f.setStage(t, "arena", 10)
+	f.setImage(t, "arena", nextImage)
+	f.setImage(t, "lobby", nextImage)
+
+	f.reconcileNamedGroup(t, r, "lobby")
+	f.reconcileNamedGroup(t, r, "arena")
+	if n := len(f.serverNamesOfGroup(t, "arena")); n != 1 {
+		t.Fatalf("arena has %d servers, want 1: lobby is still changing over", n)
+	}
+
+	f.bringUpCurrent(t, "lobby")
+	f.reconcileNamedGroup(t, r, "lobby")
+	for _, name := range stale {
+		srv := f.server(name)
+		if !srv.Spec.Retire {
+			t.Fatalf("stale %s not retired once its replacement is Ready", name)
+		}
+		f.setPhase(t, srv, phase.Retiring)
+	}
+	f.reconcileNamedGroup(t, r, "lobby")
+	if got := f.serverGroup(t, "lobby").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+		t.Fatalf("lobby status.changeover = %q with its stale server retiring, want Deferred", got)
+	}
+
+	f.reconcileNamedGroup(t, r, "arena")
+	if n := len(f.serverNamesOfGroup(t, "arena")); n != 2 {
+		t.Fatalf("arena has %d servers, want 2: lobby is Deferred and holds stage 0 no longer", n)
+	}
+}
+
+func TestAPersistentGroupWaitsForItsStage(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.createPersistentGroup(t, "world", 1)
+	for _, name := range []string{"lobby", "world"} {
+		f.reconcileNamedGroup(t, r, name)
+		f.readyAllServersOf(t, name)
+	}
+	f.setStage(t, "world", 10)
+	f.setImage(t, "lobby", nextImage)
+	f.setImage(t, "world", nextImage)
+
+	f.reconcileNamedGroup(t, r, "lobby")
+	f.reconcileNamedGroup(t, r, "world")
+
+	if srv := f.server("world-0"); !srv.DeletionTimestamp.IsZero() || srv.Status.Phase == string(phase.Draining) {
+		t.Fatalf("world-0 is being taken down while stage 0 is in flight")
+	}
+	if got := f.serverGroup(t, "world").Status.Changeover; got != spawneryv1alpha1.ChangeoverWaiting {
+		t.Fatalf("world status.changeover = %q, want Waiting", got)
+	}
+	if c := f.progressing(t, "world"); c.Reason != spawneryv1alpha1.ReasonWaitingForEarlierStage ||
+		c.Message != "waiting for stage 0: lobby" {
+		t.Fatalf("world Progressing = %s %q", c.Reason, c.Message)
+	}
+
+	f.finishChangeover(t, r, "lobby")
+	f.reconcileNamedGroup(t, r, "world")
+
+	if srv, present := f.serverIfPresent("world-0"); present && srv.DeletionTimestamp.IsZero() &&
+		srv.Status.Phase != string(phase.Draining) {
+		t.Fatalf("world-0 phase %s is not being taken down once lobby is through", srv.Status.Phase)
+	}
+	if got := f.serverGroup(t, "world").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
+		t.Fatalf("world status.changeover = %q, want Begun", got)
+	}
+}
+
 func TestAWhenEmptyGroupStaysDeferredThroughAReadinessLoss(t *testing.T) {
 	f := newFixture(t)
 	r := groupReconciler(f)
@@ -239,6 +346,15 @@ func (f *fixture) setChangeoverBudget(t *testing.T, n int32) {
 		t.Fatalf("update network: %v", err)
 	}
 	f.network = net
+}
+
+func (f *fixture) setStage(t *testing.T, group string, stage int32) {
+	t.Helper()
+	g := f.serverGroup(t, group)
+	g.Spec.ChangeoverStage = stage
+	if err := f.c.Update(f.ctx, g); err != nil {
+		t.Fatalf("update ServerGroup %s: %v", group, err)
+	}
 }
 
 func (f *fixture) createEphemeralGroupLike(t *testing.T, name string) *spawneryv1alpha1.ServerGroup {

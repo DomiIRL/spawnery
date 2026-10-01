@@ -348,11 +348,16 @@ func TestNetworkCountsChangeoversInFlightAndWaiting(t *testing.T) {
 	if err := f.c.Status().Update(f.ctx, waiting); err != nil {
 		t.Fatalf("set arena's changeover to Waiting: %v", err)
 	}
+	persistent := f.createPersistentGroup(t, "world", 1)
+	persistent.Status.Changeover = spawneryv1alpha1.ChangeoverBegun
+	if err := f.c.Status().Update(f.ctx, persistent); err != nil {
+		t.Fatalf("set world's changeover to Begun: %v", err)
+	}
 
 	f.reconcileNetwork(t, r, "production")
 
 	if got := testutil.ToFloat64(ChangeoversInFlight.WithLabelValues(f.ns, "production")); got != 1 {
-		t.Errorf("ChangeoversInFlight = %v, want 1", got)
+		t.Errorf("ChangeoversInFlight = %v, want 1: a persistent group holds no place", got)
 	}
 	if got := testutil.ToFloat64(ChangeoversWaiting.WithLabelValues(f.ns, "production")); got != 1 {
 		t.Errorf("ChangeoversWaiting = %v, want 1", got)

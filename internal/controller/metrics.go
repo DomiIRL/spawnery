@@ -22,8 +22,9 @@ import (
 )
 
 // ChangeoversInFlight is the groups of a network AdmitChangeovers currently
-// holds a place for: Begun and not failing, the same holder rule it uses.
-// ChangeoversWaiting is the groups it is making wait for one.
+// holds a place for: Begun, not failing and not persistent, the same holder
+// rule it uses. ChangeoversWaiting is the groups it is making wait for one or
+// for an earlier stage.
 //
 // NetworkReconciler.countGroups sets both on every pass, over the same
 // server and proxy groups it already lists to sum OnlinePlayers -- so a
@@ -32,12 +33,12 @@ import (
 var (
 	ChangeoversInFlight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "spawnery_network_changeovers_in_flight",
-		Help: "Groups of the network currently holding a changeover budget place.",
+		Help: "Groups of the network holding a changeover budget place.",
 	}, []string{"namespace", "network"})
 
 	ChangeoversWaiting = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "spawnery_network_changeovers_waiting",
-		Help: "Groups of the network waiting for a changeover budget place.",
+		Help: "Groups of the network waiting for a changeover budget place or an earlier stage.",
 	}, []string{"namespace", "network"})
 )
 

@@ -369,3 +369,36 @@ func TestOwnPersistentChangeover(t *testing.T) {
 		})
 	}
 }
+
+func TestChangeoverRefused(t *testing.T) {
+	lobby := ChangeoverView{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverBegun}
+	arena := ChangeoverView{Kind: "ServerGroup", Name: "arena", State: spawneryv1alpha1.ChangeoverWaiting}
+	failingArena := arena
+	failingArena.Failing = true
+	laterArena := arena
+	laterArena.Stage = 10
+	failingLaterArena := laterArena
+	failingLaterArena.Failing = true
+	for _, tc := range []struct {
+		name     string
+		siblings []ChangeoverView
+		budget   int32
+		self     ChangeoverView
+		want     bool
+	}{
+		{"not waiting is never refused", []ChangeoverView{lobby}, 1, lobby, false},
+		{"no budget, same stage", []ChangeoverView{lobby}, 0, arena, false},
+		{"no budget, a failing self is not refused", []ChangeoverView{lobby}, 0, failingArena, false},
+		{"no budget, an earlier stage in flight refuses", []ChangeoverView{lobby}, 0, laterArena, true},
+		{"no budget, an earlier stage refuses a failing self too", []ChangeoverView{lobby}, 0, failingLaterArena, true},
+		{"budget spent refuses", []ChangeoverView{lobby}, 1, arena, true},
+		{"budget free admits", []ChangeoverView{lobby}, 2, arena, false},
+		{"budget set, a failing self is admitted by nothing", nil, 2, failingArena, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := changeoverRefused(tc.siblings, tc.budget, tc.self); got != tc.want {
+				t.Errorf("changeoverRefused = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -521,7 +522,7 @@ func (r *ServerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	var siblings []ChangeoverView
 	budget := network.ChangeoverBudget()
-	if group.IsEphemeral() && mayResize {
+	if !group.IsOnDemand() && mayResize {
 		siblings, err = changeoverSiblings(ctx, r, group.Namespace, network.Name, "ServerGroup", group.Name)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -531,11 +532,12 @@ func (r *ServerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	var waitingFor []string
+	var wait ChangeoverWait
 	if decision.ChangeoverWaiting {
-		// A refused group took no place, so the siblings alone are admitted
-		// exactly as they were with it.
-		waitingFor = changeoverHolders(siblings, AdmitChangeovers(siblings, budget), "ServerGroup", group.Name)
+		wait = describeWait(append(slices.Clip(siblings), ChangeoverView{
+			Kind: "ServerGroup", Name: group.Name, State: spawneryv1alpha1.ChangeoverWaiting,
+			Stage: group.Spec.ChangeoverStage, Persistent: !group.IsEphemeral(),
+		}), budget, ChangeoverView{Kind: "ServerGroup", Name: group.Name, Stage: group.Spec.ChangeoverStage})
 	}
 	sized := mayResize
 
@@ -800,7 +802,7 @@ func (r *ServerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if decision.FloorHeld && (decision.FloorBlocked || (decision.Create > 0 && !backoff.MayCreate)) {
 		floor = FloorReport{Joinable: decision.Joinable, Min: group.UpdateMinAvailable()}
 	}
-	reportProgressing(group, views, podHash, waitingFor, floor)
+	reportProgressing(group, views, podHash, wait, floor)
 	// This group's own answer about the forwarding secret. Unlike the proxy
 	// side, this controller works in Servers and holds no pods, so it costs a
 	// list of its own -- label-scoped to this group, over the manager's warm
@@ -923,6 +925,11 @@ func (r *ServerGroupReconciler) size(
 	var decision SizeDecision
 	was := group.Status.Changeover
 	group.Status.Changeover = spawneryv1alpha1.ChangeoverNone
+	self := ChangeoverView{
+		Kind: "ServerGroup", Name: group.Name,
+		Failing: changeoverFailing(group.Status.Conditions),
+		Stage:   group.Spec.ChangeoverStage, Persistent: !group.IsEphemeral(),
+	}
 	switch {
 	case !mayResize:
 		// No size is decided, and the condemnation attached below is the whole
@@ -931,10 +938,7 @@ func (r *ServerGroupReconciler) size(
 	case group.IsEphemeral():
 		if group.Spec.Scaling != nil {
 			own := ownServerChangeover(views, podHash, int32(len(pendingCreates)), group.UpdateWhenEmpty(), was)
-			admitted := AdmitChangeovers(append(siblings, ChangeoverView{
-				Kind: "ServerGroup", Name: group.Name, State: own,
-				Failing: changeoverFailing(group.Status.Conditions),
-			}), budget)
+			self.State = own
 			decision = DecideSize(ScalingInputs{
 				Views:         views,
 				MinReplicas:   group.Spec.Scaling.MinReplicas,
@@ -954,8 +958,7 @@ func (r *ServerGroupReconciler) size(
 				PendingDeletes: pendingDeletes,
 				PendingRetires: pendingRetires,
 
-				ChangeoverRefused: budget > 0 && own == spawneryv1alpha1.ChangeoverWaiting &&
-					!admitted[changeoverKey("ServerGroup", group.Name)],
+				ChangeoverRefused: changeoverRefused(siblings, budget, self),
 			})
 			switch {
 			// The ceiling, not the budget, holds this group; a place would
@@ -978,14 +981,24 @@ func (r *ServerGroupReconciler) size(
 		// views that carry no spec.ordinal, which is a rule about adopted
 		// persistent servers and no promise made to this type.
 	default:
+		own := ownPersistentChangeover(views, podHash,
+			takedownInFlight(PersistentInputs{Views: views, PendingDeletes: pendingDeletes}), was)
+		self.State = own
+		refused := changeoverRefused(siblings, budget, self)
 		decision = DecidePersistentSize(PersistentInputs{
-			Group:          group.Name,
-			Replicas:       group.DesiredReplicas(),
-			PodHash:        podHash,
-			Views:          views,
-			PendingCreates: pendingCreates,
-			PendingDeletes: pendingDeletes,
+			Group:             group.Name,
+			Replicas:          group.DesiredReplicas(),
+			PodHash:           podHash,
+			Views:             views,
+			PendingCreates:    pendingCreates,
+			PendingDeletes:    pendingDeletes,
+			ChangeoverRefused: refused,
 		})
+		decision.ChangeoverWaiting = refused
+		group.Status.Changeover = own
+		if own == spawneryv1alpha1.ChangeoverWaiting && decision.DeleteReason == "StaleSpec" {
+			group.Status.Changeover = spawneryv1alpha1.ChangeoverBegun
+		}
 	}
 
 	// Condemnation is attached here, once, for every path out of the switch
@@ -1287,7 +1300,7 @@ type FloorReport struct {
 	Joinable, Min int32
 }
 
-func reportProgressing(group *spawneryv1alpha1.ServerGroup, views []ServerView, podHash string, waitingFor []string, floor FloorReport) {
+func reportProgressing(group *spawneryv1alpha1.ServerGroup, views []ServerView, podHash string, wait ChangeoverWait, floor FloorReport) {
 	var starting, older int32
 	// A retiree that will never retire. spec.retire is the update budget's one
 	// signal (selectRetirement), and it survives the server failing -- so a
@@ -1338,10 +1351,10 @@ func reportProgressing(group *spawneryv1alpha1.ServerGroup, views []ServerView, 
 
 	condition := metav1.Condition{Type: spawneryv1alpha1.ConditionProgressing}
 	switch {
-	case len(waitingFor) > 0:
+	case wait.Reason != "":
 		condition.Status = metav1.ConditionTrue
-		condition.Reason = spawneryv1alpha1.ReasonWaitingForChangeoverBudget
-		condition.Message = "waiting for a changeover place; changing over: " + strings.Join(waitingFor, ", ")
+		condition.Reason = wait.Reason
+		condition.Message = wait.Message
 	// Before the two counts below, because it is the answer to the question
 	// they raise. A group in this state reports older > 0 for as long as the
 	// retention window lasts and says "still being replaced", which is true

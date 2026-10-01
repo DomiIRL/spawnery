@@ -530,7 +530,7 @@ func (r *NetworkReconciler) countGroups(ctx context.Context, network *spawneryv1
 		serverGroupCount++
 		players += g.Status.OnlinePlayers
 		switch {
-		case g.Status.Changeover == spawneryv1alpha1.ChangeoverBegun && !changeoverFailing(g.Status.Conditions):
+		case g.IsEphemeral() && g.Status.Changeover == spawneryv1alpha1.ChangeoverBegun && !changeoverFailing(g.Status.Conditions):
 			inFlight++
 		case g.Status.Changeover == spawneryv1alpha1.ChangeoverWaiting:
 			waiting++

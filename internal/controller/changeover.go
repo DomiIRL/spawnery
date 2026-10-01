@@ -142,6 +142,21 @@ func describeWait(groups []ChangeoverView, budget int32, self ChangeoverView) Ch
 	}
 }
 
+// changeoverRefused reports whether self, a group that must change over, may
+// not begin. Without a budget only the stage gate refuses: a failing self is
+// admitted by nothing, and the pass on which its backoff has just expired still
+// reads BackingOff True from the last one.
+func changeoverRefused(siblings []ChangeoverView, budget int32, self ChangeoverView) bool {
+	if self.State != spawneryv1alpha1.ChangeoverWaiting {
+		return false
+	}
+	if budget < 1 {
+		_, _, gated := earliestStageBefore(siblings, self.Stage)
+		return gated
+	}
+	return !AdmitChangeovers(append(slices.Clip(siblings), self), budget)[changeoverKey(self.Kind, self.Name)]
+}
+
 func changeoverFailing(conditions []metav1.Condition) bool {
 	return meta.IsStatusConditionTrue(conditions, spawneryv1alpha1.ConditionBackingOff) ||
 		meta.IsStatusConditionTrue(conditions, spawneryv1alpha1.ConditionDegraded)
@@ -159,12 +174,13 @@ func changeoverSiblings(
 	}
 	for i := range servers.Items {
 		g := &servers.Items[i]
-		if g.Spec.NetworkRef.Name != network || (selfKind == "ServerGroup" && g.Name == selfName) {
+		if g.Spec.NetworkRef.Name != network || (selfKind == "ServerGroup" && g.Name == selfName) || g.IsOnDemand() {
 			continue
 		}
 		views = append(views, ChangeoverView{
 			Kind: "ServerGroup", Name: g.Name,
 			State: g.Status.Changeover, Failing: changeoverFailing(g.Status.Conditions),
+			Stage: g.Spec.ChangeoverStage, Persistent: !g.IsEphemeral(),
 		})
 	}
 	proxies := &spawneryv1alpha1.ProxyGroupList{}
@@ -179,6 +195,7 @@ func changeoverSiblings(
 		views = append(views, ChangeoverView{
 			Kind: "ProxyGroup", Name: g.Name,
 			State: g.Status.Changeover, Failing: changeoverFailing(g.Status.Conditions),
+			Stage: g.Spec.ChangeoverStage,
 		})
 	}
 	return views, nil

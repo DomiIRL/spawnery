@@ -84,7 +84,8 @@ type ScalingInputs struct {
 	// the type comment above for the hazard that filtering it would create.
 	PodHash string
 	// ChangeoverRefused withholds the cold start: the network's changeover
-	// budget is spent by other groups. Demand is still answered.
+	// budget is spent by other groups, or an earlier stage is still changing
+	// over. Demand is still answered.
 	ChangeoverRefused bool
 	// MaxUnavailable is spec.update.maxUnavailable: how many servers this
 	// update may have unavailable at once.
@@ -161,8 +162,8 @@ type SizeDecision struct {
 	// this field is the explicit signal the caller that builds the
 	// operator-facing ScalingLimited message needs to tell them apart.
 	ColdStartBlocked bool
-	// ChangeoverWaiting is a cold start withheld by the network's changeover
-	// budget.
+	// ChangeoverWaiting is a cold start or a stale takedown withheld by the
+	// network's changeover budget or an earlier stage.
 	ChangeoverWaiting bool
 	// FloorHeld is true when a changeover retirement was declined only
 	// because it would leave fewer than MinAvailable joinable servers.
