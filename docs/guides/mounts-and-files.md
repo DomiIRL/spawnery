@@ -162,6 +162,14 @@ here is built not to have. So it is refused, with a message naming
 `spec.configOverlay` — which is where `server.properties`, `paper-global.yml`
 and `paper-world-defaults.yml` belong anyway.
 
+## Mounts and `spec.storage.keep`
+
+A mount point under `/data` is never deleted by `spec.storage.keep`, and
+neither is anything below it or the directories above it, whether the mount is
+read-only or writable. The entry does not have to list it.
+[What survives a start](persistent-worlds.md#what-survives-a-start) has the
+rest.
+
 ## Editing a mount replaces the group's servers
 
 A mount shapes the pod, so it is in the group's pod digest, and adding one,
