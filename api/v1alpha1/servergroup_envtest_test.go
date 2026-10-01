@@ -491,7 +491,7 @@ func TestPlayableSlotsIsAllowedOnEveryType(t *testing.T) {
 func TestServerGroupStorageKeepAccepted(t *testing.T) {
 	c, ctx := testenv.Client(t)
 	ns := testenv.Namespace(t, ctx, c)
-	keep := []string{"worlds/world", "plugins/Challenges/internal", "worlds/world/level.dat*", "a?"}
+	keep := []string{"world", "plugins/ExampleGame/state", "world/level.dat*", "a?"}
 
 	od := onDemandGroup(ns, "keeps-on-demand")
 	od.Spec.Storage.Keep = keep
@@ -521,7 +521,7 @@ func TestServerGroupStorageKeepRefusesBadEntries(t *testing.T) {
 		"too long":       {strings.Repeat("a", 257)},
 		"newline":        {"a\nb"},
 		"carriage":       {"a\rb"},
-		"one bad entry":  {"worlds/world", "a//b"},
+		"one bad entry":  {"world", "a//b"},
 	}
 	for name, keep := range tests {
 		t.Run(name, func(t *testing.T) {

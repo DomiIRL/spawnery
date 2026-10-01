@@ -67,7 +67,7 @@ func TestSubstitutionReachesTheContainerAsItsPrefix(t *testing.T) {
 }
 
 func TestKeepReachesTheContainerOneEntryPerLine(t *testing.T) {
-	storage := &spawneryv1alpha1.StorageSpec{Size: resource.MustParse("1Gi"), Keep: []string{"worlds/world", "plugins/Challenges/internal"}}
+	storage := &spawneryv1alpha1.StorageSpec{Size: resource.MustParse("1Gi"), Keep: []string{"world", "plugins/ExampleGame/state"}}
 	pod := build(t, func(_ *spawneryv1alpha1.Network, g *spawneryv1alpha1.ServerGroup) {
 		g.Spec.Storage = storage
 	})
@@ -77,7 +77,7 @@ func TestKeepReachesTheContainerOneEntryPerLine(t *testing.T) {
 			got = e.Value
 		}
 	}
-	if got != "worlds/world\nplugins/Challenges/internal" {
+	if got != "world\nplugins/ExampleGame/state" {
 		t.Errorf("%s = %q", EnvKeep, got)
 	}
 

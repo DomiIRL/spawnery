@@ -871,11 +871,11 @@ func TestEntrypointStopsIfSubstitutionRefuses(t *testing.T) {
 }
 
 func TestPruneRunsOnlyWithKeepEntriesAndFirst(t *testing.T) {
-	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=worlds/world\nplugins/Challenges/internal")
+	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=world\nplugins/ExampleGame/state")
 	if err != nil {
 		t.Fatalf("entrypoint: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "SPAWNERY_CONFIG_ARGV: --prune worlds/world\nplugins/Challenges/internal --mountinfo ") {
+	if !strings.Contains(out, "SPAWNERY_CONFIG_ARGV: --prune world\nplugins/ExampleGame/state --mountinfo ") {
 		t.Errorf("no prune call:\n%s", out)
 	}
 	if strings.Index(out, "--prune") > strings.Index(out, "--flavor paper") {
@@ -892,7 +892,7 @@ func TestPruneRunsOnlyWithKeepEntriesAndFirst(t *testing.T) {
 
 func TestPruneRunsBeforeTheEulaIsWritten(t *testing.T) {
 	dir := t.TempDir()
-	out, err := runEntrypoint(t, dir, 0, "SPAWNERY_KEEP=worlds", "STUB_PRUNE_EXIT=1")
+	out, err := runEntrypoint(t, dir, 0, "SPAWNERY_KEEP=world", "STUB_PRUNE_EXIT=1")
 	if err == nil {
 		t.Fatalf("entrypoint succeeded after a refusing prune:\n%s", out)
 	}
@@ -902,7 +902,7 @@ func TestPruneRunsBeforeTheEulaIsWritten(t *testing.T) {
 }
 
 func TestEntrypointStopsIfPruneRefuses(t *testing.T) {
-	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=worlds", "STUB_PRUNE_EXIT=1")
+	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=world", "STUB_PRUNE_EXIT=1")
 	if err == nil || strings.Contains(out, "JAVA_ARGV") || strings.Contains(out, "--flavor paper") {
 		t.Errorf("the start went on after a refusal:\n%s", out)
 	}

@@ -100,33 +100,33 @@ func TestPrune(t *testing.T) {
 	}{
 		{
 			name:  "unmatched files and directories go",
-			files: []string{"server.properties", "logs/latest.log", "empty/", "worlds/world/level.dat"},
-			keep:  []string{"worlds/world"},
-			want:  []string{"worlds/world/level.dat"},
+			files: []string{"server.properties", "logs/latest.log", "empty/", "world/level.dat"},
+			keep:  []string{"world"},
+			want:  []string{"world/level.dat"},
 		},
 		{
 			name:  "a matched directory is kept whole",
-			files: []string{"worlds/world/region/r.0.0.mca", "worlds/world/data/a.dat", "worlds/old/x"},
-			keep:  []string{"worlds/world"},
-			want:  []string{"worlds/world/data/a.dat", "worlds/world/region/r.0.0.mca"},
+			files: []string{"world/region/r.0.0.mca", "world/data/a.dat", "old/x"},
+			keep:  []string{"world"},
+			want:  []string{"world/data/a.dat", "world/region/r.0.0.mca"},
 		},
 		{
 			name:  "a state directory survives beside files that go",
-			files: []string{"plugins/Challenges/internal/db.json", "plugins/Challenges/config.yml", "plugins/old.jar"},
-			keep:  []string{"plugins/Challenges/internal"},
-			want:  []string{"plugins/Challenges/internal/db.json"},
+			files: []string{"plugins/ExampleGame/state/db.json", "plugins/ExampleGame/config.yml", "plugins/old.jar"},
+			keep:  []string{"plugins/ExampleGame/state"},
+			want:  []string{"plugins/ExampleGame/state/db.json"},
 		},
 		{
 			name:  "globs match within a segment",
-			files: []string{"worlds/world/level.dat", "worlds/world/level.dat_old", "worlds/world/session.lock", "worlds/world/dimensions/minecraft/map1/a", "worlds/world/dimensions/minecraft/other/b"},
-			keep:  []string{"worlds/world/level.dat*", "worlds/world/dimensions/minecraft/map*"},
-			want:  []string{"worlds/world/dimensions/minecraft/map1/a", "worlds/world/level.dat", "worlds/world/level.dat_old"},
+			files: []string{"world/level.dat", "world/level.dat_old", "world/session.lock", "world/dimensions/minecraft/map1/a", "world/dimensions/minecraft/other/b"},
+			keep:  []string{"world/level.dat*", "world/dimensions/minecraft/map*"},
+			want:  []string{"world/dimensions/minecraft/map1/a", "world/level.dat", "world/level.dat_old"},
 		},
 		{
 			name:  "a glob in a middle segment",
-			files: []string{"plugins/Challenges/internal/x.json", "plugins/Challenges/config.yml"},
-			keep:  []string{"plugins/*/internal"},
-			want:  []string{"plugins/Challenges/internal/x.json"},
+			files: []string{"plugins/ExampleGame/state/x.json", "plugins/ExampleGame/config.yml"},
+			keep:  []string{"plugins/*/state"},
+			want:  []string{"plugins/ExampleGame/state/x.json"},
 		},
 		{
 			name:  "a question mark is one character",
@@ -137,7 +137,7 @@ func TestPrune(t *testing.T) {
 		{
 			name:  "an empty claim is fine",
 			files: nil,
-			keep:  []string{"worlds/world"},
+			keep:  []string{"world"},
 			want:  nil,
 		},
 	}
@@ -154,12 +154,12 @@ func TestPrune(t *testing.T) {
 	}
 }
 
-func TestLostAndFoundIsNotTouched(t *testing.T) {
-	dir := claim(t, "lost+found/orphan", "junk")
-	if err := run(dir, []string{"worlds"}, noMounts(t)); err != nil {
+func TestLostAndFoundIsKeptAtTheRootOnly(t *testing.T) {
+	dir := claim(t, "lost+found/orphan", "world/lost+found/x", "world/level.dat", "junk")
+	if err := run(dir, []string{"world/level.dat"}, noMounts(t)); err != nil {
 		t.Fatal(err)
 	}
-	if got := left(t, dir); fmt.Sprint(got) != "[lost+found/orphan]" {
+	if got := left(t, dir); fmt.Sprint(got) != "[lost+found/orphan world/level.dat]" {
 		t.Errorf("left %v", got)
 	}
 }
@@ -174,7 +174,7 @@ func TestMountPointsAndTheirParentsAreKept(t *testing.T) {
 	if err := os.WriteFile(info, []byte(table), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(dir, []string{"worlds"}, info); err != nil {
+	if err := run(dir, []string{"world"}, info); err != nil {
 		t.Fatal(err)
 	}
 	want := "[data/rw/b data/rw/deeper/c mods/ro/a]"
@@ -191,7 +191,7 @@ func TestAMountPointWithASpaceIsUnescaped(t *testing.T) {
 	if err := os.WriteFile(info, []byte(table), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(dir, []string{"worlds"}, info); err != nil {
+	if err := run(dir, []string{"world"}, info); err != nil {
 		t.Fatal(err)
 	}
 	if got := left(t, dir); fmt.Sprint(got) != "[my data/a]" {
@@ -200,8 +200,8 @@ func TestAMountPointWithASpaceIsUnescaped(t *testing.T) {
 }
 
 func TestALevelDatNoEntryKeepsRefusesAndDeletesNothing(t *testing.T) {
-	dir := claim(t, "junk", "worlds/world/level.dat", "old/world/level.dat")
-	err := run(dir, []string{"worlds/world"}, noMounts(t))
+	dir := claim(t, "junk", "world/level.dat", "old/world/level.dat")
+	err := run(dir, []string{"world"}, noMounts(t))
 	if err == nil || !strings.Contains(err.Error(), "old") {
 		t.Fatalf("err = %v, want a refusal naming old", err)
 	}
@@ -211,10 +211,10 @@ func TestALevelDatNoEntryKeepsRefusesAndDeletesNothing(t *testing.T) {
 }
 
 func TestASourceCarryingAKeptPathRefusesAndDeletesNothing(t *testing.T) {
-	dir := claim(t, "junk", "plugins/Challenges/internal/db.json")
-	src := claim(t, "Challenges/internal/seed.json", "Challenges/config.yml")
-	err := run(dir, []string{"plugins/Challenges/internal"}, noMounts(t), sourcetree.Pair{From: src, Into: "plugins"})
-	if err == nil || !strings.Contains(err.Error(), "plugins/Challenges/internal/seed.json") {
+	dir := claim(t, "junk", "plugins/ExampleGame/state/db.json")
+	src := claim(t, "ExampleGame/state/seed.json", "ExampleGame/config.yml")
+	err := run(dir, []string{"plugins/ExampleGame/state"}, noMounts(t), sourcetree.Pair{From: src, Into: "plugins"})
+	if err == nil || !strings.Contains(err.Error(), "plugins/ExampleGame/state/seed.json") {
 		t.Fatalf("err = %v, want a refusal naming the path", err)
 	}
 	if got := left(t, dir); len(got) != 2 {
@@ -224,9 +224,9 @@ func TestASourceCarryingAKeptPathRefusesAndDeletesNothing(t *testing.T) {
 
 func TestASourceThatShipsOnlyUnkeptPathsIsFine(t *testing.T) {
 	dir := claim(t, "junk")
-	src := claim(t, "Challenges/config.yml", "lost+found/x")
+	src := claim(t, "ExampleGame/config.yml", "lost+found/x")
 	missing := filepath.Join(t.TempDir(), "absent")
-	err := run(dir, []string{"plugins/Challenges/internal"}, noMounts(t),
+	err := run(dir, []string{"plugins/ExampleGame/state"}, noMounts(t),
 		sourcetree.Pair{From: src, Into: "plugins"}, sourcetree.Pair{From: missing, Into: "."})
 	if err != nil {
 		t.Fatal(err)
@@ -288,7 +288,7 @@ func TestARelativeRootStillSeesAbsoluteMountPoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
-	if err := run(".", []string{"worlds"}, info); err != nil {
+	if err := run(".", []string{"world"}, info); err != nil {
 		t.Fatal(err)
 	}
 	want := "[data/rw/b mods/ro/a]"

@@ -223,7 +223,7 @@ func TestPruneRefusesALevelDatItWouldDelete(t *testing.T) {
 	}
 	t.Chdir(dir)
 	var stderr bytes.Buffer
-	if code := run([]string{"--prune", "worlds", "--mountinfo", emptyMountinfo(t)}, &stderr); code != 1 {
+	if code := run([]string{"--prune", "world", "--mountinfo", emptyMountinfo(t)}, &stderr); code != 1 {
 		t.Errorf("exit code is %d, want 1 for a refusal", code)
 	}
 	if !strings.Contains(stderr.String(), "old/level.dat") && !strings.Contains(stderr.String(), "old") {
