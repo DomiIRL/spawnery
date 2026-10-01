@@ -301,7 +301,7 @@ kind: ProxyGroup
 spec:
   update:
     transfer:                 # unset = today's behaviour
-      forceAfterSeconds: 300  # default 300, minimum 0
+      forceAfterSeconds: 120  # default 120, minimum 0
 ```
 
 **Enabling it rolls the group once.** A proxy only accepts a transferred
@@ -311,31 +311,52 @@ of the rendered config the group's pod hash covers. The proxies doing that
 first roll do not have the setting yet, so they still drain the old way;
 every roll after that transfers.
 
+**Disabling it is safe.** It rolls the group the same way, and the old
+proxies, which still transfer, only send players to proxies that accept
+them: the new ones do not, so the old ones drain the old way.
+
 Once enabled, a leaving proxy moves players in two moments:
 
 - **At once, on a server switch.** A player who is about to connect to a
   different backend — `/server arena`, a plugin sending them on — is
   transferred there instead, landing on another proxy of the group along the
   way.
-- **Forced, after `forceAfterSeconds`.** Counted from when the proxy started
-  leaving. After that, every player whose current server's door is open is
-  transferred back to that same server. A player on a server whose door is
+- **Forced, after `forceAfterSeconds`.** Counted from when the proxy's agent
+  first sees itself leaving, which is within one resync (30 s) of the
+  operator starting the drain. Keep it below `drain.timeoutSeconds` and any
+  `maxStaleSeconds`, or those disconnect the players first. After that,
+  every player whose current server's door is open is transferred back to
+  that same server. A player on a server whose door is
   closed (`AcceptJoins` false, a round in progress) is never forced; once the
   door opens and the deadline has passed, they go on the next pass, which
   runs once a second.
 
-A transfer only happens while another proxy of the same group is Ready and
-not itself leaving — otherwise there is nowhere to send the player, and the
-proxy leaves them where they are. Each player is tried once per deadline;
+A transfer only happens while another proxy of the same group is Ready, not
+itself leaving, and accepts transfers — otherwise there is nowhere to send
+the player, and the proxy leaves them where they are. Each player is tried
+once per leaving proxy, so one who comes back to it is not sent round again;
 anyone whose client is older than 1.20.5 cannot be transferred and stays
 behind, same as before, bounded by `maxStaleSeconds` and the drain deadline.
 
+The transfer sends the client to the host and port it typed in, not to a
+particular proxy: it is the Service in front of the group that picks where
+the player lands. An SRV record or a front end that maps ports works as
+long as that name still leads to the group. With `expose.type: HostPort`
+the address is a node's, and there the port still belongs to the leaving
+pod, so the transfer brings the player back to it; it does not transfer
+them a second time, but they do not move either.
+
 The player lands on the new proxy at the server they were going to, or were
 already on, via a signed cookie keyed off the forwarding secret every proxy
-in the network already mounts. A cookie that does not check out — expired
-(they are good for 60 s), another player's, naming a server the receiving
-proxy does not know, or written before a forwarding-secret rotation — routes
-the player as an ordinary fresh join rather than to the named server.
+in the network already mounts. That gives the secret a second job: whoever
+holds it can mint a cookie that sends their own player to any registered
+server, past whatever the proxy would have chosen, so treat a plugin that
+can read it as one that can route.
+
+A cookie that does not check out — expired (they are good for 60 s),
+another player's, naming a server the receiving proxy does not know, or
+written before a forwarding-secret rotation — routes the player as an
+ordinary fresh join rather than to the named server.
 
 What the player sees is a loading screen; what the backend sees is a quit
 followed by a join, the same as any reconnect. That has not been measured
@@ -351,7 +372,8 @@ spawnery: transfer cookie from 'Notch' refused: expired
 
 A roll replaces proxies blue/green — the new pods come up and serve while
 the old ones drain — so during a roll there is always somewhere for a
-transfer to land.
+transfer to land. Retiring or scaling down a single replica has no such
+guarantee: when no other proxy of the group is Ready, nobody is transferred.
 
 ## Taking a retirement back
 
