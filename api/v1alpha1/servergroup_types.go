@@ -142,8 +142,9 @@ type StorageSpec struct {
 	//
 	// An entry is a path whose segments may use * and ? (path.Match per
 	// segment). A matched directory is kept whole. Mount points, their parent
-	// directories and lost+found are never deleted. A level.dat that no entry
-	// keeps refuses the start.
+	// directories and the root lost+found are never deleted. The start is
+	// refused when something no entry keeps is a level.dat* file, a region
+	// directory or an .mca file.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:items:MaxLength=256
