@@ -23,6 +23,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
@@ -508,7 +510,6 @@ func TestServerGroupStorageKeepRefusesBadEntries(t *testing.T) {
 	ns := testenv.Namespace(t, ctx, c)
 
 	tests := map[string][]string{
-		"empty list":     {},
 		"absolute":       {"/x"},
 		"parent segment": {"a/../b"},
 		"dot segment":    {"a/./b"},
@@ -528,5 +529,24 @@ func TestServerGroupStorageKeepRefusesBadEntries(t *testing.T) {
 				t.Fatalf("keep %q was accepted", keep)
 			}
 		})
+	}
+}
+
+// keep is omitempty, so an empty list cannot be sent through the typed client.
+func TestServerGroupStorageKeepRefusesAnEmptyList(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	raw, err := runtime.DefaultUnstructuredConverter.ToUnstructured(onDemandGroup(ns, "keeps-nothing"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &unstructured.Unstructured{Object: raw}
+	u.SetGroupVersionKind(spawneryv1alpha1.GroupVersion.WithKind("ServerGroup"))
+	if err := unstructured.SetNestedSlice(u.Object, []any{}, "spec", "storage", "keep"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Create(ctx, u); err == nil {
+		t.Fatal("an empty keep list was accepted")
 	}
 }
