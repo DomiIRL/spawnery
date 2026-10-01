@@ -195,7 +195,17 @@ so keep one or ship the other.
 
 There is no dry-run field. Every path the start removes is logged as
 `spawnery: keep: removing <path>`, so the first start after a change shows what
-the list does. The list is part of the pod, so changing it rolls the group.
+the list does.
+
+The list is part of the pod. Changing it on a persistent group rolls the group.
+On an on-demand group nothing rolls: a running member keeps its pod and its old
+list, and gets the new list, and the current image, at its next start, because
+the server is created from the group as it is then.
+
+Upgrade the operator and the chart before a group uses `keep`, and the image
+with them. An operator older than the field drops it from the spec, and an
+image older than the field ignores `SPAWNERY_KEEP`. Both keep everything, so the
+group runs without the cleanup it asks for and nothing says so.
 
 ## The failure clock, and why `Degraded` is late
 

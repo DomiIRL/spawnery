@@ -77,7 +77,9 @@ cross a `/`. A matched directory is kept whole.
 
 `internal/podspec` emits `SPAWNERY_KEEP`, the entries joined by newlines, only
 when the field is set. A group without it builds the identical pod and the
-hash golden does not move. A group that sets it, or changes it, rolls.
+hash golden does not move. A persistent group that sets it, or changes it, rolls. An on-demand group
+does not: a running member keeps its pod, and the new list reaches it at its
+next start.
 
 ## 6. The prune
 
