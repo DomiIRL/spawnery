@@ -127,7 +127,8 @@ func plan(root string, rel []string, pats, mounts [][]string, doomed *[]string) 
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if name == "lost+found" {
+		// lost+found exists at the root of a freshly formatted volume only
+		if name == "lost+found" && len(rel) == 0 {
 			continue
 		}
 		r := append(append([]string{}, rel...), name)
