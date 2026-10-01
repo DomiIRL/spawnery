@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spawnery/spawnery/internal/sourcetree"
 )
 
 // tree writes files under a source and their copies under a destination, as
@@ -57,7 +59,7 @@ func read(t *testing.T, p string) string {
 
 func TestPlaceholdersAreFilledWithAndWithoutSpaces(t *testing.T) {
 	from, into := tree(t, map[string]string{"Lobby/config.yml": "a: {{ SECRET_A }}\nb: {{SECRET_B}}\n"})
-	err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_A": "one", "SECRET_B": "two"}))
+	err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(map[string]string{"SECRET_A": "one", "SECRET_B": "two"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +70,7 @@ func TestPlaceholdersAreFilledWithAndWithoutSpaces(t *testing.T) {
 
 func TestOtherPrefixesAreLeftAlone(t *testing.T) {
 	from, into := tree(t, map[string]string{"c.yml": "x: {{ OTHER_A }}\n"})
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(nil)); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(nil)); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, filepath.Join(into, "c.yml")); got != "x: {{ OTHER_A }}\n" {
@@ -78,7 +80,7 @@ func TestOtherPrefixesAreLeftAlone(t *testing.T) {
 
 func TestOnlyTextExtensionsAreTouched(t *testing.T) {
 	from, into := tree(t, map[string]string{"plugin.jar": "{{ SECRET_A }}", "notes.md": "{{ SECRET_A }}", "c.properties": "{{ SECRET_A }}"})
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
 		t.Fatal(err)
 	}
 	if read(t, filepath.Join(into, "plugin.jar")) != "{{ SECRET_A }}" || read(t, filepath.Join(into, "notes.md")) != "{{ SECRET_A }}" {
@@ -91,7 +93,7 @@ func TestOnlyTextExtensionsAreTouched(t *testing.T) {
 
 func TestAMissingVariableNamesFileAndPlaceholder(t *testing.T) {
 	from, into := tree(t, map[string]string{"Db/config.yml": "user: {{ SECRET_USER }}\npass: {{ SECRET_PASS }}\n"})
-	err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_USER": "hunter2"}))
+	err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(map[string]string{"SECRET_USER": "hunter2"}))
 	if err == nil {
 		t.Fatal("a missing variable was accepted")
 	}
@@ -106,7 +108,7 @@ func TestAMissingVariableNamesFileAndPlaceholder(t *testing.T) {
 func TestValuesArriveVerbatim(t *testing.T) {
 	value := "a$b&c\\d\"e'f\ng{{ SECRET_A }}/h"
 	from, into := tree(t, map[string]string{"c.json": `{"p": "{{ SECRET_A }}"}`})
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_A": value})); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(map[string]string{"SECRET_A": value})); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, filepath.Join(into, "c.json")); got != `{"p": "`+value+`"}` {
@@ -120,7 +122,7 @@ func TestAFileWithoutPlaceholdersIsNotRewritten(t *testing.T) {
 	if err := os.Chmod(p, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(nil)); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(nil)); err != nil {
 		t.Fatalf("a file with nothing to fill was written to: %v", err)
 	}
 }
@@ -128,7 +130,7 @@ func TestAFileWithoutPlaceholdersIsNotRewritten(t *testing.T) {
 func TestBytesOutsidePlaceholdersSurvive(t *testing.T) {
 	raw := "\xff\xfe{{ SECRET_A }}\x00tail"
 	from, into := tree(t, map[string]string{"c.txt": raw})
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, filepath.Join(into, "c.txt")); got != "\xff\xfev\x00tail" {
@@ -141,7 +143,7 @@ func TestAFileMissingAtTheDestinationIsSkipped(t *testing.T) {
 	if err := os.Remove(filepath.Join(into, "c.yml")); err != nil {
 		t.Fatal(err)
 	}
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(nil)); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(nil)); err != nil {
 		t.Fatalf("a file the entrypoint did not copy was demanded: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(into, "c.yml")); !os.IsNotExist(err) {
@@ -150,7 +152,7 @@ func TestAFileMissingAtTheDestinationIsSkipped(t *testing.T) {
 }
 
 func TestAMissingSourceIsNoSource(t *testing.T) {
-	if err := Trees([]Pair{{filepath.Join(t.TempDir(), "absent"), t.TempDir()}}, "SECRET_", env(nil)); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: filepath.Join(t.TempDir(), "absent"), Into: t.TempDir()}}, "SECRET_", env(nil)); err != nil {
 		t.Fatalf("an absent source failed: %v", err)
 	}
 }
@@ -162,7 +164,7 @@ func TestAnUnreadableLostAndFoundIsSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(lf, 0o700) })
-	if err := Trees([]Pair{{from, into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
+	if err := Trees([]sourcetree.Pair{{From: from, Into: into}}, "SECRET_", env(map[string]string{"SECRET_A": "v"})); err != nil {
 		t.Fatalf("an ext4 claim's lost+found stopped the start: %v", err)
 	}
 	if read(t, filepath.Join(into, "c.yml")) != "v" {

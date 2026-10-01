@@ -36,6 +36,7 @@ import (
 
 	"github.com/spawnery/spawnery/internal/prune"
 	"github.com/spawnery/spawnery/internal/render"
+	"github.com/spawnery/spawnery/internal/sourcetree"
 	"github.com/spawnery/spawnery/internal/substitute"
 )
 
@@ -101,7 +102,7 @@ func run(args []string, stderr io.Writer) int {
 }
 
 // pairs collects repeated --pair FROM=INTO flags.
-type pairs []substitute.Pair
+type pairs []sourcetree.Pair
 
 func (p *pairs) String() string { return fmt.Sprint(*p) }
 
@@ -110,7 +111,7 @@ func (p *pairs) Set(v string) error {
 	if !ok || from == "" || into == "" {
 		return fmt.Errorf("want FROM=INTO, got %q", v)
 	}
-	*p = append(*p, substitute.Pair{From: from, Into: into})
+	*p = append(*p, sourcetree.Pair{From: from, Into: into})
 	return nil
 }
 
@@ -152,11 +153,7 @@ func runPrune(args []string, stderr io.Writer) int {
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
-	var pp []prune.Pair
-	for _, p := range ps {
-		pp = append(pp, prune.Pair(p))
-	}
-	if err := prune.Run(".", keep, *mountinfo, pp, stderr); err != nil {
+	if err := prune.Run(".", keep, *mountinfo, ps, stderr); err != nil {
 		_, _ = fmt.Fprintf(stderr, "spawnery: %v\nspawnery: refusing to start\n", err)
 		return 1
 	}

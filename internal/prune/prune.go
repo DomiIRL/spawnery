@@ -19,7 +19,6 @@ limitations under the License.
 package prune
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -28,22 +27,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-)
 
-// Pair is a source tree and where the entrypoint copies it.
-type Pair struct{ From, Into string }
+	"github.com/spawnery/spawnery/internal/sourcetree"
+)
 
 // Run deletes everything below dir that no keep entry matches, logging each
 // path to log first. It refuses, before deleting anything, when that would
-// delete a level.dat or when a pair's source carries a path that keep holds
+// delete a world or when a pair's source carries a path that keep holds
 // at its destination. mountinfo is read for the mount points below dir, which
 // are never entered.
-func Run(dir string, keep []string, mountinfo string, pairs []Pair, log io.Writer) error {
+func Run(dir string, keep []string, mountinfo string, pairs []sourcetree.Pair, log io.Writer) error {
 	pats, err := parseKeep(keep)
 	if err != nil {
 		return err
 	}
-	root, err := filepath.EvalSymlinks(dir)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return err
 	}
@@ -56,8 +58,12 @@ func Run(dir string, keep []string, mountinfo string, pairs []Pair, log io.Write
 		return err
 	}
 	for _, rel := range doomed {
-		if hasLevelDat(filepath.Join(root, rel)) {
-			return fmt.Errorf("spec.storage.keep does not keep %s, which holds a level.dat", rel)
+		world, err := holdsWorld(filepath.Join(root, rel))
+		if err != nil {
+			return fmt.Errorf("cannot tell whether %s holds a world: %w", rel, err)
+		}
+		if world {
+			return fmt.Errorf("spec.storage.keep does not keep %s, which holds a world", rel)
 		}
 	}
 	for _, p := range pairs {
@@ -163,32 +169,30 @@ func onTheWay(pats, mounts [][]string, rel []string) bool {
 	return false
 }
 
-func hasLevelDat(p string) bool {
+// holdsWorld reports whether p is, or holds, a level.dat or one of its
+// rename leftovers (level.dat_old, level.dat_new), a region directory or an
+// .mca file. It fails on any path it cannot read.
+func holdsWorld(p string) (bool, error) {
 	found := false
-	_ = filepath.WalkDir(p, func(q string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && d.Name() == "level.dat" {
+	err := filepath.WalkDir(p, func(q string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		n := d.Name()
+		if d.IsDir() && n == "region" || !d.IsDir() && (strings.HasPrefix(n, "level.dat") || strings.HasSuffix(n, ".mca")) {
 			found = true
 			return fs.SkipAll
 		}
 		return nil
 	})
-	return found
+	return found, err
 }
 
 // refuseKept refuses when the source carries a path keep holds at its
 // destination, which the copy would silently overwrite with the shipped file.
-func refuseKept(p Pair, pats [][]string) error {
-	err := filepath.WalkDir(p.From, func(q string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) && q == p.From {
-				return fs.SkipAll
-			}
-			return err
-		}
+func refuseKept(p sourcetree.Pair, pats [][]string) error {
+	return p.Walk(func(q string, d fs.DirEntry) error {
 		if d.IsDir() {
-			if d.Name() == "lost+found" && filepath.Dir(q) == filepath.Clean(p.From) {
-				return fs.SkipDir
-			}
 			return nil
 		}
 		rel, err := filepath.Rel(p.From, q)
@@ -201,16 +205,12 @@ func refuseKept(p Pair, pats [][]string) error {
 		}
 		return nil
 	})
-	return err
 }
 
 // mountsBelow lists, relative to root, the mount points in a mountinfo file.
 // mountinfo writes a space in a path as \040.
 func mountsBelow(root, mountinfo string) ([][]string, error) {
 	b, err := os.ReadFile(mountinfo)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, err
 	}

@@ -173,6 +173,16 @@ func TestSubstituteFailsWithoutLeakingAValue(t *testing.T) {
 	}
 }
 
+// emptyMountinfo writes a mount table with no mounts.
+func emptyMountinfo(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "mountinfo")
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestPruneNeedsTheKeepEntries(t *testing.T) {
 	var stderr bytes.Buffer
 	if code := run([]string{"--prune"}, &stderr); code != 2 {
@@ -192,7 +202,7 @@ func TestPruneDeletesWhatIsNotKept(t *testing.T) {
 	}
 	t.Chdir(dir)
 	var stderr bytes.Buffer
-	if code := run([]string{"--prune", "keep", "--mountinfo", filepath.Join(dir, "none")}, &stderr); code != 0 {
+	if code := run([]string{"--prune", "keep", "--mountinfo", emptyMountinfo(t)}, &stderr); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(dir, "junk")); err == nil {
@@ -213,7 +223,7 @@ func TestPruneRefusesALevelDatItWouldDelete(t *testing.T) {
 	}
 	t.Chdir(dir)
 	var stderr bytes.Buffer
-	if code := run([]string{"--prune", "worlds", "--mountinfo", filepath.Join(dir, "none")}, &stderr); code != 1 {
+	if code := run([]string{"--prune", "worlds", "--mountinfo", emptyMountinfo(t)}, &stderr); code != 1 {
 		t.Errorf("exit code is %d, want 1 for a refusal", code)
 	}
 	if !strings.Contains(stderr.String(), "old/level.dat") && !strings.Contains(stderr.String(), "old") {

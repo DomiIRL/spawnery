@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/spawnery/spawnery/internal/sourcetree"
 )
 
 // claim writes files (a trailing slash makes an empty directory) under a new
@@ -75,7 +77,17 @@ func left(t *testing.T, dir string) []string {
 	return out
 }
 
-func run(dir string, keep []string, mountinfo string, pairs ...Pair) error {
+// noMounts writes an empty mount table.
+func noMounts(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "mountinfo")
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func run(dir string, keep []string, mountinfo string, pairs ...sourcetree.Pair) error {
 	return Run(dir, keep, mountinfo, pairs, io.Discard)
 }
 
@@ -111,6 +123,12 @@ func TestPrune(t *testing.T) {
 			want:  []string{"worlds/world/dimensions/minecraft/map1/a", "worlds/world/level.dat", "worlds/world/level.dat_old"},
 		},
 		{
+			name:  "a glob in a middle segment",
+			files: []string{"plugins/Challenges/internal/x.json", "plugins/Challenges/config.yml"},
+			keep:  []string{"plugins/*/internal"},
+			want:  []string{"plugins/Challenges/internal/x.json"},
+		},
+		{
 			name:  "a question mark is one character",
 			files: []string{"a1/f", "a12/f"},
 			keep:  []string{"a?"},
@@ -126,7 +144,7 @@ func TestPrune(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := claim(t, tc.files...)
-			if err := run(dir, tc.keep, filepath.Join(dir, "no-mountinfo")); err != nil {
+			if err := run(dir, tc.keep, noMounts(t)); err != nil {
 				t.Fatal(err)
 			}
 			if got := left(t, dir); fmt.Sprint(got) != fmt.Sprint(tc.want) {
@@ -138,7 +156,7 @@ func TestPrune(t *testing.T) {
 
 func TestLostAndFoundIsNotTouched(t *testing.T) {
 	dir := claim(t, "lost+found/orphan", "junk")
-	if err := run(dir, []string{"worlds"}, filepath.Join(dir, "none")); err != nil {
+	if err := run(dir, []string{"worlds"}, noMounts(t)); err != nil {
 		t.Fatal(err)
 	}
 	if got := left(t, dir); fmt.Sprint(got) != "[lost+found/orphan]" {
@@ -183,7 +201,7 @@ func TestAMountPointWithASpaceIsUnescaped(t *testing.T) {
 
 func TestALevelDatNoEntryKeepsRefusesAndDeletesNothing(t *testing.T) {
 	dir := claim(t, "junk", "worlds/world/level.dat", "old/world/level.dat")
-	err := run(dir, []string{"worlds/world"}, filepath.Join(dir, "none"))
+	err := run(dir, []string{"worlds/world"}, noMounts(t))
 	if err == nil || !strings.Contains(err.Error(), "old") {
 		t.Fatalf("err = %v, want a refusal naming old", err)
 	}
@@ -195,7 +213,7 @@ func TestALevelDatNoEntryKeepsRefusesAndDeletesNothing(t *testing.T) {
 func TestASourceCarryingAKeptPathRefusesAndDeletesNothing(t *testing.T) {
 	dir := claim(t, "junk", "plugins/Challenges/internal/db.json")
 	src := claim(t, "Challenges/internal/seed.json", "Challenges/config.yml")
-	err := run(dir, []string{"plugins/Challenges/internal"}, filepath.Join(dir, "none"), Pair{From: src, Into: "plugins"})
+	err := run(dir, []string{"plugins/Challenges/internal"}, noMounts(t), sourcetree.Pair{From: src, Into: "plugins"})
 	if err == nil || !strings.Contains(err.Error(), "plugins/Challenges/internal/seed.json") {
 		t.Fatalf("err = %v, want a refusal naming the path", err)
 	}
@@ -208,8 +226,8 @@ func TestASourceThatShipsOnlyUnkeptPathsIsFine(t *testing.T) {
 	dir := claim(t, "junk")
 	src := claim(t, "Challenges/config.yml", "lost+found/x")
 	missing := filepath.Join(t.TempDir(), "absent")
-	err := run(dir, []string{"plugins/Challenges/internal"}, filepath.Join(dir, "none"),
-		Pair{From: src, Into: "plugins"}, Pair{From: missing, Into: "."})
+	err := run(dir, []string{"plugins/Challenges/internal"}, noMounts(t),
+		sourcetree.Pair{From: src, Into: "plugins"}, sourcetree.Pair{From: missing, Into: "."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +239,7 @@ func TestASymlinkIsRemovedAndItsTargetStays(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, "link")); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(dir, []string{"keep"}, filepath.Join(dir, "none")); err != nil {
+	if err := run(dir, []string{"keep"}, noMounts(t)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(filepath.Join(dir, "link")); err == nil {
@@ -235,7 +253,7 @@ func TestASymlinkIsRemovedAndItsTargetStays(t *testing.T) {
 func TestEachRemovalIsLogged(t *testing.T) {
 	dir := claim(t, "keep/a", "plugins/old.jar")
 	var log strings.Builder
-	if err := Run(dir, []string{"keep"}, filepath.Join(dir, "none"), nil, &log); err != nil {
+	if err := Run(dir, []string{"keep"}, noMounts(t), nil, &log); err != nil {
 		t.Fatal(err)
 	}
 	if log.String() != "spawnery: keep: removing plugins\n" {
@@ -248,5 +266,75 @@ func TestABadEntryRefuses(t *testing.T) {
 		if err := run(claim(t), []string{k}, "none"); err == nil {
 			t.Errorf("entry %q was accepted", k)
 		}
+	}
+}
+
+func TestAMissingMountinfoRefusesAndDeletesNothing(t *testing.T) {
+	dir := claim(t, "junk", "keep/a")
+	if err := run(dir, []string{"keep"}, filepath.Join(t.TempDir(), "absent")); err == nil {
+		t.Fatal("a missing mountinfo was accepted")
+	}
+	if got := left(t, dir); len(got) != 2 {
+		t.Errorf("deleted before refusing: %v", got)
+	}
+}
+
+func TestARelativeRootStillSeesAbsoluteMountPoints(t *testing.T) {
+	dir := claim(t, "mods/ro/a", "data/rw/b", "junk")
+	root, _ := filepath.EvalSymlinks(dir)
+	info := filepath.Join(t.TempDir(), "mountinfo")
+	table := fmt.Sprintf("2 1 0:2 / %s/mods/ro ro - ext4 /dev/a ro\n3 1 0:3 / %s/data/rw rw - ext4 /dev/b rw\n", root, root)
+	if err := os.WriteFile(info, []byte(table), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	if err := run(".", []string{"worlds"}, info); err != nil {
+		t.Fatal(err)
+	}
+	want := "[data/rw/b mods/ro/a]"
+	if got := left(t, dir); fmt.Sprint(got) != want {
+		t.Errorf("left %v, want %s", got, want)
+	}
+}
+
+func TestEveryShapeOfAWorldRefusesAndDeletesNothing(t *testing.T) {
+	tests := map[string][]string{
+		"rename leftovers only": {"old/world/level.dat_old", "old/world/level.dat_new"},
+		"a bare region":         {"old/world/region/r.0.0.mca"},
+		"an empty region":       {"old/world/region/"},
+		"a stray mca":           {"old/r.0.0.mca"},
+	}
+	for name, files := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := claim(t, append([]string{"keep/a"}, files...)...)
+			err := run(dir, []string{"keep"}, noMounts(t))
+			if err == nil || !strings.Contains(err.Error(), "old") {
+				t.Fatalf("err = %v, want a refusal naming old", err)
+			}
+			for _, p := range []string{"keep/a", "old"} {
+				if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
+					t.Errorf("%s was deleted before refusing: %v", p, err)
+				}
+			}
+		})
+	}
+}
+
+func TestAnUnreadableSubtreeRefusesAndDeletesNothing(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	dir := claim(t, "keep/a", "junk/x", "old/sealed/y")
+	sealed := filepath.Join(dir, "old", "sealed")
+	if err := os.Chmod(sealed, 0o300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(sealed, 0o755) })
+	err := run(dir, []string{"keep"}, noMounts(t))
+	if err == nil || !strings.Contains(err.Error(), "old") {
+		t.Fatalf("err = %v, want a refusal naming old", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "junk", "x")); err != nil {
+		t.Errorf("junk was deleted before refusing: %v", err)
 	}
 }
