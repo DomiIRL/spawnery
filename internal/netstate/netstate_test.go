@@ -642,13 +642,13 @@ func TestBuildCarriesThePlayableFigure(t *testing.T) {
 }
 
 func TestBuildCarriesAClosedDoor(t *testing.T) {
-	src, reg := source(t,
-		ephemeralGroup("ns", "lobby"),
-		readyServer("ns", "lobby-a", "lobby", 0, 100),
-		readyServer("ns", "lobby-b", "lobby", 0, 100),
-	)
+	lobbyA := readyServer("ns", "lobby-a", "lobby", 0, 100)
+	lobbyA.Status.PodUID = "pod-a"
+	lobbyB := readyServer("ns", "lobby-b", "lobby", 0, 100)
+	lobbyB.Status.PodUID = "pod-b"
+	src, reg := source(t, ephemeralGroup("ns", "lobby"), lobbyA, lobbyB)
 	reg.Connect("pod-a", agent.RoleServer)
-	if err := reg.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, false); err != nil {
+	if err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 
@@ -661,5 +661,73 @@ func TestBuildCarriesAClosedDoor(t *testing.T) {
 	}
 	if got.GetServers()[1].GetJoinsClosed() {
 		t.Errorf("lobby-b = %+v, want joins open", got.GetServers()[1])
+	}
+}
+
+func TestAClosedDoorFollowsTheCurrentPodNotTheServerName(t *testing.T) {
+	// A persistent server keeps its name across a restart; the registry
+	// entry for the pod it replaced does not disappear until the orphan
+	// sweep forgets it. The operator's own record of which pod is current
+	// -- status.podUID, the same value Build sends as Incarnation -- is
+	// what a reader has to key on, or the old pod's shut door outlives the
+	// restart that reopened it.
+	srv := readyServer("ns", "survival-0", "survival", 0, 100)
+	srv.Status.PodUID = "new-pod"
+	src, reg := source(t, ephemeralGroup("ns", "survival"), srv)
+
+	reg.Connect("old-pod", agent.RoleServer)
+	if err := reg.ReportAcceptJoins("old-pod", "ns", false, false); err != nil {
+		t.Fatalf("ReportAcceptJoins(old-pod): %v", err)
+	}
+	reg.Connect("new-pod", agent.RoleServer)
+	if err := reg.ReportAcceptJoins("new-pod", "ns", true, false); err != nil {
+		t.Fatalf("ReportAcceptJoins(new-pod): %v", err)
+	}
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got.GetServers()[0].GetJoinsClosed() {
+		t.Errorf("survival-0 = %+v, want the current pod's open door", got.GetServers()[0])
+	}
+}
+
+func TestAClosedDoorOnTheCurrentPodIsCarried(t *testing.T) {
+	srv := readyServer("ns", "survival-0", "survival", 0, 100)
+	srv.Status.PodUID = "pod-a"
+	src, reg := source(t, ephemeralGroup("ns", "survival"), srv)
+
+	reg.Connect("pod-a", agent.RoleServer)
+	if err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
+		t.Fatalf("ReportAcceptJoins: %v", err)
+	}
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !got.GetServers()[0].GetJoinsClosed() {
+		t.Errorf("survival-0 = %+v, want the current pod's closed door", got.GetServers()[0])
+	}
+}
+
+func TestAClosedDoorOnTheCurrentPodSurvivesADisconnect(t *testing.T) {
+	srv := readyServer("ns", "survival-0", "survival", 0, 100)
+	srv.Status.PodUID = "pod-a"
+	src, reg := source(t, ephemeralGroup("ns", "survival"), srv)
+
+	reg.Connect("pod-a", agent.RoleServer)
+	if err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
+		t.Fatalf("ReportAcceptJoins: %v", err)
+	}
+	reg.Disconnect("pod-a")
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !got.GetServers()[0].GetJoinsClosed() {
+		t.Errorf("survival-0 = %+v, want the closed door to survive a disconnect", got.GetServers()[0])
 	}
 }

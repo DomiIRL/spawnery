@@ -241,10 +241,13 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			Incarnation: srv.Status.PodUID,
 			// From the spec and not the status: the group decided this when it
 			// created the server, and nothing observes it afterwards.
-			Number:      srv.Spec.Number,
-			Held:        srv.Spec.Hold,
-			Node:        nodeOf[srv.Status.PodName],
-			JoinsClosed: closedDoors[srv.Name],
+			Number: srv.Spec.Number,
+			Held:   srv.Spec.Hold,
+			Node:   nodeOf[srv.Status.PodName],
+			// Keyed by Incarnation above and not by name: ClosedDoors answers
+			// per pod, and a persistent server's name outlives the pod that
+			// closed this door.
+			JoinsClosed: closedDoors[srv.Status.PodUID],
 		})
 	}
 

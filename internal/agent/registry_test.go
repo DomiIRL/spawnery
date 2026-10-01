@@ -822,14 +822,14 @@ func TestAServerCanCloseItsDoorAndOpenItAgain(t *testing.T) {
 	r := New(time.Now, time.Second, time.Now())
 	r.Connect("pod-a", RoleServer)
 
-	if err := r.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, false); err != nil {
+	if err := r.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins(false): %v", err)
 	}
 	if r.Lookup("pod-a").AcceptingJoins {
 		t.Error("a server that closed its door was still read as taking players")
 	}
 
-	if err := r.ReportAcceptJoins("pod-a", "ns", "lobby-a", true, false); err != nil {
+	if err := r.ReportAcceptJoins("pod-a", "ns", true, false); err != nil {
 		t.Fatalf("ReportAcceptJoins(true): %v", err)
 	}
 	if !r.Lookup("pod-a").AcceptingJoins {
@@ -842,7 +842,7 @@ func TestAClosedDoorOutlivesADisconnect(t *testing.T) {
 	// swung open in between would put players into a round that had started.
 	r := New(time.Now, time.Second, time.Now())
 	r.Connect("pod-a", RoleServer)
-	_ = r.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, false)
+	_ = r.ReportAcceptJoins("pod-a", "ns", false, false)
 
 	r.Disconnect("pod-a")
 
@@ -855,7 +855,7 @@ func TestAProxyHasNoDoorToClose(t *testing.T) {
 	r := New(time.Now, time.Second, time.Now())
 	r.Connect("proxy-a", RoleProxy)
 
-	if err := r.ReportAcceptJoins("proxy-a", "ns", "lobby-a", false, false); err == nil {
+	if err := r.ReportAcceptJoins("proxy-a", "ns", false, false); err == nil {
 		t.Error("a proxy was allowed to close a door it does not have")
 	}
 }
@@ -867,7 +867,7 @@ func TestARoundEndIsRememberedAfterTheStreamDrops(t *testing.T) {
 	if got := r.Lookup("pod-a").RoundEnded; got {
 		t.Error("a server that has said nothing has not ended a round")
 	}
-	if err := r.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, true); err != nil {
+	if err := r.ReportAcceptJoins("pod-a", "ns", false, true); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 	if got := r.Lookup("pod-a"); !got.RoundEnded || got.AcceptingJoins {
@@ -882,28 +882,28 @@ func TestARoundEndIsRememberedAfterTheStreamDrops(t *testing.T) {
 	}
 }
 
-func TestClosedDoorsListsAServerThatClosedItsDoor(t *testing.T) {
+func TestClosedDoorsListsAPodThatClosedItsDoor(t *testing.T) {
 	r := New(time.Now, time.Second, time.Now())
 	r.Connect("pod-a", RoleServer)
-	if err := r.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, false); err != nil {
+	if err := r.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 
-	if closed := r.ClosedDoors("ns"); !closed["lobby-a"] {
-		t.Errorf("ClosedDoors(ns) = %v, want lobby-a", closed)
+	if closed := r.ClosedDoors("ns"); !closed["pod-a"] {
+		t.Errorf("ClosedDoors(ns) = %v, want pod-a", closed)
 	}
 }
 
-func TestClosedDoorsDropsAServerThatReopened(t *testing.T) {
+func TestClosedDoorsDropsAPodThatReopened(t *testing.T) {
 	r := New(time.Now, time.Second, time.Now())
 	r.Connect("pod-a", RoleServer)
-	_ = r.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, false)
-	if err := r.ReportAcceptJoins("pod-a", "ns", "lobby-a", true, false); err != nil {
+	_ = r.ReportAcceptJoins("pod-a", "ns", false, false)
+	if err := r.ReportAcceptJoins("pod-a", "ns", true, false); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 
-	if closed := r.ClosedDoors("ns"); closed["lobby-a"] {
-		t.Errorf("ClosedDoors(ns) = %v, want lobby-a open again", closed)
+	if closed := r.ClosedDoors("ns"); closed["pod-a"] {
+		t.Errorf("ClosedDoors(ns) = %v, want pod-a open again", closed)
 	}
 }
 
@@ -912,6 +912,43 @@ func TestClosedDoorsOmitsAServerNothingIsKnownAbout(t *testing.T) {
 
 	if closed := r.ClosedDoors("ns"); len(closed) != 0 {
 		t.Errorf("ClosedDoors(ns) = %v, want none", closed)
+	}
+}
+
+func TestClosedDoorsSurvivesASameUIDDisconnect(t *testing.T) {
+	// Mirrors TestAClosedDoorOutlivesADisconnect at the ClosedDoors reader:
+	// a renewal of the same pod must not be read as a reopened door.
+	r := New(time.Now, time.Second, time.Now())
+	r.Connect("pod-a", RoleServer)
+	_ = r.ReportAcceptJoins("pod-a", "ns", false, false)
+
+	r.Disconnect("pod-a")
+
+	if closed := r.ClosedDoors("ns"); !closed["pod-a"] {
+		t.Errorf("ClosedDoors(ns) = %v, want pod-a still closed across a disconnect", closed)
+	}
+}
+
+func TestClosedDoorsIsKeyedByPodNotByServerName(t *testing.T) {
+	// A persistent server keeps its name across a pod restart; this
+	// registry does not. The old pod's entry survives the restart until
+	// the orphan sweep forgets it, so a reader asking "is lobby-a's door
+	// shut" has to name the pod it means, not the server -- otherwise the
+	// old pod's closed door reads as the new pod's, minutes after the new
+	// one reopened it.
+	r := New(time.Now, time.Second, time.Now())
+	r.Connect("old-pod", RoleServer)
+	_ = r.ReportAcceptJoins("old-pod", "ns", false, false)
+
+	r.Connect("new-pod", RoleServer)
+	_ = r.ReportAcceptJoins("new-pod", "ns", true, false)
+
+	closed := r.ClosedDoors("ns")
+	if !closed["old-pod"] {
+		t.Errorf("ClosedDoors(ns) = %v, want old-pod still closed", closed)
+	}
+	if closed["new-pod"] {
+		t.Errorf("ClosedDoors(ns) = %v, want new-pod open", closed)
 	}
 }
 
