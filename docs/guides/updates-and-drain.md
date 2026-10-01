@@ -222,8 +222,8 @@ old one is still doing. `status.changeover` reports this as `Deferred`:
 
 - A `RollingUpdate` server group reaches it once every stale server still
   around is retiring or draining and every current server is Ready.
-- A proxy group reaches it once at least `replicas` current pods are Ready,
-  whatever its stale pods are still doing.
+- A proxy group reaches it once at least `replicas` current pods are Ready
+  and every stale pod still present is draining or terminating.
 
 `Deferred` holds no budget place and gates no later stage, and a readiness
 blip does not take either back once reached. That is also its cost: the old
@@ -276,13 +276,14 @@ stale pod serving nobody is marked to drain at once, so a crashlooping proxy
 cannot hold its own replacement back; once at least `replicas` of the new
 pods are Ready, every other stale pod still around is marked in the same
 pass, each on its own `maxStaleSeconds` deadline. A `replicas` lowered
-mid-roll, before any replacement is Ready, takes its surplus from the new
-pods, never from the old ones still serving.
+mid-roll, while fewer than `replicas` new pods are Ready, takes its surplus
+from the new pods, never from the old ones still serving.
 
-The group reports `status.changeover` as `Deferred` as soon as its new pods
-stand this way, whatever its old ones are still doing: it holds neither a
-changeover place nor a later stage for as long as the last players take to
-leave. `spec.update.maxStaleSeconds` is what bounds that drain.
+The group reports `status.changeover` as `Deferred` once at least `replicas`
+current pods are Ready and every stale pod still present is draining or
+terminating: it holds neither a changeover place nor a later stage for as
+long as the last players take to leave. `spec.update.maxStaleSeconds` is
+what bounds that drain.
 
 ## Taking a retirement back
 
