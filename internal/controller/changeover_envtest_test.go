@@ -673,6 +673,160 @@ func TestAServerGroupWaitsForTheProxyStageUntilItsNewPodsStand(t *testing.T) {
 	}
 }
 
+func TestAnUnreconciledProxyStageGatesAPersistentGroup(t *testing.T) {
+	f := newFixture(t)
+	gr := groupReconciler(f)
+	pr := proxyGroupReconciler(f)
+	f.createPersistentGroup(t, "world", 1)
+	for _, name := range []string{"lobby", "world"} {
+		f.reconcileNamedGroup(t, gr, name)
+		f.readyAllServersOf(t, name)
+	}
+	stale := f.readyProxyGroup(t, pr, "gateway", func(g *spawneryv1alpha1.ProxyGroup) { g.Spec.ChangeoverStage = -10 })
+
+	f.setProxyImage(t, "gateway", nextProxyImage)
+	f.setImage(t, "world", nextImage)
+	f.reconcileNamedGroup(t, gr, "world")
+
+	if g := f.proxyGroup("gateway"); g.Status.Changeover != spawneryv1alpha1.ChangeoverNone ||
+		g.Generation == g.Status.ObservedGeneration {
+		t.Fatalf("gateway changeover %q, generation %d, observed %d: the race needs a stale status",
+			g.Status.Changeover, g.Generation, g.Status.ObservedGeneration)
+	}
+	if srv := f.server("world-0"); !srv.DeletionTimestamp.IsZero() || srv.Status.Phase == string(phase.Draining) {
+		t.Fatalf("world-0 is being taken down before the proxy stage has been reconciled")
+	}
+	if c := f.progressing(t, "world"); c.Reason != spawneryv1alpha1.ReasonWaitingForEarlierStage ||
+		c.Message != "waiting for stage -10: gateway" {
+		t.Fatalf("world Progressing = %s %q", c.Reason, c.Message)
+	}
+
+	f.reconcileProxyGroup(pr, "gateway")
+	if got := f.proxyGroup("gateway").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
+		t.Fatalf("gateway status.changeover = %q, want Begun", got)
+	}
+	f.reconcileNamedGroup(t, gr, "world")
+	if srv := f.server("world-0"); !srv.DeletionTimestamp.IsZero() || srv.Status.Phase == string(phase.Draining) {
+		t.Fatalf("world-0 is being taken down while the proxy stage is in flight")
+	}
+
+	pods := f.proxyPods("gateway")
+	for i := range pods {
+		if slices.Contains(stale, pods[i].Name) {
+			f.reportProxyPlayers(t, pods[i], 1)
+		} else {
+			f.markProxyPodReady(t, &pods[i])
+		}
+	}
+	f.reconcileProxyGroup(pr, "gateway")
+	f.reconcileProxyGroup(pr, "gateway")
+	if got := f.proxyGroup("gateway").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+		t.Fatalf("gateway status.changeover = %q, want Deferred", got)
+	}
+
+	f.reconcileNamedGroup(t, gr, "world")
+	if srv, present := f.serverIfPresent("world-0"); present && srv.DeletionTimestamp.IsZero() &&
+		srv.Status.Phase != string(phase.Draining) {
+		t.Fatalf("world-0 phase %s is not being taken down once the proxy stage stands", srv.Status.Phase)
+	}
+}
+
+func TestChangeoverSiblingsMarkAnUnobservedSpec(t *testing.T) {
+	f := newFixture(t)
+	pr := proxyGroupReconciler(f)
+	f.createProxyGroup("gateway", func(g *spawneryv1alpha1.ProxyGroup) { g.Spec.ChangeoverStage = -10 })
+	unobserved := func() (bool, bool) {
+		t.Helper()
+		views, err := changeoverSiblings(f.ctx, f.c, f.ns, f.network.Name, "ServerGroup", "lobby")
+		if err != nil {
+			t.Fatalf("changeoverSiblings: %v", err)
+		}
+		for _, v := range views {
+			if v.Kind == "ProxyGroup" && v.Name == "gateway" {
+				return v.Unobserved, true
+			}
+		}
+		return false, false
+	}
+
+	if u, _ := unobserved(); !u {
+		t.Fatalf("a proxy group never reconciled is not unobserved")
+	}
+	f.reconcileProxyGroup(pr, "gateway")
+	if u, _ := unobserved(); u {
+		t.Fatalf("a reconciled proxy group is still unobserved")
+	}
+	f.setProxyImage(t, "gateway", nextProxyImage)
+	if u, _ := unobserved(); !u {
+		t.Fatalf("a spec change not yet reconciled is not unobserved")
+	}
+
+	g := f.proxyGroup("gateway")
+	g.Finalizers = append(g.Finalizers, "spawnery.cloud/test-hold")
+	if err := f.c.Update(f.ctx, g); err != nil {
+		t.Fatalf("hold gateway: %v", err)
+	}
+	t.Cleanup(func() {
+		g := &spawneryv1alpha1.ProxyGroup{}
+		if err := f.c.Get(context.Background(), types.NamespacedName{Name: "gateway", Namespace: f.ns}, g); err == nil {
+			g.Finalizers = nil
+			_ = f.c.Update(context.Background(), g)
+		}
+	})
+	if err := f.c.Delete(f.ctx, g); err != nil {
+		t.Fatalf("delete gateway: %v", err)
+	}
+	if _, present := unobserved(); present {
+		t.Fatalf("a proxy group being deleted is still a changeover sibling")
+	}
+}
+
+func TestARefusedProxyGroupObservesItsSpec(t *testing.T) {
+	f := newFixture(t)
+	pr := proxyGroupReconciler(f)
+	f.readyProxyGroup(t, pr, "gateway")
+	gateway := f.proxyGroup("gateway")
+	gateway.Spec.Scheduling = &spawneryv1alpha1.Scheduling{
+		Tolerations: []corev1.Toleration{{Key: "spawnery.cloud/test-refusal", Operator: corev1.TolerationOpExists}},
+	}
+	if err := f.c.Update(f.ctx, gateway); err != nil {
+		t.Fatalf("update gateway: %v", err)
+	}
+	f.reconcileProxyGroup(pr, "gateway")
+
+	g := f.proxyGroup("gateway")
+	if c := meta.FindStatusCondition(g.Status.Conditions, spawneryv1alpha1.ConditionAccepted); c == nil ||
+		c.Reason != spawneryv1alpha1.ReasonSchedulingNotAllowed {
+		t.Fatalf("gateway Accepted condition = %+v, want SchedulingNotAllowed", c)
+	}
+	if g.Status.ObservedGeneration != g.Generation {
+		t.Fatalf("refused gateway observedGeneration = %d, generation %d", g.Status.ObservedGeneration, g.Generation)
+	}
+}
+
+func TestARefusedServerGroupObservesItsSpec(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.reconcileNamedGroup(t, r, "lobby")
+	lobby := f.serverGroup(t, "lobby")
+	lobby.Spec.Scheduling = &spawneryv1alpha1.Scheduling{
+		Tolerations: []corev1.Toleration{{Key: "spawnery.cloud/test-refusal", Operator: corev1.TolerationOpExists}},
+	}
+	if err := f.c.Update(f.ctx, lobby); err != nil {
+		t.Fatalf("update lobby: %v", err)
+	}
+	f.reconcileNamedGroup(t, r, "lobby")
+
+	g := f.serverGroup(t, "lobby")
+	if c := meta.FindStatusCondition(g.Status.Conditions, spawneryv1alpha1.ConditionAccepted); c == nil ||
+		c.Reason != spawneryv1alpha1.ReasonSchedulingNotAllowed {
+		t.Fatalf("lobby Accepted condition = %+v, want SchedulingNotAllowed", c)
+	}
+	if g.Status.ObservedGeneration != g.Generation {
+		t.Fatalf("refused lobby observedGeneration = %d, generation %d", g.Status.ObservedGeneration, g.Generation)
+	}
+}
+
 func TestAProxyStageGatesWithTheBudgetUnset(t *testing.T) {
 	f := newFixture(t)
 	gr := groupReconciler(f)

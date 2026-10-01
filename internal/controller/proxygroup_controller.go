@@ -544,6 +544,7 @@ func (r *ProxyGroupReconciler) refuse(ctx context.Context, group *spawneryv1alph
 	if group.Status.Changeover == spawneryv1alpha1.ChangeoverWaiting {
 		group.Status.Changeover = spawneryv1alpha1.ChangeoverNone
 	}
+	group.Status.ObservedGeneration = group.Generation
 	protectErr := r.protectPlayersOnly(ctx, group)
 	if err := r.writeStatus(ctx, group); err != nil {
 		return ctrl.Result{}, err

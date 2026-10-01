@@ -192,11 +192,13 @@ per reconcile, when its own state is `Waiting`.
 - No new watch. Every group is reconciled at least every five seconds, which
   is also how often a changeover makes progress.
 
-**The race.** Two reconcilers read the cache a moment apart, and a sibling's
-`status.changeover` is one status write behind its reconcile. A later stage
-can therefore begin just as an earlier one turns stale; by rule 3 it then runs
-to the end. This is accepted, as for the budget: the failure stages prevent
-is a whole network in the wrong order, not a race of one pass.
+**The race.** A sibling's `status.changeover` is one status write behind its
+reconcile. Closed on 2026-10-02: a sibling whose `metadata.generation` is
+ahead of its `status.observedGeneration` gates every later stage as if in
+flight, without taking a budget place, so a single apply that changes every
+group no longer lets a later stage begin before an earlier one has published
+its state; every path that writes a group's status advances
+`observedGeneration`.
 
 ## 5. What an operator sees
 
