@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -215,4 +217,190 @@ func TestTutorialPlayableSlots(t *testing.T) {
 		}
 		return now.Status.FreeSlots == 3, fmt.Sprintf("status.freeSlots=%d", now.Status.FreeSlots)
 	})
+}
+
+// TestTutorialChangeoverStages puts the gateway a stage ahead of the lobby
+// and changes both: the lobby's first new server may only come once the
+// gateway's new proxy stands.
+//
+// It starts from one lobby server: at its ceiling the lobby could not surge,
+// and would hold back for that reason rather than for the gateway.
+//
+// The lobby is changed only after the gateway reports its changeover: a
+// sibling's status.changeover is one status write behind its reconcile, and
+// the design accepts that a later stage which saw it before that write begins
+// at once.
+func TestTutorialChangeoverStages(t *testing.T) {
+	if os.Getenv("SPAWNERY_E2E_TUTORIAL") != "1" {
+		t.Skip("set SPAWNERY_E2E_TUTORIAL=1; hack/e2e-tutorial.sh does this nightly")
+	}
+
+	applyManifest(t, tutorialManifest)
+
+	lobbyKey := client.ObjectKey{Namespace: tutorialNamespace, Name: tutorialServerGroup}
+	gatewayKey := client.ObjectKey{Namespace: tutorialNamespace, Name: tutorialProxyGroup}
+
+	eventuallyIn(t, tutorialOperatorNamespace, 8*time.Minute, "one lobby server, room under its ceiling, and no changeover under way", func() (bool, string) {
+		var lobby spawneryv1alpha1.ServerGroup
+		if err := k8s.Get(ctx, lobbyKey, &lobby); err != nil {
+			return false, err.Error()
+		}
+		var gateway spawneryv1alpha1.ProxyGroup
+		if err := k8s.Get(ctx, gatewayKey, &gateway); err != nil {
+			return false, err.Error()
+		}
+		return lobby.Status.Replicas == 1 && lobby.Status.ReadyReplicas == 1 && gateway.Status.ReadyReplicas >= 1 &&
+				lobby.Status.Changeover == "" && gateway.Status.Changeover == "",
+			fmt.Sprintf("lobby replicas=%d ready=%d changeover=%q; gateway ready=%d changeover=%q",
+				lobby.Status.Replicas, lobby.Status.ReadyReplicas, lobby.Status.Changeover,
+				gateway.Status.ReadyReplicas, gateway.Status.Changeover)
+	})
+
+	oldHashes := map[string]bool{}
+	var servers spawneryv1alpha1.ServerList
+	if err := k8s.List(ctx, &servers, client.InNamespace(tutorialNamespace)); err != nil {
+		t.Fatalf("list servers: %v", err)
+	}
+	for _, s := range servers.Items {
+		if s.Spec.GroupRef.Name == tutorialServerGroup {
+			oldHashes[s.Spec.PodHash] = true
+		}
+	}
+
+	probe := corev1.EnvVar{Name: "STAGE_PROBE", Value: strconv.FormatInt(time.Now().UnixNano(), 10)}
+	start := time.Now()
+	since := func(at time.Time) string { return at.Sub(start).Round(time.Second).String() }
+
+	var gateway spawneryv1alpha1.ProxyGroup
+	if err := k8s.Get(ctx, gatewayKey, &gateway); err != nil {
+		t.Fatalf("get ProxyGroup: %v", err)
+	}
+	gatewayPatch := client.MergeFrom(gateway.DeepCopy())
+	gateway.Spec.ChangeoverStage = -10
+	gateway.Spec.Env = append(gateway.Spec.Env, probe)
+	if err := k8s.Patch(ctx, &gateway, gatewayPatch); err != nil {
+		t.Fatalf("patch ProxyGroup: %v", err)
+	}
+	t.Logf("+%s gateway patched: changeoverStage -10, %s=%s", since(time.Now()), probe.Name, probe.Value)
+
+	eventuallyIn(t, tutorialOperatorNamespace, time.Minute, "the gateway to report its changeover", func() (bool, string) {
+		var now spawneryv1alpha1.ProxyGroup
+		if err := k8s.Get(ctx, gatewayKey, &now); err != nil {
+			return false, err.Error()
+		}
+		c := now.Status.Changeover
+		return c == spawneryv1alpha1.ChangeoverWaiting || c == spawneryv1alpha1.ChangeoverBegun,
+			fmt.Sprintf("status.changeover=%q", c)
+	})
+	t.Logf("+%s gateway in flight", since(time.Now()))
+
+	var lobby spawneryv1alpha1.ServerGroup
+	if err := k8s.Get(ctx, lobbyKey, &lobby); err != nil {
+		t.Fatalf("get ServerGroup: %v", err)
+	}
+	lobbyPatch := client.MergeFrom(lobby.DeepCopy())
+	lobby.Spec.Env = append(lobby.Spec.Env, probe)
+	if err := k8s.Patch(ctx, &lobby, lobbyPatch); err != nil {
+		t.Fatalf("patch ServerGroup: %v", err)
+	}
+	lobbyGeneration := lobby.Generation
+	t.Logf("+%s lobby patched: %s=%s (generation %d)", since(time.Now()), probe.Name, probe.Value, lobbyGeneration)
+
+	var proxyStood, lobbyBegan, firstGated time.Time
+	var lobbyBeganName, lastSeen string
+	var violations []string
+	deadline := time.Now().Add(10 * time.Minute)
+	for ; time.Now().Before(deadline); time.Sleep(time.Second) {
+		var g spawneryv1alpha1.ProxyGroup
+		if err := k8s.Get(ctx, gatewayKey, &g); err != nil {
+			continue
+		}
+		var l spawneryv1alpha1.ServerGroup
+		if err := k8s.Get(ctx, lobbyKey, &l); err != nil {
+			continue
+		}
+		var list spawneryv1alpha1.ServerList
+		if err := k8s.List(ctx, &list, client.InNamespace(tutorialNamespace)); err != nil {
+			continue
+		}
+
+		if proxyStood.IsZero() && (g.Status.Changeover == spawneryv1alpha1.ChangeoverDeferred || g.Status.Changeover == spawneryv1alpha1.ChangeoverNone) {
+			proxyStood = time.Now()
+			t.Logf("+%s gateway stands: status.changeover=%q readyReplicas=%d", since(proxyStood), g.Status.Changeover, g.Status.ReadyReplicas)
+		}
+
+		if lobbyBegan.IsZero() {
+			for _, s := range list.Items {
+				if s.Spec.GroupRef.Name != tutorialServerGroup || oldHashes[s.Spec.PodHash] || s.CreationTimestamp.Time.Before(start.Truncate(time.Second)) {
+					continue
+				}
+				if lobbyBegan.IsZero() || s.CreationTimestamp.Time.Before(lobbyBegan) {
+					lobbyBegan, lobbyBeganName = s.CreationTimestamp.Time, s.Name
+				}
+			}
+			if !lobbyBegan.IsZero() {
+				t.Logf("+%s lobby's first new server %s (created +%s)", since(time.Now()), lobbyBeganName, since(lobbyBegan))
+			}
+		}
+
+		progressing := meta.FindStatusCondition(l.Status.Conditions, spawneryv1alpha1.ConditionProgressing)
+		reason, message := "", ""
+		if progressing != nil {
+			reason, message = progressing.Reason, progressing.Message
+		}
+		if seen := fmt.Sprintf("gateway %q ready=%d; lobby %q replicas=%d ready=%d, Progressing %s: %s",
+			g.Status.Changeover, g.Status.ReadyReplicas, l.Status.Changeover,
+			l.Status.Replicas, l.Status.ReadyReplicas, reason, message); seen != lastSeen {
+			lastSeen = seen
+			t.Logf("+%s %s", since(time.Now()), seen)
+		}
+		gatewayInFlight := g.Status.Changeover == spawneryv1alpha1.ChangeoverWaiting || g.Status.Changeover == spawneryv1alpha1.ChangeoverBegun
+		if lobbyBegan.IsZero() && gatewayInFlight && l.Status.ObservedGeneration >= lobbyGeneration {
+			if reason != spawneryv1alpha1.ReasonWaitingForEarlierStage {
+				violations = append(violations, fmt.Sprintf("+%s gateway %q, lobby Progressing reason %q (%s)",
+					since(time.Now()), g.Status.Changeover, reason, message))
+			} else if firstGated.IsZero() {
+				firstGated = time.Now()
+				t.Logf("+%s lobby gated: changeover=%q Progressing %s: %s", since(firstGated), l.Status.Changeover, reason, message)
+				if want := "waiting for stage -10: " + tutorialProxyGroup; message != want {
+					violations = append(violations, fmt.Sprintf("lobby Progressing message %q, want %q", message, want))
+				}
+			}
+		}
+
+		if !proxyStood.IsZero() && !lobbyBegan.IsZero() &&
+			g.Status.Changeover == spawneryv1alpha1.ChangeoverNone && l.Status.Changeover == spawneryv1alpha1.ChangeoverNone {
+			t.Logf("+%s both done: gateway ready=%d, lobby ready=%d", since(time.Now()), g.Status.ReadyReplicas, l.Status.ReadyReplicas)
+			break
+		}
+	}
+
+	for _, v := range violations {
+		t.Errorf("lobby not held by the stage gate: %s", v)
+	}
+	switch {
+	case proxyStood.IsZero():
+		t.Fatalf("the gateway never stood within the deadline%s", denialHint(t, tutorialOperatorNamespace))
+	case lobbyBegan.IsZero():
+		t.Fatalf("the lobby never created a server under its new spec%s", denialHint(t, tutorialOperatorNamespace))
+	}
+	if firstGated.IsZero() {
+		t.Errorf("never saw the lobby report %s while the gateway was in flight", spawneryv1alpha1.ReasonWaitingForEarlierStage)
+	}
+	if lobbyBegan.Before(proxyStood.Add(-3 * time.Second)) {
+		t.Errorf("lobby's first new server %s was created at +%s, before the gateway stood at +%s",
+			lobbyBeganName, since(lobbyBegan), since(proxyStood))
+	}
+
+	var g spawneryv1alpha1.ProxyGroup
+	var l spawneryv1alpha1.ServerGroup
+	if err := k8s.Get(ctx, gatewayKey, &g); err != nil {
+		t.Fatalf("get ProxyGroup: %v", err)
+	}
+	if err := k8s.Get(ctx, lobbyKey, &l); err != nil {
+		t.Fatalf("get ServerGroup: %v", err)
+	}
+	if g.Status.Changeover != "" || l.Status.Changeover != "" {
+		t.Errorf("changeovers not finished: gateway %q, lobby %q", g.Status.Changeover, l.Status.Changeover)
+	}
 }
