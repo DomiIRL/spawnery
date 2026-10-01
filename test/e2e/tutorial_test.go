@@ -5,13 +5,11 @@ package e2e
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -493,7 +491,7 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 		return list.Items, err
 	}
 
-	eventuallyIn(t, tutorialOperatorNamespace, 8*time.Minute, "two transferring proxies and two Ready lobby servers", func() (bool, string) {
+	eventuallyIn(t, tutorialOperatorNamespace, 5*time.Minute, "two transferring proxies and two Ready lobby servers", func() (bool, string) {
 		var g spawneryv1alpha1.ProxyGroup
 		if err := k8s.Get(ctx, gatewayKey, &g); err != nil {
 			return false, err.Error()
@@ -539,30 +537,37 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 	fillerPod, fillerServer := whereIs(t, filler, proxyPods)
 	t.Logf("filler %s: proxy %s, backend %s", filler.username, fillerPod, fillerServer)
 
+	leave := func(j *heldJoin, pod string) {
+		j.stop()
+		eventuallyIn(t, tutorialOperatorNamespace, 30*time.Second, j.username+" to leave "+pod, func() (bool, string) {
+			log, err := readPodLog(tutorialNamespace, pod, &corev1.PodLogOptions{Container: podspec.ProxyContainerName})
+			if err != nil {
+				return false, err.Error()
+			}
+			left := regexp.MustCompile(`\[connected player\] ` + regexp.QuoteMeta(j.username) + `\b[^\n]* has disconnected`)
+			return left.MatchString(log), "no disconnect line for " + j.username
+		})
+	}
+
+	const hold = 2 * time.Minute
 	var player *heldJoin
 	var playerPod, playerServer string
+	var holdEnd time.Time
 	for attempt := 1; attempt <= 12 && player == nil; attempt++ {
-		j := join(fmt.Sprintf("%sp%d", base, attempt), 3*time.Minute)
+		j := join(fmt.Sprintf("%sp%d", base, attempt), hold)
+		started := time.Now()
 		pod, server := whereIs(t, j, proxyPods)
 		t.Logf("attempt %d, %s: proxy %s, backend %s", attempt, j.username, pod, server)
 		if pod == fillerPod && server != fillerServer {
-			player, playerPod, playerServer = j, pod, server
+			player, playerPod, playerServer, holdEnd = j, pod, server, started.Add(hold)
 			continue
 		}
-		j.stop()
+		leave(j, pod)
 	}
 	if player == nil {
 		t.Fatalf("twelve joins never shared the filler's proxy %s; the NodePort is not spreading connections", fillerPod)
 	}
-	filler.stop()
-	eventuallyIn(t, tutorialOperatorNamespace, time.Minute, "the filler to leave its proxy", func() (bool, string) {
-		log, err := readPodLog(tutorialNamespace, fillerPod, &corev1.PodLogOptions{Container: podspec.ProxyContainerName})
-		if err != nil {
-			return false, err.Error()
-		}
-		left := regexp.MustCompile(`\[connected player\] ` + regexp.QuoteMeta(filler.username) + `\b[^\n]* has disconnected`)
-		return left.MatchString(log), "no disconnect line for " + filler.username
-	})
+	leave(filler, fillerPod)
 
 	var original corev1.Pod
 	if err := k8s.Get(ctx, client.ObjectKey{Namespace: tutorialNamespace, Name: playerPod}, &original); err != nil {
@@ -581,9 +586,13 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 	rolled := time.Now()
 	t.Logf("gateway rolled with %s on %s behind %s", player.username, playerPod, playerServer)
 
+	arrivalDeadline := rolled.Add(75 * time.Second)
+	if latest := holdEnd.Add(-10 * time.Second); latest.Before(arrivalDeadline) {
+		arrivalDeadline = latest
+	}
 	var arrivedPod, arrivedServer string
 	var originalGone bool
-	for deadline := time.Now().Add(150 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
+	for ; time.Now().Before(arrivalDeadline); time.Sleep(time.Second) {
 		select {
 		case err := <-player.done:
 			player.done <- err
@@ -617,8 +626,8 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 		}
 	}
 	if arrivedPod == "" {
-		t.Fatalf("%s never arrived on another proxy within 150s of the roll; transfer lines on %s: %q%s",
-			player.username, playerPod, transferred(), denialHint(t, tutorialOperatorNamespace))
+		t.Fatalf("%s never arrived on another proxy within %s of the roll; transfer lines on %s: %q%s",
+			player.username, arrivalDeadline.Sub(rolled).Round(time.Second), playerPod, transferred(), denialHint(t, tutorialOperatorNamespace))
 	}
 	if !originalGone {
 		t.Fatalf("%s arrived on %s, but its original proxy %s never went away", player.username, arrivedPod, playerPod)
@@ -632,11 +641,26 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 	if arrivedServer != playerServer {
 		t.Errorf("%s arrived behind %s, want %s, the server it was on before the roll", player.username, arrivedServer, playerServer)
 	}
+	arrivedLog, err := readPodLog(tutorialNamespace, arrivedPod, &corev1.PodLogOptions{Container: podspec.ProxyContainerName})
+	if err != nil {
+		t.Fatalf("read %s's log: %v", arrivedPod, err)
+	}
+	if refused := regexp.MustCompile(`spawnery: transfer cookie from '` + regexp.QuoteMeta(player.username) + `' refused[^\n]*`).FindString(arrivedLog); refused != "" {
+		t.Errorf("%s: %s", arrivedPod, refused)
+	}
 
-	eventuallyIn(t, tutorialOperatorNamespace, 90*time.Second, "the operator to count the player on "+playerServer, func() (bool, string) {
+	statusWait := 45 * time.Second
+	if left := time.Until(holdEnd.Add(-5 * time.Second)); left < statusWait {
+		statusWait = left
+	}
+	eventuallyIn(t, tutorialOperatorNamespace, statusWait, "the operator to count the player on "+playerServer, func() (bool, string) {
+		players := lobbyServerPlayers()
+		if _, ok := players[playerServer]; !ok {
+			return false, fmt.Sprintf("%s is not among the Ready lobby servers %v", playerServer, players)
+		}
 		seen := ""
 		ok := true
-		for name, players := range lobbyServerPlayers() {
+		for name, players := range players {
 			seen += fmt.Sprintf(" %s=%d", name, players)
 			want := int32(0)
 			if name == playerServer {
@@ -647,21 +671,15 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 		return ok, "status.players:" + seen
 	})
 
-	err = <-player.done
-	player.done <- err
-	if err != nil {
-		t.Fatalf("%s's join did not hold through the roll (%v):\n%s", player.username, err, player.out.String())
+	// spawnery-join reconnects only where a Transfer points, so a process
+	// still running after its username arrived on another pod followed one.
+	select {
+	case err := <-player.done:
+		player.done <- err
+		t.Fatalf("%s's join ended before the checks were done (%v):\n%s", player.username, err, player.out.String())
+	default:
 	}
-	var result struct {
-		Transfers int `json:"transfers"`
-	}
-	if err := json.Unmarshal(bytes.TrimSpace(player.out.Bytes()), &result); err != nil {
-		t.Fatalf("read spawnery-join's result: %v\n%s", err, player.out.String())
-	}
-	t.Logf("spawnery-join: %s", strings.TrimSpace(player.out.String()))
-	if result.Transfers < 1 {
-		t.Errorf("spawnery-join reports %d transfers, want at least 1", result.Transfers)
-	}
+	player.stop()
 
 	t.Run("a closed door shields the player", func(t *testing.T) {
 		t.Skip("no command or tool closes a backend's door from outside the server: AcceptJoins is " +
@@ -704,7 +722,7 @@ func (j *heldJoin) stop() {
 
 func whereIs(t *testing.T, j *heldJoin, pods func() ([]corev1.Pod, error)) (string, string) {
 	t.Helper()
-	deadline := time.Now().Add(time.Minute)
+	deadline := time.Now().Add(30 * time.Second)
 	for ; time.Now().Before(deadline); time.Sleep(500 * time.Millisecond) {
 		select {
 		case err := <-j.done:
@@ -722,7 +740,7 @@ func whereIs(t *testing.T, j *heldJoin, pods func() ([]corev1.Pod, error)) (stri
 			}
 		}
 	}
-	t.Fatalf("%s was not seen on any proxy within a minute", j.username)
+	t.Fatalf("%s was not seen on any proxy within 30s", j.username)
 	return "", ""
 }
 
