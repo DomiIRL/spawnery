@@ -288,6 +288,71 @@ terminating: it holds neither a changeover place nor a later stage for as
 long as the last players take to leave. `spec.update.maxStaleSeconds` is
 what bounds that drain.
 
+### Moving players to another proxy
+
+Since Minecraft 1.20.5 a server can hand a client a *transfer*: the client
+closes its connection and opens a new one elsewhere, and the proxy it lands
+on can read back a cookie the old one set. `spec.update.transfer` puts that
+to use instead of waiting for `maxStaleSeconds`, or for the player to leave
+on their own:
+
+```yaml
+kind: ProxyGroup
+spec:
+  update:
+    transfer:                 # unset = today's behaviour
+      forceAfterSeconds: 300  # default 300, minimum 0
+```
+
+**Enabling it rolls the group once.** A proxy only accepts a transferred
+client with `accepts-transfers = true` in `velocity.toml`, which the
+operator renders only for a group with `transfer` set, and that line is part
+of the rendered config the group's pod hash covers. The proxies doing that
+first roll do not have the setting yet, so they still drain the old way;
+every roll after that transfers.
+
+Once enabled, a leaving proxy moves players in two moments:
+
+- **At once, on a server switch.** A player who is about to connect to a
+  different backend — `/server arena`, a plugin sending them on — is
+  transferred there instead, landing on another proxy of the group along the
+  way.
+- **Forced, after `forceAfterSeconds`.** Counted from when the proxy started
+  leaving. After that, every player whose current server's door is open is
+  transferred back to that same server. A player on a server whose door is
+  closed (`AcceptJoins` false, a round in progress) is never forced; once the
+  door opens and the deadline has passed, they go on the next pass, which
+  runs once a second.
+
+A transfer only happens while another proxy of the same group is Ready and
+not itself leaving — otherwise there is nowhere to send the player, and the
+proxy leaves them where they are. Each player is tried once per deadline;
+anyone whose client is older than 1.20.5 cannot be transferred and stays
+behind, same as before, bounded by `maxStaleSeconds` and the drain deadline.
+
+The player lands on the new proxy at the server they were going to, or were
+already on, via a signed cookie keyed off the forwarding secret every proxy
+in the network already mounts. A cookie that does not check out — expired
+(they are good for 60 s), another player's, naming a server the receiving
+proxy does not know, or written before a forwarding-secret rotation — routes
+the player as an ordinary fresh join rather than to the named server.
+
+What the player sees is a loading screen; what the backend sees is a quit
+followed by a join, the same as any reconnect. That has not been measured
+against a real client yet, so take "loading screen" as the shape of it, not
+a claim that it feels seamless.
+
+The agent logs every transfer and every cookie it refuses:
+
+```
+spawnery: transferred 'Notch' (switch) toward 'arena'
+spawnery: transfer cookie from 'Notch' refused: expired
+```
+
+A roll replaces proxies blue/green — the new pods come up and serve while
+the old ones drain — so during a roll there is always somewhere for a
+transfer to land.
+
 ## Taking a retirement back
 
 `/cloud unretire <name>` (or `unretire(server)` from a plugin) takes a
