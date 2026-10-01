@@ -88,6 +88,17 @@ type fake struct {
 	// holdDisconnect, when set, is sent right after afterAck: a player thrown
 	// out during the hold rather than during the join.
 	holdDisconnect []byte
+	// loginCookieRequests are asked for during login, before Login Success,
+	// the way a proxy receiving a transfer asks.
+	loginCookieRequests []string
+	// storeCookies are stored on the client right after afterAck, and
+	// configCookieRequests asked for after them.
+	storeCookies         map[string][]byte
+	configCookieRequests []string
+	// transferHost and transferPort, when set, are sent as a Transfer after
+	// the cookies; the connection then waits for the client to hang up.
+	transferHost string
+	transferPort int
 
 	mu              sync.Mutex
 	handshake       handshakeFields
@@ -97,6 +108,85 @@ type fake struct {
 	loginUUID       [16]byte
 	gotLoginAck     bool
 	serverErrors    []error
+	cookieAnswers   map[string]cookieAnswer
+	logins          int
+}
+
+type cookieAnswer struct {
+	present bool
+	payload []byte
+}
+
+func (f *fake) sawCookieAnswers() map[string]cookieAnswer {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]cookieAnswer{}
+	for k, v := range f.cookieAnswers {
+		out[k] = v
+	}
+	return out
+}
+
+func (f *fake) loginsSeen() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.logins
+}
+
+// configIDs are the configuration-state Store Cookie and Transfer ids: one
+// packet was inserted ahead of both in 26.3 (protocol 777).
+func configIDs(protocol int) (storeCookie, transfer int32) {
+	if protocol >= 777 {
+		return 0x0b, 0x0c
+	}
+	return 0x0a, 0x0b
+}
+
+// askForCookie sends a Cookie Request and records the Cookie Response.
+func (f *fake) askForCookie(conn net.Conn, threshold int, requestID, responseID int32, key string) error {
+	if err := writeFrame(conn, threshold, requestID, mcproto.AppendString(nil, key)); err != nil {
+		return err
+	}
+	id, payload, err := readFrame(conn, threshold)
+	if err != nil {
+		return err
+	}
+	if id != responseID {
+		return fmt.Errorf("expected a cookie response 0x%02x, got packet 0x%02x", responseID, id)
+	}
+	r := bytes.NewReader(payload)
+	got, err := readStringFrom(r)
+	if err != nil {
+		return err
+	}
+	if got != key {
+		return fmt.Errorf("cookie response names %q, want %q", got, key)
+	}
+	present, err := r.ReadByte()
+	if err != nil {
+		return err
+	}
+	answer := cookieAnswer{present: present == 1}
+	if answer.present {
+		n, err := mcproto.ReadVarInt(r)
+		if err != nil {
+			return err
+		}
+		answer.payload = make([]byte, n)
+		if _, err := io.ReadFull(r, answer.payload); err != nil {
+			return err
+		}
+	}
+	if r.Len() != 0 {
+		return fmt.Errorf("cookie response carries %d trailing bytes", r.Len())
+	}
+	f.mu.Lock()
+	if f.cookieAnswers == nil {
+		f.cookieAnswers = map[string]cookieAnswer{}
+	}
+	f.cookieAnswers[key] = answer
+	f.mu.Unlock()
+	return nil
 }
 
 type handshakeFields struct {
@@ -250,7 +340,14 @@ func (f *fake) serveLogin(conn net.Conn) error {
 	}
 	f.mu.Lock()
 	f.loginName, f.loginUUID = name, uuid
+	f.logins++
 	f.mu.Unlock()
+
+	for _, key := range f.loginCookieRequests {
+		if err := f.askForCookie(conn, -1, 0x05, 0x04, key); err != nil {
+			return err
+		}
+	}
 
 	switch {
 	case f.closeAfterLoginStart:
@@ -303,6 +400,29 @@ func (f *fake) serveLogin(conn net.Conn) error {
 
 	if f.holdDisconnect != nil {
 		return writeFrame(conn, threshold, 0x02, f.holdDisconnect)
+	}
+	storeID, transferID := configIDs(f.protocol)
+	for key, value := range f.storeCookies {
+		payload := mcproto.AppendString(nil, key)
+		payload = mcproto.AppendVarInt(payload, int32(len(value)))
+		payload = append(payload, value...)
+		if err := writeFrame(conn, threshold, storeID, payload); err != nil {
+			return err
+		}
+	}
+	for _, key := range f.configCookieRequests {
+		if err := f.askForCookie(conn, threshold, 0x00, 0x01, key); err != nil {
+			return err
+		}
+	}
+	if f.transferHost != "" {
+		payload := mcproto.AppendString(nil, f.transferHost)
+		payload = mcproto.AppendVarInt(payload, int32(f.transferPort))
+		if err := writeFrame(conn, threshold, transferID, payload); err != nil {
+			return err
+		}
+		_, _ = conn.Read(make([]byte, 1))
+		return nil
 	}
 	for i := 0; i < f.keepAlives; i++ {
 		sent := []byte{0, 0, 0, 0, 0, 0, 0, byte(i + 1)}
@@ -791,5 +911,123 @@ func TestJoinRespectsAContextDeadline(t *testing.T) {
 	var netErr net.Error
 	if !errors.As(err, &netErr) || !netErr.Timeout() {
 		t.Errorf("error is %q, want a timeout", err)
+	}
+}
+
+func TestJoinAndHoldAnswersCookieRequestsFromWhatWasStored(t *testing.T) {
+	for _, protocol := range []int{776, 777} {
+		t.Run(strconv.Itoa(protocol), func(t *testing.T) {
+			f := &fake{
+				protocol:             protocol,
+				compressAt:           4096,
+				storeCookies:         map[string][]byte{"spawnery:transfer": []byte("ticket")},
+				configCookieRequests: []string{"spawnery:transfer", "spawnery:unknown"},
+				keepAlives:           1,
+			}
+			host, port := start(t, f)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if _, err := JoinWith(ctx, host, port, "spawnery_probe", Options{Hold: 400 * time.Millisecond}); err != nil {
+				t.Fatalf("JoinWith: %v", err)
+			}
+			answers := f.sawCookieAnswers()
+			if got := answers["spawnery:transfer"]; !got.present || string(got.payload) != "ticket" {
+				t.Errorf("the stored cookie was answered with %+v, want \"ticket\"", got)
+			}
+			if got, ok := answers["spawnery:unknown"]; !ok || got.present {
+				t.Errorf("a cookie never stored was answered with %+v (asked: %v), want an answer without a payload", got, ok)
+			}
+			if errs := f.errorsSeen(); len(errs) != 0 {
+				t.Errorf("the server half reported %v", errs)
+			}
+		})
+	}
+}
+
+func TestJoinAndHoldFollowsATransferWithItsCookies(t *testing.T) {
+	for _, protocol := range []int{776, 777} {
+		t.Run(strconv.Itoa(protocol), func(t *testing.T) {
+			target := &fake{
+				protocol:            protocol,
+				compressAt:          4096,
+				loginCookieRequests: []string{"spawnery:transfer", "spawnery:unknown"},
+				keepAlives:          1,
+			}
+			targetHost, targetPort := start(t, target)
+			source := &fake{
+				protocol:     protocol,
+				compressAt:   4096,
+				storeCookies: map[string][]byte{"spawnery:transfer": []byte("ticket")},
+				transferHost: targetHost,
+				transferPort: targetPort,
+			}
+			host, port := start(t, source)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			began := time.Now()
+			result, err := JoinWith(ctx, host, port, "spawnery_probe",
+				Options{Hold: 800 * time.Millisecond, FollowTransfers: true})
+			elapsed := time.Since(began)
+			if err != nil {
+				t.Fatalf("JoinWith: %v", err)
+			}
+			if result.Transfers != 1 {
+				t.Errorf("Transfers = %d, want 1", result.Transfers)
+			}
+			if elapsed < 800*time.Millisecond {
+				t.Errorf("JoinWith returned after %s, before the 800ms hold was up", elapsed)
+			}
+			if elapsed > 5*time.Second {
+				t.Errorf("JoinWith took %s for an 800ms hold", elapsed)
+			}
+
+			hs := target.sawHandshake()
+			if hs.nextState != 3 {
+				t.Errorf("the transferred handshake asked for next state %d, want 3", hs.nextState)
+			}
+			if hs.protocol != int32(protocol) || hs.host != targetHost || int(hs.port) != targetPort {
+				t.Errorf("the transferred handshake was %+v, want protocol %d to %s:%d", hs, protocol, targetHost, targetPort)
+			}
+			if !target.sawLoginAck() {
+				t.Error("the client never completed the login on the server it was transferred to")
+			}
+			answers := target.sawCookieAnswers()
+			if got := answers["spawnery:transfer"]; !got.present || string(got.payload) != "ticket" {
+				t.Errorf("the transfer cookie was answered with %+v, want \"ticket\"", got)
+			}
+			if got, ok := answers["spawnery:unknown"]; !ok || got.present {
+				t.Errorf("a cookie never stored was answered with %+v (asked: %v), want an answer without a payload", got, ok)
+			}
+			if got := target.keepAlivesAnswered(); got != 1 {
+				t.Errorf("the target got %d keep alive answers, want 1: the hold did not continue there", got)
+			}
+			for _, f := range []*fake{source, target} {
+				if errs := f.errorsSeen(); len(errs) != 0 {
+					t.Errorf("a server half reported %v", errs)
+				}
+			}
+		})
+	}
+}
+
+func TestJoinAndHoldEndsAtATransferItDoesNotFollow(t *testing.T) {
+	target := &fake{keepAlives: 1}
+	targetHost, targetPort := start(t, target)
+	source := &fake{protocol: 777, transferHost: targetHost, transferPort: targetPort}
+	host, port := start(t, source)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := JoinAndHold(ctx, host, port, "spawnery_probe", 3*time.Second)
+	if err == nil {
+		t.Fatalf("JoinAndHold succeeded with %+v although the player was transferred away", result)
+	}
+	if !strings.Contains(err.Error(), "transferred") || !strings.Contains(err.Error(), net.JoinHostPort(targetHost, strconv.Itoa(targetPort))) {
+		t.Errorf("error is %q, want it to name the transfer and its target", err)
+	}
+	if got := target.loginsSeen(); got != 0 {
+		t.Errorf("the target saw %d logins, want none", got)
 	}
 }
