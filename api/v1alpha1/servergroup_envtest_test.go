@@ -485,3 +485,48 @@ func TestPlayableSlotsIsAllowedOnEveryType(t *testing.T) {
 		t.Fatalf("on-demand: %v", err)
 	}
 }
+
+func TestServerGroupStorageKeepAccepted(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+	keep := []string{"worlds/world", "plugins/Challenges/internal", "worlds/world/level.dat*", "a?"}
+
+	od := onDemandGroup(ns, "keeps-on-demand")
+	od.Spec.Storage.Keep = keep
+	if err := c.Create(ctx, od); err != nil {
+		t.Fatalf("create on-demand group with keep: %v", err)
+	}
+	p := persistentGroup(ns, "keeps-persistent")
+	p.Spec.Storage.Keep = keep
+	if err := c.Create(ctx, p); err != nil {
+		t.Fatalf("create persistent group with keep: %v", err)
+	}
+}
+
+func TestServerGroupStorageKeepRefusesBadEntries(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	tests := map[string][]string{
+		"empty list":     {},
+		"absolute":       {"/x"},
+		"parent segment": {"a/../b"},
+		"dot segment":    {"a/./b"},
+		"empty segment":  {"a//b"},
+		"trailing slash": {"a/"},
+		"bracket":        {"a[b"},
+		"closing":        {"a]b"},
+		"backslash":      {`a\b`},
+		"too long":       {strings.Repeat("a", 257)},
+		"one bad entry":  {"worlds/world", "a//b"},
+	}
+	for name, keep := range tests {
+		t.Run(name, func(t *testing.T) {
+			g := onDemandGroup(ns, "keep-"+strings.ReplaceAll(name, " ", "-"))
+			g.Spec.Storage.Keep = keep
+			if err := c.Create(ctx, g); err == nil {
+				t.Fatalf("keep %q was accepted", keep)
+			}
+		})
+	}
+}
