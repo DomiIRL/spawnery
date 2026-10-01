@@ -1887,16 +1887,16 @@ func TestASlowStartingProxyIsNotReportedAsDiverged(t *testing.T) {
 	}
 }
 
-// TestASpecChangeSurgesBeforeItMarksAnything is the rollout's first move: the
-// replacement proxy is created before any proxy is
+// TestASpecChangeSurgesBeforeItMarksAnything is the rollout's first move: a
+// replacement for every stale proxy is created before any proxy is
 // asked to stop taking connections. That ordering is what leaves room for the
 // ready count to hold at replicas; whether it actually holds is the readiness
 // gate's business, and that is the next test's.
 //
-// It measures the surge and nothing else. The rollout as a whole — one proxy at
-// a time, every one of them, ending on the new shape — is
-// TestTheRolloutFinishesWithEveryProxyOnTheNewShape, and the readiness gate in
-// front of the first mark is TestTheSurgePodMustBeReadyBeforeAnyPodIsMarked.
+// It measures the surge and nothing else. The rollout as a whole, ending on
+// the new shape, is TestTheRolloutFinishesWithEveryProxyOnTheNewShape, and the
+// readiness gate in front of the marks is
+// TestTheReplacementsMustBeReadyBeforeAnyPodIsMarked.
 func TestASpecChangeSurgesBeforeItMarksAnything(t *testing.T) {
 	f := newFixture(t)
 	r := proxyGroupReconciler(f)
@@ -1920,29 +1920,29 @@ func TestASpecChangeSurgesBeforeItMarksAnything(t *testing.T) {
 
 	f.reconcileProxyGroup(r, "gateway")
 	after := f.proxyPods("gateway")
-	if len(after) != 3 {
-		t.Fatalf("proxy pods = %d after the spec change, want 3 — the surge pod must exist before anything is marked", len(after))
+	if len(after) != 4 {
+		t.Fatalf("proxy pods = %d after the spec change, want 4 — every replacement must exist before anything is marked", len(after))
 	}
 	for i := range after {
 		if _, dated := drainingSince(&after[i]); dated {
-			t.Errorf("pod %s was marked while the surge pod is still unready; ready capacity would dip below replicas", after[i].Name)
+			t.Errorf("pod %s was marked while the replacements are still unready; ready capacity would dip below replicas", after[i].Name)
 		}
 	}
 }
 
-// TestTheSurgePodMustBeReadyBeforeAnyPodIsMarked states the property the
+// TestTheReplacementsMustBeReadyBeforeAnyPodIsMarked states the property the
 // surge exists for, and it is the one a pod count alone cannot show.
 //
-// The second reconcile with the surge pod still unready is what gives this
+// The second reconcile with the replacements still unready is what gives this
 // test its grip, and it was added after the mutation run said so. Without it
-// this test's one pass under an unready surge pod is the pass that creates it,
+// this test's one pass under unready replacements is the pass that creates them,
 // where the group is below its target and the decision is a create with no
 // drain in it whatever the readiness gate says: the gate could be deleted
 // outright and the test would not notice — which is what running that mutation
 // against the version without this pass actually did. On the second pass the
 // group is at its target, so the gate is the last thing standing between a
 // stale pod and the mark.
-func TestTheSurgePodMustBeReadyBeforeAnyPodIsMarked(t *testing.T) {
+func TestTheReplacementsMustBeReadyBeforeAnyPodIsMarked(t *testing.T) {
 	f := newFixture(t)
 	r := proxyGroupReconciler(f)
 	f.createProxyGroup("gateway")
@@ -1958,20 +1958,20 @@ func TestTheSurgePodMustBeReadyBeforeAnyPodIsMarked(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 	f.reconcileProxyGroup(r, "gateway")
-	// A resync with the surge pod still unready: the group is at its target
-	// size now, so nothing is created and nothing may be marked either.
+	// A resync with the replacements still unready: the group is at its
+	// target size now, so nothing is created and nothing may be marked either.
 	f.clock.Advance(ResyncInterval)
 	f.reconcileProxyGroup(r, "gateway")
 
-	// Make the surge pod ready and reconcile again.
+	// Make the replacements ready and reconcile again.
 	pods := f.proxyPods("gateway")
-	if len(pods) != 3 {
-		t.Fatalf("proxy pods = %d, want the group's 2 replicas plus one surge", len(pods))
+	if len(pods) != 4 {
+		t.Fatalf("proxy pods = %d, want the group's 2 replicas plus a replacement for each", len(pods))
 	}
 	for i := range pods {
 		if _, dated := drainingSince(&pods[i]); dated {
-			t.Fatalf("pod %s was marked before the surge pod turned ready; the group has 2 replicas and would "+
-				"have been left with 1 ready proxy", pods[i].Name)
+			t.Fatalf("pod %s was marked before the replacements turned ready; the group has 2 replicas and would "+
+				"have been left without a ready proxy", pods[i].Name)
 		}
 		f.markProxyPodReady(t, &pods[i])
 	}
@@ -1983,8 +1983,8 @@ func TestTheSurgePodMustBeReadyBeforeAnyPodIsMarked(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != 1 {
-		t.Errorf("marked = %d, want exactly 1 — a rolling update replaces one proxy at a time", marked)
+	if marked != 2 {
+		t.Errorf("marked = %d, want 2 — once the replacements are Ready every old proxy is marked at once", marked)
 	}
 }
 
@@ -2017,10 +2017,9 @@ func TestChangingReplicasAloneRollsNothing(t *testing.T) {
 // TestADrainingProxyKeepsItsMarkWhileTheRolloutWaits pins the one piece of
 // state a rollout cannot re-derive on the pass after it decides.
 //
-// DecideRollout deliberately names nobody while another pod is draining — that
-// is what makes the update one proxy at a time — so a caller that rebuilt
-// `leaving` from the decision alone would cancel its own drain on the very next
-// pass: readiness restored, annotation deleted, and then the same choice made
+// DecideRollout never names a stale pod that is already draining, so a caller
+// that rebuilt `leaving` from the decision alone would cancel its own drain on
+// the very next pass: readiness restored, annotation deleted, and then the same choice made
 // again five seconds later with the deadline running from zero. A proxy with a
 // player on it would be told to stop taking connections and to start again,
 // forever, and the drain would never end.
@@ -2049,7 +2048,7 @@ func TestADrainingProxyKeepsItsMarkWhileTheRolloutWaits(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	// Pass one surges, pass two marks — once the surge pod is ready.
+	// Pass one surges, pass two marks — once the replacements are ready.
 	f.reconcileProxyGroup(r, "gateway")
 	surged := f.proxyPods("gateway")
 	for i := range surged {
@@ -2064,7 +2063,7 @@ func TestADrainingProxyKeepsItsMarkWhileTheRolloutWaits(t *testing.T) {
 		}
 	}
 	if marked == "" {
-		t.Fatal("no proxy was marked once the surge pod was ready; there is no drain to keep")
+		t.Fatal("no proxy was marked once the replacements were ready; there is no drain to keep")
 	}
 
 	f.clock.Advance(ResyncInterval)
@@ -2086,7 +2085,8 @@ func TestADrainingProxyKeepsItsMarkWhileTheRolloutWaits(t *testing.T) {
 
 // TestTheRolloutFinishesWithEveryProxyOnTheNewShape drives the whole thing:
 // one spec change, and the operator converges on a group of the new shape
-// without ever running more than the surge over its replica count.
+// without ever running more than one replacement per stale proxy over its
+// replica count.
 //
 // Every pod is reported empty, which is what lets a marked proxy go on the pass
 // it is marked; the point here is the sequence, not the wait, which
@@ -2115,12 +2115,12 @@ func TestTheRolloutFinishesWithEveryProxyOnTheNewShape(t *testing.T) {
 		t.Fatalf("desired hash: %v", err)
 	}
 
-	// Ten passes is well over the four this rollout takes — a create and then a
-	// mark for each of the two proxies, the count checked by running the loop
-	// short — so it leaves room for the operator to be slower than expected and
-	// none for it to never finish. The passes after the fourth are not padding
-	// either: they are what says a settled group stays settled instead of
-	// rolling itself forever.
+	// Ten passes is well over the two this rollout takes — creating both
+	// replacements, then marking both old proxies, the count checked by
+	// running the loop short — so it leaves room for the operator to be slower
+	// than expected and none for it to never finish. The passes after the
+	// second are not padding either: they are what says a settled group stays
+	// settled instead of rolling itself forever.
 	for pass := 0; pass < 10; pass++ {
 		pods := f.proxyPods("gateway")
 		for i := range pods {
@@ -2128,8 +2128,8 @@ func TestTheRolloutFinishesWithEveryProxyOnTheNewShape(t *testing.T) {
 			f.reportProxyPlayers(t, pods[i], 0)
 		}
 		f.reconcileProxyGroup(r, "gateway")
-		if n := len(f.proxyPods("gateway")); n > 3 {
-			t.Fatalf("proxy pods = %d on pass %d, want at most replicas + the surge of 1", n, pass)
+		if n := len(f.proxyPods("gateway")); n > 4 {
+			t.Fatalf("proxy pods = %d on pass %d, want at most replicas + one replacement per stale proxy", n, pass)
 		}
 	}
 
@@ -2235,8 +2235,8 @@ func TestAMarkedProxyKeepsItsMarkWhenTheSurgePodIsLost(t *testing.T) {
 	if got := f.proxies.lastReady(string(pod.UID)); got == nil || *got {
 		t.Errorf("the stale draining proxy was told ready=%v after the surge pod was lost, want false", got)
 	}
-	if n := len(f.proxyPods("gateway")); n != 3 {
-		t.Errorf("proxy pods = %d, want 3 — a replacement surge pod must come up under the one that is going", n)
+	if n := len(f.proxyPods("gateway")); n != 4 {
+		t.Errorf("proxy pods = %d, want 4 — the lost replacement must come up again under the ones that are going", n)
 	}
 }
 
@@ -2418,20 +2418,17 @@ func TestAStaleMarkDoesNotSpendTheSurplusBudget(t *testing.T) {
 // pod's mark outlives the reason it was made, and it is the state a rollback
 // puts a group into.
 //
-// A spec change is not one-way. Change the image, wait for the surge pod, let a
-// proxy be marked for being stale — then put the image back, and that proxy
-// matches the spec again while the surge pod raised to replace it does not. The
-// mark that was a stale mark is now a surplus mark, and the pod nobody has
-// marked is the stale one.
+// A spec change is not one-way. Change the image, wait for the replacements,
+// let the old proxies be marked for being stale — then put the image back, and
+// those proxies match the spec again while the replacements raised for them do
+// not. The marks that were stale marks are now surplus marks, and the pods
+// nobody has marked are the stale ones.
 //
-// The group holds the mark, which is a choice and not an accident. Releasing it
-// would spend the surplus budget on the surge pod's departure before that
-// departure has started — the surge pod is stale but unmarked, and gets marked
-// only on a later pass, because a rolling update takes one proxy at a time. A
-// spec that flaps would then cancel and remake drains, restarting a deadline
-// that is supposed to bound them. The cost of holding is one proxy more than
-// the minimum leaving, one at a time and bounded by the same deadline as every
-// other wait here.
+// The group holds the marks, which is a choice and not an accident. Releasing
+// them would spend the surplus budget on the replacements' departure before
+// that departure has started — they are stale but unmarked, and are not marked
+// while no current pod is Ready. A spec that flaps would then cancel and remake
+// drains, restarting a deadline that is supposed to bound them.
 func TestARevertedSpecChangeKeepsTheMarkItAlreadyMade(t *testing.T) {
 	f := newFixture(t)
 	r := proxyGroupReconciler(f)
@@ -2443,10 +2440,9 @@ func TestARevertedSpecChangeKeepsTheMarkItAlreadyMade(t *testing.T) {
 		t.Fatalf("proxy pods = %d, want 2", len(before))
 	}
 	sortPodsOldestFirst(before)
-	// One proxy has a player and the other has no agent at all, so which of the
-	// two is marked is decided by the occupancy rule rather than by a tie: a
-	// reported count outranks an unknown one, and the player keeps that pod in
-	// the group long enough for the revert below to land on it.
+	// One proxy has a player and the other has no agent at all, which counts as
+	// occupied: both stay in the group long enough for the revert below to land
+	// on them.
 	held := before[0]
 	f.reportProxyPlayers(t, held, 1)
 	for i := range before {
@@ -2463,16 +2459,18 @@ func TestARevertedSpecChangeKeepsTheMarkItAlreadyMade(t *testing.T) {
 	}
 	f.reconcileProxyGroup(r, "gateway")
 	surged := f.proxyPods("gateway")
-	if len(surged) != 3 {
-		t.Fatalf("proxy pods = %d after the spec change, want 3", len(surged))
+	if len(surged) != 4 {
+		t.Fatalf("proxy pods = %d after the spec change, want 4", len(surged))
 	}
 	for i := range surged {
 		f.markProxyPodReady(t, &surged[i])
 	}
 	f.reconcileProxyGroup(r, "gateway")
 
-	if got := markedProxies(f.proxyPods("gateway")); len(got) != 1 || got[0] != held.Name {
-		t.Fatalf("marked = %v, want just %s — the proxy with a reported count is the one the rule takes", got, held.Name)
+	originals := []string{before[0].Name, before[1].Name}
+	sort.Strings(originals)
+	if got := markedProxies(f.proxyPods("gateway")); !slices.Equal(got, originals) {
+		t.Fatalf("marked = %v, want both originals %v", got, originals)
 	}
 	marked, ok := f.pod(held.Name)
 	if !ok {
@@ -2480,8 +2478,8 @@ func TestARevertedSpecChangeKeepsTheMarkItAlreadyMade(t *testing.T) {
 	}
 	at := marked.Annotations[ProxyDrainingSinceAnnotation]
 
-	// The rollback: the marked proxy matches the spec again, and the surge pod
-	// that was brought up to replace it does not.
+	// The rollback: the marked proxies match the spec again, and the
+	// replacements brought up for them do not.
 	g = f.proxyGroup("gateway")
 	g.Spec.Image = shipped
 	if err := f.c.Update(f.ctx, g); err != nil {
@@ -2511,9 +2509,9 @@ func TestARevertedSpecChangeKeepsTheMarkItAlreadyMade(t *testing.T) {
 			"describes", held.Name)
 	}
 
-	if got := markedProxies(f.proxyPods("gateway")); len(got) != 1 || got[0] != held.Name {
-		t.Errorf("marked = %v, want just %s still — the budget is spent on departures under way, and the surge "+
-			"pod's has not started", got, held.Name)
+	if got := markedProxies(f.proxyPods("gateway")); !slices.Equal(got, originals) {
+		t.Errorf("marked = %v, want just the originals %v still — the budget is spent on departures under way, "+
+			"and the replacements' have not started", got, originals)
 	}
 	if got := after.Annotations[ProxyDrainingSinceAnnotation]; got != at {
 		t.Errorf("draining-since on %s is now %q, want the original %q — a rollback must not restart a deadline "+
@@ -3226,16 +3224,16 @@ func TestAHashMismatchMarkDoesNotFireANodeDrainingEvent(t *testing.T) {
 	if err := f.c.Update(f.ctx, g); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	f.reconcileProxyGroup(r, "gateway") // surges the replacement; nothing marked yet
+	f.reconcileProxyGroup(r, "gateway") // surges the replacements; nothing marked yet
 
 	after := f.proxyPods("gateway")
-	if len(after) != 3 {
-		t.Fatalf("proxy pods = %d after the spec change, want 3", len(after))
+	if len(after) != 4 {
+		t.Fatalf("proxy pods = %d after the spec change, want 4", len(after))
 	}
 	for i := range after {
 		f.markProxyPodReady(t, &after[i])
 	}
-	f.reconcileProxyGroup(r, "gateway") // marks exactly one pod, for the hash mismatch
+	f.reconcileProxyGroup(r, "gateway") // marks both old pods, for the hash mismatch
 
 	marked := 0
 	for _, p := range f.proxyPods("gateway") {
@@ -3243,8 +3241,8 @@ func TestAHashMismatchMarkDoesNotFireANodeDrainingEvent(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != 1 {
-		t.Fatalf("marked = %d, want 1; nothing below tests the gate without a mark to test it against", marked)
+	if marked != 2 {
+		t.Fatalf("marked = %d, want 2; nothing below tests the gate without a mark to test it against", marked)
 	}
 
 	if containsEvent(drainEvents(rec), spawneryv1alpha1.ReasonNodeDraining) {

@@ -302,8 +302,8 @@ func TestChangeoverBudgetHoldsAProxyGroupBehindAServerGroup(t *testing.T) {
 	f.finishChangeover(t, gr, "lobby")
 	f.reconcileProxyGroup(pr, "gateway")
 
-	if n := len(f.proxyPods("gateway")); n != 3 {
-		t.Fatalf("gateway has %d pods, want 3: the place is free, the surge pod comes", n)
+	if n := len(f.proxyPods("gateway")); n != 4 {
+		t.Fatalf("gateway has %d pods, want 4: the place is free, the replacements come", n)
 	}
 	if got := f.proxyGroup("gateway").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
 		t.Fatalf("gateway status.changeover = %q, want Begun", got)
@@ -327,8 +327,8 @@ func TestChangeoverBudgetUnsetDoesNotRefuseADegradedProxyGroup(t *testing.T) {
 
 	f.reconcileProxyGroup(pr, "gateway")
 
-	if n := len(f.proxyPods("gateway")); n != 3 {
-		t.Fatalf("gateway has %d pods, want 3: no budget refuses nothing", n)
+	if n := len(f.proxyPods("gateway")); n != 4 {
+		t.Fatalf("gateway has %d pods, want 4: no budget refuses nothing", n)
 	}
 }
 
@@ -348,8 +348,8 @@ func TestChangeoverBudgetHeldUntilTheLastStaleProxyIsGone(t *testing.T) {
 			f.setProxyImage(t, "gateway", nextProxyImage)
 			f.reconcileProxyGroup(pr, "gateway")
 			pods := f.proxyPods("gateway")
-			if len(pods) != 3 {
-				t.Fatalf("gateway has %d pods, want 3", len(pods))
+			if len(pods) != 4 {
+				t.Fatalf("gateway has %d pods, want 4", len(pods))
 			}
 			for i := range pods {
 				f.markProxyPodReady(t, &pods[i])
@@ -432,8 +432,8 @@ func TestARefusedWaitingProxyGroupGivesUpItsPlace(t *testing.T) {
 	// Waiting.
 	f.finishChangeover(t, gr, "lobby")
 	f.reconcileProxyGroup(pr, "zulu")
-	if n := len(f.proxyPods("zulu")); n != 3 {
-		t.Fatalf("zulu has %d pods, want 3: the place is free, the surge pod comes", n)
+	if n := len(f.proxyPods("zulu")); n != 4 {
+		t.Fatalf("zulu has %d pods, want 4: the place is free, the replacements come", n)
 	}
 	if got := f.proxyGroup("zulu").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
 		t.Fatalf("zulu status.changeover = %q, want Begun", got)

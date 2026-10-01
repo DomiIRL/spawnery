@@ -930,8 +930,8 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 			// Two ways to be out of date, and the rollout does not distinguish
 			// them: a pod whose rendered shape no longer matches the group, and
 			// a pod on a node that is going away. Both have to be replaced by a
-			// pod somewhere else, one at a time, without disconnecting anyone —
-			// which is the sentence DecideRollout already implements.
+			// pod somewhere else without disconnecting anyone — which is the
+			// sentence DecideRollout already implements.
 			Stale:           pods[i].Labels[podspec.LabelPodHash] != wantHash || nodeGoing[i] || requested,
 			RetireRequested: requested,
 			Ready:           isPodReady(&pods[i]),
@@ -1039,8 +1039,8 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 		leaving[name] = true
 	}
 	// A pod already carrying the mark keeps it while the group still wants it
-	// gone, because DecideRollout deliberately names nobody while another pod
-	// is draining — that is what makes the update one proxy at a time. Without
+	// gone, because DecideRollout names only pods to mark now: never a stale
+	// pod already draining, and no surplus while anything drains. Without
 	// this the drain started last pass would be cancelled on the next one and
 	// made again on the one after, and each cancellation deletes the
 	// annotation, so the deadline would start from zero every time.
@@ -1055,8 +1055,8 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 	// rather than the number it still needs, and sits under capacity until a
 	// drain finishes on its own. Nothing rescues it in the meantime: the group
 	// is not short of pods, only of ready ones, so DecideRollout's create
-	// branch does not fire, and its one-at-a-time gate returns before it could
-	// decide anything else.
+	// branch does not fire, and its surplus branch waits while anything
+	// drains.
 	//
 	// The number it needs comes out of what must be left standing:
 	//
@@ -1069,24 +1069,25 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 	//
 	// The term subtracts stale *marks* rather than stale pods because what the
 	// invariant is about is pods that are leaving, and a stale pod with no mark
-	// is still serving — it will be marked on a later pass, one at a time.
+	// is still serving — it will be marked once the group's current pods are
+	// Ready.
 	//
 	// The two counts come apart in one state: a spec change reverted while a
 	// proxy is draining for it.
-	// Take a group of two on v1, change the image, wait for the surge pod, and
-	// let one old proxy be marked; then put the image back. The marked pod
-	// matches the spec again and the surge pod does not, so a pod that was a
-	// stale mark is now a surplus mark and the pod nobody has marked is the
-	// stale one. Subtracting stale pods would release the mark on the spot,
-	// because the surge pod's eventual departure is counted as if it had
-	// already happened; subtracting stale marks holds it, and the surge pod is
-	// marked on a later pass when this one has finished.
+	// Take a group of two on v1, change the image, wait for the replacements,
+	// and let the old proxies be marked; then put the image back. The marked
+	// pods match the spec again and the replacements do not, so what were
+	// stale marks are now surplus marks and the pods nobody has marked are the
+	// stale ones. Subtracting stale pods would release the marks on the spot,
+	// because the replacements' eventual departure is counted as if it had
+	// already happened; subtracting stale marks holds them, and the
+	// replacements are replaced in turn when these have finished.
 	//
-	// Holding it is the conservative reading: the
+	// Holding them is the conservative reading: the
 	// budget is spent only on departures that are actually under way, so a spec
 	// that flaps does not release a drain it will want back. It costs the group
-	// one proxy more than the minimum, drained one at a time and bounded by the
-	// deadline like every other wait here.
+	// up to replicas proxies more than the minimum, bounded by the deadline
+	// like every other wait here.
 	// TestARevertedSpecChangeKeepsTheMarkItAlreadyMade pins it, so this is a
 	// decision the code states rather than one a comment claims.
 	//
@@ -1127,7 +1128,7 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 	// candidate set. Player counts moving underneath can therefore change which
 	// of the marks still standing would be kept, but nothing here can hand a
 	// mark back to a pod this loop released — only a fresh decision can, and
-	// DecideRollout makes none while anything is draining.
+	// DecideRollout marks no current pod while anything is draining.
 	//
 	// The set is not monotone. It grows whenever a pass with nothing draining
 	// decides a surplus, which is how every mark here first appears; the
@@ -1544,7 +1545,7 @@ func reportChangingOver(group *spawneryv1alpha1.ProxyGroup, pods []corev1.Pod, w
 		cond.Reason = spawneryv1alpha1.ReasonPodShapeChanged
 		cond.Message = fmt.Sprintf(
 			"%d of %d proxy pods carry a shape this operator no longer renders and are "+
-				"being replaced one at a time; if every group in the cluster says this at "+
+				"being replaced; if every group in the cluster says this at "+
 				"once, an operator upgrade changed the pod render rather than anyone "+
 				"editing a spec", stale, len(pods))
 		if len(waitingFor) > 0 {
