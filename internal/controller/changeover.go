@@ -206,9 +206,12 @@ func changeoverHolders(groups []ChangeoverView, admitted map[string]bool, selfKi
 // group's extra server. A WhenEmpty group with a Ready current server is
 // Deferred instead: what remains waits for its players, not for the budget.
 // It stays Deferred while any current server still counts, Ready or not, so a
-// readiness loss does not take a budget place nobody admitted it to.
+// readiness loss does not take a budget place nobody admitted it to. A
+// RollingUpdate group is Deferred the same way once every stale server is
+// retiring and a current one is up, so the last retiree's own drain does not
+// hold a budget place nobody still needs.
 func ownServerChangeover(views []ServerView, podHash string, pendingCreates int32, whenEmpty bool, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
-	var stale, current, readyCurrent bool
+	var stale, staleServing, current, readyCurrent, unreadyCurrent bool
 	for _, v := range views {
 		if v.Hold {
 			continue
@@ -216,20 +219,49 @@ func ownServerChangeover(views []ServerView, podHash string, pendingCreates int3
 		if staleSpec(v, podHash) {
 			if !phase.Terminal(v.Phase) {
 				stale = true
+				if !v.leaving() && !v.Retire {
+					staleServing = true
+				}
 			}
 		} else if v.countsTowardSize() {
 			current = true
 			if v.Phase == phase.Ready {
 				readyCurrent = true
+			} else {
+				unreadyCurrent = true
 			}
+		}
+	}
+	wasDeferred := was == spawneryv1alpha1.ChangeoverDeferred
+	switch {
+	case !stale:
+		return spawneryv1alpha1.ChangeoverNone
+	case whenEmpty && (readyCurrent || (wasDeferred && current)):
+		return spawneryv1alpha1.ChangeoverDeferred
+	case !whenEmpty && !staleServing && current &&
+		(wasDeferred || (pendingCreates == 0 && !unreadyCurrent)):
+		return spawneryv1alpha1.ChangeoverDeferred
+	case current || pendingCreates > 0:
+		return spawneryv1alpha1.ChangeoverBegun
+	default:
+		return spawneryv1alpha1.ChangeoverWaiting
+	}
+}
+
+// ownPersistentChangeover is a persistent group's changeover state. It begins
+// with its first stale takedown and stays begun while stale ordinals remain; a
+// current ordinal added meanwhile does not begin it.
+func ownPersistentChangeover(views []ServerView, podHash string, takedown bool, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
+	stale := false
+	for _, v := range views {
+		if !v.Hold && staleSpec(v, podHash) && !phase.Terminal(v.Phase) {
+			stale = true
 		}
 	}
 	switch {
 	case !stale:
 		return spawneryv1alpha1.ChangeoverNone
-	case whenEmpty && (readyCurrent || (was == spawneryv1alpha1.ChangeoverDeferred && current)):
-		return spawneryv1alpha1.ChangeoverDeferred
-	case current || pendingCreates > 0:
+	case takedown || was == spawneryv1alpha1.ChangeoverBegun:
 		return spawneryv1alpha1.ChangeoverBegun
 	default:
 		return spawneryv1alpha1.ChangeoverWaiting

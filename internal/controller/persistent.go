@@ -89,6 +89,9 @@ type PersistentInputs struct {
 	// and that case is handled the same way as a view's empty hash: adopted,
 	// not compared. See the empty check in DecidePersistentSize's stale loop.
 	PodHash string
+	// ChangeoverRefused withholds the stale nomination: an earlier stage of
+	// the network is still changing over.
+	ChangeoverRefused bool
 }
 
 // DecidePersistentSize decides which ordinals a persistent group is missing,
@@ -229,7 +232,7 @@ func DecidePersistentSize(in PersistentInputs) SizeDecision {
 		stale = append(stale, ordinal)
 	}
 	sort.Slice(stale, func(i, j int) bool { return stale[i] > stale[j] })
-	if len(stale) > 0 {
+	if len(stale) > 0 && !in.ChangeoverRefused {
 		decision.Delete = append(decision.Delete, held[stale[0]])
 		decision.DeleteReason = "StaleSpec"
 		return decision

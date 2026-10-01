@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
 	"github.com/spawnery/spawnery/internal/phase"
@@ -288,6 +289,7 @@ func TestOwnServerChangeover(t *testing.T) {
 	old := ServerView{Name: "old", PodHash: "old", Phase: phase.Ready}
 	current := ServerView{Name: "new", PodHash: "current", Phase: phase.Ready}
 	startingCurrent := ServerView{Name: "new", PodHash: "current", Phase: phase.Starting}
+	retiringOld := ServerView{Name: "old-r", PodHash: "old", Phase: phase.Retiring, Retire: true}
 	for _, tc := range []struct {
 		name      string
 		views     []ServerView
@@ -304,10 +306,42 @@ func TestOwnServerChangeover(t *testing.T) {
 		{"a held stale server is no changeover", []ServerView{{Name: "old", PodHash: "old", Phase: phase.Ready, Hold: true}, current}, 0, false, "", spawneryv1alpha1.ChangeoverNone},
 		{"deferred stays deferred while its current server is not Ready", []ServerView{old, startingCurrent}, 0, true, spawneryv1alpha1.ChangeoverDeferred, spawneryv1alpha1.ChangeoverDeferred},
 		{"deferred with no current server left waits again", []ServerView{old}, 0, true, spawneryv1alpha1.ChangeoverDeferred, spawneryv1alpha1.ChangeoverWaiting},
+		{"RollingUpdate with every stale server retiring and the current one Ready", []ServerView{retiringOld, current}, 0, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverDeferred},
+		{"RollingUpdate with a stale server not yet asked to leave", []ServerView{retiringOld, old, current}, 0, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
+		{"RollingUpdate with a replacement still starting", []ServerView{retiringOld, current, startingCurrent}, 0, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
+		{"RollingUpdate with a create in flight", []ServerView{retiringOld, current}, 1, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
+		{"RollingUpdate deferred stays deferred through a readiness blip", []ServerView{retiringOld, startingCurrent}, 0, false, spawneryv1alpha1.ChangeoverDeferred, spawneryv1alpha1.ChangeoverDeferred},
+		{"RollingUpdate deferred falls back once a stale server is serving again", []ServerView{old, current}, 0, false, spawneryv1alpha1.ChangeoverDeferred, spawneryv1alpha1.ChangeoverBegun},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := ownServerChangeover(tc.views, "current", tc.pending, tc.whenEmpty, tc.was); got != tc.want {
 				t.Errorf("ownServerChangeover = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestOwnPersistentChangeover(t *testing.T) {
+	stale := ServerView{Name: "w-0", PodHash: "old", Phase: phase.Ready, Ordinal: ptr.To[int32](0)}
+	current := ServerView{Name: "w-1", PodHash: "current", Phase: phase.Ready, Ordinal: ptr.To[int32](1)}
+	held := ServerView{Name: "w-0", PodHash: "old", Phase: phase.Ready, Ordinal: ptr.To[int32](0), Hold: true}
+	for _, tc := range []struct {
+		name     string
+		views    []ServerView
+		takedown bool
+		was      spawneryv1alpha1.ChangeoverState
+		want     spawneryv1alpha1.ChangeoverState
+	}{
+		{"nothing stale", []ServerView{current}, false, "", spawneryv1alpha1.ChangeoverNone},
+		{"stale, nothing down", []ServerView{stale}, false, "", spawneryv1alpha1.ChangeoverWaiting},
+		{"a takedown in flight has begun", []ServerView{stale}, true, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverBegun},
+		{"begun stays begun between takedowns", []ServerView{stale, current}, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
+		{"a new current ordinal beside stale ones while Waiting stays Waiting", []ServerView{stale, current}, false, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverWaiting},
+		{"a held stale server is no changeover", []ServerView{held, current}, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverNone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ownPersistentChangeover(tc.views, "current", tc.takedown, tc.was); got != tc.want {
+				t.Errorf("ownPersistentChangeover = %q, want %q", got, tc.want)
 			}
 		})
 	}
