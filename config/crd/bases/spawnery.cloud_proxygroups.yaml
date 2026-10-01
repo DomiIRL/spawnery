@@ -1894,6 +1894,18 @@ spec:
                     format: int32
                     minimum: 0
                     type: integer
+                  transfer:
+                    description: Transfer moves players to another proxy instead of
+                      waiting for them.
+                    properties:
+                      forceAfterSeconds:
+                        description: |-
+                          ForceAfterSeconds is how long a leaving proxy waits before it
+                          transfers players who have not changed server. Default 300.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
                 type: object
             required:
             - expose

@@ -203,6 +203,22 @@ type ProxyUpdateSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxStaleSeconds int32 `json:"maxStaleSeconds,omitempty"`
+
+	// Transfer moves players to another proxy instead of waiting for them.
+	// +optional
+	Transfer *ProxyTransferSpec `json:"transfer,omitempty"`
+}
+
+// ProxyTransferSpec moves players off a leaving proxy with Minecraft's
+// transfer packet (clients 1.20.5 and newer): at once when they change
+// server, the rest after ForceAfterSeconds unless their server has closed
+// its door. Setting it rolls the group once.
+type ProxyTransferSpec struct {
+	// ForceAfterSeconds is how long a leaving proxy waits before it
+	// transfers players who have not changed server. Default 300.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	ForceAfterSeconds *int32 `json:"forceAfterSeconds,omitempty"`
 }
 
 // ProxyGroupSpec describes the Velocity layer of a network.
@@ -484,4 +500,20 @@ func (g *ProxyGroup) MaxStale() time.Duration {
 		return 0
 	}
 	return time.Duration(g.Spec.Update.MaxStaleSeconds) * time.Second
+}
+
+// defaultTransferForceAfter is spec.update.transfer.forceAfterSeconds when
+// transfer is set but the field itself is not.
+const defaultTransferForceAfter = 300 * time.Second
+
+// TransferForceAfter is spec.update.transfer.forceAfterSeconds and whether
+// transfer is on at all. (0, false) when spec.update.transfer is unset.
+func (g *ProxyGroup) TransferForceAfter() (time.Duration, bool) {
+	if g.Spec.Update == nil || g.Spec.Update.Transfer == nil {
+		return 0, false
+	}
+	if g.Spec.Update.Transfer.ForceAfterSeconds == nil {
+		return defaultTransferForceAfter, true
+	}
+	return time.Duration(*g.Spec.Update.Transfer.ForceAfterSeconds) * time.Second, true
 }

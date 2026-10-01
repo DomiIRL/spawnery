@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
 	"github.com/spawnery/spawnery/internal/testenv"
@@ -164,6 +165,25 @@ func TestProxyGroupExposeValidation(t *testing.T) {
 				t.Errorf("error = %v, want it to mention %q", err, tc.wantMsg)
 			}
 		})
+	}
+}
+
+// TestProxyGroupTransferForceAfterSecondsMinimum proves the
+// +kubebuilder:validation:Minimum=0 marker on ProxyTransferSpec.ForceAfterSeconds
+// is actually in the installed CRD, not just in the source.
+func TestProxyGroupTransferForceAfterSecondsMinimum(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	g := proxyGroup(ns, spawneryv1alpha1.ExposeSpec{
+		Type:     spawneryv1alpha1.ExposeNodePort,
+		NodePort: &spawneryv1alpha1.NodePortSpec{Port: 30565},
+	})
+	g.Spec.Update = &spawneryv1alpha1.ProxyUpdateSpec{
+		Transfer: &spawneryv1alpha1.ProxyTransferSpec{ForceAfterSeconds: ptr.To[int32](-1)},
+	}
+	if err := c.Create(ctx, g); err == nil {
+		t.Fatal("create succeeded with forceAfterSeconds: -1, want refusal")
 	}
 }
 

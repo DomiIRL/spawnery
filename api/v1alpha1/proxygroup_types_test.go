@@ -24,6 +24,8 @@ package v1alpha1
 import (
 	"testing"
 	"time"
+
+	"k8s.io/utils/ptr"
 )
 
 // TestDrainTimeoutDefaultsWhenTheFieldIsAbsent proves the accessor, not just
@@ -43,6 +45,29 @@ func TestDrainTimeoutHonorsAnExplicitValue(t *testing.T) {
 	g := &ProxyGroup{Spec: ProxyGroupSpec{Drain: &DrainSpec{TimeoutSeconds: 45}}}
 	if got, want := g.DrainTimeout(), 45*time.Second; got != want {
 		t.Errorf("DrainTimeout() = %v, want %v", got, want)
+	}
+}
+
+func TestTransferForceAfter(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		u    *ProxyUpdateSpec
+		want time.Duration
+		on   bool
+	}{
+		{"no update", nil, 0, false},
+		{"update without transfer", &ProxyUpdateSpec{}, 0, false},
+		{"transfer with defaults", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{}}, 300 * time.Second, true},
+		{"transfer at once", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{ForceAfterSeconds: ptr.To[int32](0)}}, 0, true},
+		{"transfer after 90", &ProxyUpdateSpec{Transfer: &ProxyTransferSpec{ForceAfterSeconds: ptr.To[int32](90)}}, 90 * time.Second, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &ProxyGroup{Spec: ProxyGroupSpec{Update: tc.u}}
+			got, on := g.TransferForceAfter()
+			if got != tc.want || on != tc.on {
+				t.Errorf("TransferForceAfter() = %v, %v; want %v, %v", got, on, tc.want, tc.on)
+			}
+		})
 	}
 }
 
