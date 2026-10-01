@@ -108,8 +108,8 @@ type ChangeoverView struct {
     Name    string
     State   spawneryv1alpha1.ChangeoverState
     Failing bool
-    Stage   int32 // spec.changeoverStage
-    Surges  bool  // false for persistent groups: they take no budget place
+    Stage      int32 // spec.changeoverStage
+    Persistent bool  // gated by stage, takes no budget place
 }
 ```
 
@@ -118,10 +118,10 @@ failing. Then:
 
 1. **Stage gate.** A `Waiting` group is admitted only if no group of a lower
    stage is in flight.
-2. **Budget.** Of the groups the gate passes, `Begun` surging groups hold
-   places; the remaining places go to waiting surging groups ordered by stage,
-   then name, then kind. Non-surging groups pass the gate and are admitted
-   without a place. Budget unset means no cap, and the gate still applies.
+2. **Budget.** Of the groups the gate passes, `Begun` non-persistent groups
+   hold places; the remaining places go to waiting non-persistent groups
+   ordered by stage, then name, then kind. Persistent groups the gate passes
+   are admitted without a place. Budget unset means no cap, and the gate still applies.
 3. **Never paused halfway.** A `Begun` group stays admitted even if a group of
    a lower stage becomes stale after it began. A paused changeover would keep
    its extra server and only make the wait longer.
@@ -166,9 +166,8 @@ today's waiting behaviour.
 
 "Stale" keeps its meaning in `DecideRollout`: a pod of an old hash, a pod on a
 node that is leaving, or a pod an admin asked to retire. All three go
-blue/green. Surplus without anything stale (a lowered `replicas`) still drains
-one at a time, as today: no new pods are involved, and the one-at-a-time
-guard protects ready capacity there.
+blue/green. Surplus without anything stale (a lowered `replicas`) is handled as today:
+no new pods are involved.
 
 **The cost** is memory: a proxy changeover now runs up to `replicas` extra
 pods instead of one, until the new ones are Ready and the old ones have
@@ -181,7 +180,7 @@ As for the budget: each group decides for itself from the shared cache, once
 per reconcile, when its own state is `Waiting`.
 
 - `changeoverSiblings` reads `spec.changeoverStage` and the kind of each
-  sibling (persistent → `Surges: false`) along with what it reads today, and
+  sibling (`Persistent` from `spec.type`) along with what it reads today, and
   lists persistent groups too.
 - The early return on a budget of 0 in `proxyChangeover` and around the
   server group's call goes: with stages, an unset budget no longer means
@@ -227,7 +226,7 @@ is a whole network in the wrong order, not a race of one pass.
   current Ready, none is (except one not serving); a dying replacement during
   the drain is rebuilt; without surge, nothing is created and only a
   non-serving stale pod is marked; a lowered `replicas` with nothing stale
-  still drains one at a time. The existing cases that encode one-at-a-time
+  drains its surplus as today. The existing cases that encode one-at-a-time
   replacement of stale pods change on purpose; each changed case is named in
   the commit.
 - **`ownServerChangeover`:** `RollingUpdate` with every stale server retiring
