@@ -211,8 +211,8 @@ spec:
 Optional `int32` on `ServerGroup` and `ProxyGroup`, default `0`, negative
 values allowed, so a group can be moved ahead of every group that sets
 nothing. A group with a stale server waits while any group of a lower stage
-is still changing over; groups of one stage change over together, within the
-budget. The gate applies whether or not a budget is set — an unset budget
+is still changing over, or has a spec change the operator has not reconciled
+yet; groups of one stage change over together, within the budget. The gate applies whether or not a budget is set — an unset budget
 caps nothing, but it does not reorder anything either. A group whose
 changeover is failing (`BackingOff` or `Degraded`) gates nothing, the same as
 for the budget, and so does one whose cold start the `maxReplicas` ceiling

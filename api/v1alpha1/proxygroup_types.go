@@ -415,7 +415,10 @@ type ProxyGroupStatus struct {
 	// Literally that, and not the looser convention it is often read as. It
 	// advances on a pass that failed as well as one that succeeded, because
 	// setStatus writes it on every path that observed the pods and the
-	// Service -- so a group permanently refused by Pod Security reports
+	// Service, and refuse() on every path that refused the group before
+	// looking (a missing or unaccepted Network, a volume, scheduling or host
+	// port the Network does not allow, a foreign ConfigMap) -- so a group
+	// permanently refused by Pod Security or by its Network reports
 	// observedGeneration == generation for as long as the refusal stands. A
 	// reader taking that to mean "the controller has caught up and all is
 	// well" is misled; Degraded=True beside the same generation is the

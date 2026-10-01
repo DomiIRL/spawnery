@@ -110,11 +110,14 @@ type ChangeoverView struct {
     Failing bool
     Stage      int32 // spec.changeoverStage
     Persistent bool  // gated by stage, takes no budget place
+    Unobserved bool  // generation ahead of status.observedGeneration (2026-10-02)
 }
 ```
 
 A group is **in flight** when its state is `Waiting` or `Begun` and it is not
-failing. Then:
+failing. An **unobserved** group, one whose spec change the operator has not
+reconciled yet, gates later stages as if in flight, failing or not, but holds
+no place and is never admitted for it (added 2026-10-02, see §4). Then:
 
 1. **Stage gate.** A `Waiting` group is admitted only if no group of a lower
    stage is in flight.
@@ -192,11 +195,21 @@ per reconcile, when its own state is `Waiting`.
 - No new watch. Every group is reconciled at least every five seconds, which
   is also how often a changeover makes progress.
 
-**The race.** Two reconcilers read the cache a moment apart, and a sibling's
-`status.changeover` is one status write behind its reconcile. A later stage
-can therefore begin just as an earlier one turns stale; by rule 3 it then runs
-to the end. This is accepted, as for the budget: the failure stages prevent
-is a whole network in the wrong order, not a race of one pass.
+**The race.** A sibling's `status.changeover` is one status write behind its
+reconcile. Narrowed on 2026-10-02: a sibling whose `metadata.generation` is
+ahead of its `status.observedGeneration` gates every later stage, so a later
+stage no longer begins in the seconds before an earlier one publishes its
+state. What remains is the informer delivery gap between two objects of one
+apply: ServerGroups and ProxyGroups come through separate informers, and a
+later stage reconciled before the earlier group's new spec reaches the cache
+still reads its old one. An unobserved group gates even when its status says
+failing, because that status is the one its spec change may have outdated;
+the cost is a later stage held back until the failing group's next status
+write. `observedGeneration` is advanced by the server group's one status write
+and by the proxy group's `setStatus` and `refuse()`, so no refusal leaves it
+behind; the proxy group's early write of `Accepted` does not advance it, and
+a pass that fails between that write and `setStatus` leaves the group
+unobserved until a later pass gets through.
 
 ## 5. What an operator sees
 

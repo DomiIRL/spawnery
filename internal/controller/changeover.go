@@ -42,6 +42,7 @@ type ChangeoverView struct {
 	Failing    bool
 	Stage      int32
 	Persistent bool // gated by stage, takes no budget place: it never surges
+	Unobserved bool // a spec change not yet reconciled: State may predate it
 }
 
 func changeoverKey(kind, name string) string { return kind + "/" + name }
@@ -50,13 +51,19 @@ func changeoverInFlight(g ChangeoverView) bool {
 	return !g.Failing && (g.State == spawneryv1alpha1.ChangeoverWaiting || g.State == spawneryv1alpha1.ChangeoverBegun)
 }
 
+// changeoverGates lets an unobserved group gate even when Failing: Failing is
+// read from the same status its unobserved spec change may have outdated.
+func changeoverGates(g ChangeoverView) bool {
+	return changeoverInFlight(g) || g.Unobserved
+}
+
 // earliestStageBefore is the lowest stage below stage with a group in flight,
 // and that stage's groups by name.
 func earliestStageBefore(groups []ChangeoverView, stage int32) (int32, []string, bool) {
 	found := false
 	var lowest int32
 	for _, g := range groups {
-		if changeoverInFlight(g) && g.Stage < stage && (!found || g.Stage < lowest) {
+		if changeoverGates(g) && g.Stage < stage && (!found || g.Stage < lowest) {
 			lowest, found = g.Stage, true
 		}
 	}
@@ -66,9 +73,13 @@ func earliestStageBefore(groups []ChangeoverView, stage int32) (int32, []string,
 	seen := map[string]bool{}
 	var names []string
 	for _, g := range groups {
-		if changeoverInFlight(g) && g.Stage == lowest && !seen[g.Name] {
-			seen[g.Name] = true
-			names = append(names, g.Name)
+		name := g.Name
+		if g.Unobserved {
+			name += " (not yet reconciled)"
+		}
+		if changeoverGates(g) && g.Stage == lowest && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
 		}
 	}
 	sort.Strings(names)
@@ -180,7 +191,8 @@ func changeoverFailing(conditions []metav1.Condition) bool {
 }
 
 // changeoverSiblings is every server and proxy group of the network in the
-// namespace except the caller, as AdmitChangeovers sees them.
+// namespace except the caller and those being deleted, as AdmitChangeovers
+// sees them.
 func changeoverSiblings(
 	ctx context.Context, c client.Reader, namespace, network, selfKind, selfName string,
 ) ([]ChangeoverView, error) {
@@ -191,13 +203,15 @@ func changeoverSiblings(
 	}
 	for i := range servers.Items {
 		g := &servers.Items[i]
-		if g.Spec.NetworkRef.Name != network || (selfKind == "ServerGroup" && g.Name == selfName) || g.IsOnDemand() {
+		if g.Spec.NetworkRef.Name != network || (selfKind == "ServerGroup" && g.Name == selfName) ||
+			g.IsOnDemand() || !g.DeletionTimestamp.IsZero() {
 			continue
 		}
 		views = append(views, ChangeoverView{
 			Kind: "ServerGroup", Name: g.Name,
 			State: g.Status.Changeover, Failing: changeoverFailing(g.Status.Conditions),
 			Stage: g.Spec.ChangeoverStage, Persistent: !g.IsEphemeral(),
+			Unobserved: g.Generation != g.Status.ObservedGeneration,
 		})
 	}
 	proxies := &spawneryv1alpha1.ProxyGroupList{}
@@ -206,13 +220,15 @@ func changeoverSiblings(
 	}
 	for i := range proxies.Items {
 		g := &proxies.Items[i]
-		if g.Spec.NetworkRef.Name != network || (selfKind == "ProxyGroup" && g.Name == selfName) {
+		if g.Spec.NetworkRef.Name != network || (selfKind == "ProxyGroup" && g.Name == selfName) ||
+			!g.DeletionTimestamp.IsZero() {
 			continue
 		}
 		views = append(views, ChangeoverView{
 			Kind: "ProxyGroup", Name: g.Name,
 			State: g.Status.Changeover, Failing: changeoverFailing(g.Status.Conditions),
-			Stage: g.Spec.ChangeoverStage,
+			Stage:      g.Spec.ChangeoverStage,
+			Unobserved: g.Generation != g.Status.ObservedGeneration,
 		})
 	}
 	return views, nil
