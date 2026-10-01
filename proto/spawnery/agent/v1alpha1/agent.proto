@@ -924,6 +924,9 @@ message ServerState {
   // How many of slots count as capacity, as the operator resolved it. 0 from
   // an operator older than this field; read it as equal to slots.
   int32 playable_slots = 13;
+  // True while the server has closed its door (AcceptJoins false). False for
+  // a server that never said.
+  bool joins_closed = 14;
 }
 
 // ProxyState is one proxy pod as the operator last saw it.

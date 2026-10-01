@@ -195,6 +195,7 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 	// zero values below, which is the same picture as a server whose agent
 	// predates the verb.
 	announcements := s.Agents.Announcements(namespace)
+	closedDoors := s.Agents.ClosedDoors(namespace)
 
 	var servers spawneryv1alpha1.ServerList
 	if err := s.Reader.List(ctx, &servers, client.InNamespace(namespace)); err != nil {
@@ -240,9 +241,10 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			Incarnation: srv.Status.PodUID,
 			// From the spec and not the status: the group decided this when it
 			// created the server, and nothing observes it afterwards.
-			Number: srv.Spec.Number,
-			Held:   srv.Spec.Hold,
-			Node:   nodeOf[srv.Status.PodName],
+			Number:      srv.Spec.Number,
+			Held:        srv.Spec.Hold,
+			Node:        nodeOf[srv.Status.PodName],
+			JoinsClosed: closedDoors[srv.Name],
 		})
 	}
 

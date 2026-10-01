@@ -489,10 +489,14 @@ func (r *Registry) ReportAnnouncement(key, namespace, server string, a Announcem
 
 // ReportAcceptJoins records whether a server wants new players.
 //
+// namespace and server come from the authenticated identity, as they do for
+// ReportAnnouncement, so ClosedDoors can name this server without requiring
+// it to have announced anything else about itself.
+//
 // A proxy is refused, for a plainer reason than the announcement's: a proxy is
 // not in anybody's routing table -- it is the routing table -- so there is
 // nothing for this to close.
-func (r *Registry) ReportAcceptJoins(key string, accept, roundEnded bool) error {
+func (r *Registry) ReportAcceptJoins(key, namespace, server string, accept, roundEnded bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -503,6 +507,8 @@ func (r *Registry) ReportAcceptJoins(key string, accept, roundEnded bool) error 
 	if e.role != RoleServer {
 		return fmt.Errorf("accept-joins from a %s agent %q", e.role, key)
 	}
+	e.namespace = namespace
+	e.server = server
 	e.joinsClosed = !accept
 	// Only ever set. A server that ends a round and then reopens its door --
 	// which nothing does today -- has still ended that round, and the pod it
@@ -532,6 +538,26 @@ func (r *Registry) Announcements(namespace string) map[string]Announcement {
 			attributes[k] = v
 		}
 		out[e.server] = Announcement{State: e.announcement.State, Attributes: attributes}
+	}
+	return out
+}
+
+// ClosedDoors is every server in a namespace that has closed its door,
+// keyed by server name.
+//
+// A server that never reported, or that reopened, is absent rather than
+// present and false, so a caller ranging over this sees only what is
+// actually closed.
+func (r *Registry) ClosedDoors(namespace string) map[string]bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[string]bool)
+	for _, e := range r.entries {
+		if e.role != RoleServer || e.namespace != namespace || e.server == "" || !e.joinsClosed {
+			continue
+		}
+		out[e.server] = true
 	}
 	return out
 }

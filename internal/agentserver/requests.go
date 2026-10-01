@@ -596,7 +596,8 @@ func (s *Server) answerAcceptJoins(
 		return refuse(reqID, agentpb.RequestError_REFUSED,
 			"only a server has a door to close: a proxy is not in a routing table, it is the routing table")
 	}
-	if err := s.opts.Agents.ReportAcceptJoins(id.PodUID, req.GetAccept(), req.GetRoundEnded()); err != nil {
+	if err := s.opts.Agents.ReportAcceptJoins(id.PodUID, id.Namespace, id.PodName,
+		req.GetAccept(), req.GetRoundEnded()); err != nil {
 		logger.V(1).Info("could not record a join preference", "reason", err.Error())
 		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
 			"the operator could not record that just now")

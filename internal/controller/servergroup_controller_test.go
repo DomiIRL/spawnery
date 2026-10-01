@@ -593,7 +593,7 @@ func TestAFinishedRoundIsReplacedWithoutCountingAFailure(t *testing.T) {
 	finished := servers[0].Name
 
 	uid := bringUpNamed(t, f, finished)
-	if err := f.agents.ReportAcceptJoins(uid, false, true); err != nil {
+	if err := f.agents.ReportAcceptJoins(uid, f.ns, finished, false, true); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 	f.reconcile(finished)

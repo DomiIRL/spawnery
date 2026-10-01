@@ -254,4 +254,15 @@ java.lang.String defaultValue);
    * @return The playableSlots.
    */
   int getPlayableSlots();
+
+  /**
+   * <pre>
+   * True while the server has closed its door (AcceptJoins false). False for
+   * a server that never said.
+   * </pre>
+   *
+   * <code>bool joins_closed = 14;</code>
+   * @return The joinsClosed.
+   */
+  boolean getJoinsClosed();
 }

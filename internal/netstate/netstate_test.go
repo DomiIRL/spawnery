@@ -640,3 +640,26 @@ func TestBuildCarriesThePlayableFigure(t *testing.T) {
 		t.Errorf("playable_slots = %d, want 12", n)
 	}
 }
+
+func TestBuildCarriesAClosedDoor(t *testing.T) {
+	src, reg := source(t,
+		ephemeralGroup("ns", "lobby"),
+		readyServer("ns", "lobby-a", "lobby", 0, 100),
+		readyServer("ns", "lobby-b", "lobby", 0, 100),
+	)
+	reg.Connect("pod-a", agent.RoleServer)
+	if err := reg.ReportAcceptJoins("pod-a", "ns", "lobby-a", false, false); err != nil {
+		t.Fatalf("ReportAcceptJoins: %v", err)
+	}
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !got.GetServers()[0].GetJoinsClosed() {
+		t.Errorf("lobby-a = %+v, want joins_closed", got.GetServers()[0])
+	}
+	if got.GetServers()[1].GetJoinsClosed() {
+		t.Errorf("lobby-b = %+v, want joins open", got.GetServers()[1])
+	}
+}

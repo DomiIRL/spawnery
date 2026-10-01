@@ -3872,6 +3872,9 @@ type ServerState struct {
 	// How many of slots count as capacity, as the operator resolved it. 0 from
 	// an operator older than this field; read it as equal to slots.
 	PlayableSlots int32 `protobuf:"varint,13,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"`
+	// True while the server has closed its door (AcceptJoins false). False for
+	// a server that never said.
+	JoinsClosed   bool `protobuf:"varint,14,opt,name=joins_closed,json=joinsClosed,proto3" json:"joins_closed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3995,6 +3998,13 @@ func (x *ServerState) GetPlayableSlots() int32 {
 		return x.PlayableSlots
 	}
 	return 0
+}
+
+func (x *ServerState) GetJoinsClosed() bool {
+	if x != nil {
+		return x.JoinsClosed
+	}
+	return false
 }
 
 // ProxyState is one proxy pod as the operator last saw it.
@@ -5111,7 +5121,7 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\n" +
 	"PERSISTENT\x10\x02\x12\t\n" +
 	"\x05PROXY\x10\x03\x12\r\n" +
-	"\tON_DEMAND\x10\x04\"\xd1\x03\n" +
+	"\tON_DEMAND\x10\x04\"\xf4\x03\n" +
 	"\vServerState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12\x14\n" +
@@ -5130,7 +5140,8 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	" \x01(\x05R\x06number\x12\x12\n" +
 	"\x04held\x18\v \x01(\bR\x04held\x12\x12\n" +
 	"\x04node\x18\f \x01(\tR\x04node\x12%\n" +
-	"\x0eplayable_slots\x18\r \x01(\x05R\rplayableSlots\x1a=\n" +
+	"\x0eplayable_slots\x18\r \x01(\x05R\rplayableSlots\x12!\n" +
+	"\fjoins_closed\x18\x0e \x01(\bR\vjoinsClosed\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +
