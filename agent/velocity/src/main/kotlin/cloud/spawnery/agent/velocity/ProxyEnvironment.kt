@@ -36,7 +36,7 @@ sealed interface ProxyEnvironment {
         val transferOff: String? = null,
     ) : ProxyEnvironment
 
-    class Transfer(val forceAfterSeconds: Long, val secretFile: Path, val secret: ByteArray)
+    class Transfer(val forceAfterSeconds: Long, val secret: ByteArray)
 
     data class Dormant(val reason: String) : ProxyEnvironment
 
@@ -129,7 +129,7 @@ sealed interface ProxyEnvironment {
                 return off("cannot read $file: $e")
             }
             if (secret.isEmpty()) return off("$file is empty")
-            return Transfer(after, file, secret) to null
+            return Transfer(after, secret) to null
         }
 
         /**

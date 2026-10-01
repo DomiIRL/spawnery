@@ -248,7 +248,6 @@ class ProxyEnvironmentTest {
 
         val transfer = assertNotNull(configured.transfer)
         assertEquals(90L, transfer.forceAfterSeconds)
-        assertEquals(secret, transfer.secretFile)
         assertEquals("s3cret", String(transfer.secret))
         assertNull(configured.transferOff)
     }
