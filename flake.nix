@@ -375,7 +375,11 @@
           # 0.15.0 moves it because the Velocity agent and the renderer
           # changed: a leaving proxy transfers its players when the group sets
           # spec.update.transfer, and velocity.toml carries accepts-transfers.
-          imageVersion = "0.15.0";
+          #
+          # 0.16.0 moves it because the Paper entrypoint changed: with
+          # spec.storage.keep set, spawnery-config --prune clears the claim
+          # before rendering.
+          imageVersion = "0.16.0";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
@@ -566,7 +570,11 @@
           # 0.15.0 moves it with the chart and the images: changeover stages,
           # blue/green proxy rolls, the wider Deferred, and the transfer opt-in
           # with door state pushed to the proxies.
-          operatorVersion = "0.15.0";
+          #
+          # 0.16.0 moves it with the chart and the images: storage.keep reaches
+          # the pod, a spec change the operator has not reconciled holds later
+          # changeover stages, and a refused proxy group observes its spec.
+          operatorVersion = "0.16.0";
 
           spawnery-slp = pkgs.buildGoModule {
             pname = "spawnery-slp";
