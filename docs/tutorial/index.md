@@ -134,7 +134,7 @@ spec:
     minecraftVersion: "26.3"
     resources:
       requests:
-        cpu: "1"
+        cpu: 500m
         memory: 2Gi
       limits:
         memory: 2Gi
