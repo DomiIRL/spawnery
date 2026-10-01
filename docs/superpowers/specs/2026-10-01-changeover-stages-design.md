@@ -25,6 +25,11 @@ on an old proxy holds the place for as long as they stay connected, and with
 them. `WhenEmpty` server groups already avoid this through `Deferred`; proxy
 groups and `RollingUpdate` server groups have no equivalent.
 
+For proxies it is worse than one wait: they drain strictly one at a time,
+fewest players first, and nothing else in the group moves while one drains.
+An idle player on the first proxy to drain holds every other old proxy in
+service, taking new players on the old generation, for as long as they stay.
+
 ## 2. The shape
 
 ```yaml
@@ -74,7 +79,14 @@ and what is left of the old one waits only for its players"**:
   roll still has to do.
 - **Proxy group:** at least `spec.replicas` current pods are Ready, and every
   stale pod still present is draining (carries
-  `spawnery.cloud/draining-since`) or terminating.
+  `spawnery.cloud/draining-since`) or terminating. With the blue/green roll
+  of §3.4 this is reached as soon as the new pods are Ready, whoever is still
+  on the old ones.
+
+Like `WhenEmpty` today, both new cases hold `Deferred` once reached: a group
+that was `Deferred` stays so while every remaining stale member is leaving and
+a current one still exists, Ready or not. A readiness blip must not take a
+budget place nobody admitted the group to.
 
 The value keeps its name rather than becoming `Settled`, so that observers
 already reading `Deferred` keep reading it.
@@ -133,6 +145,36 @@ part in stages and not in the budget:
 
 On-demand groups are never in the list.
 
+### 3.4 Proxy groups roll blue/green
+
+`DecideRollout` stops replacing stale proxies one at a time. While the group
+may surge:
+
+1. **Target** is `replicas` plus one pod for every stale pod, draining or not.
+   Every stale pod gets its replacement up front, and a replacement that dies
+   mid-drain is rebuilt, as the surge of one is today.
+2. **Once at least `replicas` current pods are Ready**, every stale pod not yet
+   draining is marked in the same pass. Each drains on its own deadline
+   (`maxStaleSeconds`, `drain.timeoutSeconds`) as today.
+3. Before that, a stale pod that serves nobody (not Ready, not draining) is
+   still marked at once, as today, so a crashlooping proxy cannot hold its
+   own replacement back.
+
+Without a place (budget or stage), the group does not surge: target is
+`replicas`, and only a stale pod that serves nobody is replaced, in place —
+today's waiting behaviour.
+
+"Stale" keeps its meaning in `DecideRollout`: a pod of an old hash, a pod on a
+node that is leaving, or a pod an admin asked to retire. All three go
+blue/green. Surplus without anything stale (a lowered `replicas`) still drains
+one at a time, as today: no new pods are involved, and the one-at-a-time
+guard protects ready capacity there.
+
+**The cost** is memory: a proxy changeover now runs up to `replicas` extra
+pods instead of one, until the new ones are Ready and the old ones have
+drained. A budget place still counts groups, so a proxy group's place is
+worth `replicas` pods. The CRD reference and the guide say so.
+
 ## 4. Where it is decided
 
 As for the budget: each group decides for itself from the shared cache, once
@@ -164,8 +206,10 @@ is a whole network in the wrong order, not a race of one pass.
 - `spawnery_network_changeovers_waiting` counts both.
 - `docs/guides/updates-and-drain.md` explains stages with a made-up network
   (a proxy group, a lobby, two game modes), the widened `Deferred` and its
-  memory cost, and that failing groups do not block. The CRD reference is
-  regenerated.
+  memory cost, and that failing groups do not block. Its section "Proxies
+  wait for their players too" is rewritten for the blue/green roll: the
+  sentence that a group of N proxies waits N times goes, and the cost of
+  `replicas` extra pods comes in. The CRD reference is regenerated.
 
 ## 6. Testing
 
@@ -175,8 +219,17 @@ is a whole network in the wrong order, not a race of one pass.
   `Begun` group of a later stage is not displaced; stages apply with the
   budget unset; all stages 0 reproduces the existing table.
 - **`ownProxyChangeover`:** a group whose current pods are all Ready and whose
-  one stale pod is draining with a player on it is `Deferred` — the idle
-  player case of §1. Fewer Ready current pods than `replicas` is `Begun`.
+  stale pods are all draining, one of them with a player on it, is
+  `Deferred` — the idle player case of §1. Fewer Ready current pods than
+  `replicas` is `Begun`.
+- **`DecideRollout`:** three stale pods and `replicas: 3` create three; with
+  three current Ready, all three stale are marked in one pass; with two
+  current Ready, none is (except one not serving); a dying replacement during
+  the drain is rebuilt; without surge, nothing is created and only a
+  non-serving stale pod is marked; a lowered `replicas` with nothing stale
+  still drains one at a time. The existing cases that encode one-at-a-time
+  replacement of stale pods change on purpose; each changed case is named in
+  the commit.
 - **`ownServerChangeover`:** `RollingUpdate` with every stale server retiring
   and every current one Ready is `Deferred`; one stale server not yet retiring
   keeps it `Begun`.
@@ -188,10 +241,16 @@ is a whole network in the wrong order, not a race of one pass.
   group is `Deferred`, then begins while the old proxy pod is still
   draining. A persistent group in stage 10 nominates no stale ordinal until
   the server group is `Deferred`.
-- **e2e (kind):** a proxy group, an ephemeral and a persistent group on three
-  stages; change the network's image and assert the order from the creation
-  times of the first current pod of each group. The test is shown to bite by
-  reverting the stage gate in a throwaway worktree and recording the failure.
+- **e2e (kind, real images):** the main suite cannot carry this — its images
+  never resolve, so nothing becomes Ready and nothing reaches `Deferred`. The
+  test goes into the tutorial suite (`hack/e2e-tutorial.sh`, real Purpur and
+  Velocity, run nightly): put the tutorial's proxy group in stage -10 and its
+  server group in stage 0, change both in one apply (an environment variable
+  on each), and assert that the server group's first current server is
+  created only after every current proxy pod is Ready and every old one is
+  draining. Run once by hand on `paul-desktop` before the PR, and shown to
+  bite by removing the stage gate in a throwaway worktree and recording the
+  failure. Persistent groups are covered by envtest only.
 
 ## 7. Not in this
 
