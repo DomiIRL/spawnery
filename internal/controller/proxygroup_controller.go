@@ -537,10 +537,10 @@ func (r *ProxyGroupReconciler) reconcileObserved(
 // controller-runtime ignores it when the error is non-nil and backs off
 // instead, which is the behaviour wanted for a failed protection pass.
 func (r *ProxyGroupReconciler) refuse(ctx context.Context, group *spawneryv1alpha1.ProxyGroup) (ctrl.Result, error) {
-	// A Waiting group has no surge pod, so giving up its place costs nothing;
-	// see AdmitChangeovers, which would otherwise keep handing the place to
-	// this name forever. A Begun group's surge pod exists and is never
-	// paused halfway, so its state stands.
+	// A Waiting group has no replacement pods, so giving up its place costs
+	// nothing; see AdmitChangeovers, which would otherwise keep handing the
+	// place to this name forever. A Begun group's replacement pods exist and
+	// it is never paused halfway, so its state stands.
 	if group.Status.Changeover == spawneryv1alpha1.ChangeoverWaiting {
 		group.Status.Changeover = spawneryv1alpha1.ChangeoverNone
 	}
@@ -742,9 +742,9 @@ func proxyPlayerNote(snap agent.Snapshot) string {
 // Registry.Lookup answers for a pod it has never seen with {Known: false,
 // PlayersStale: true}, which proxyOccupied reads as occupied. On the deletion
 // wait that costs one drain deadline; on a budget nothing bounds it, so a
-// surge pod pushes minAvailable above the currentHealthy the group can reach
-// and blocks every eviction until its agent reports -- for a proxy stuck in
-// CrashLoopBackOff, never.
+// replacement pod pushes minAvailable above the currentHealthy the group can
+// reach and blocks every eviction until its agent reports -- for a proxy stuck
+// in CrashLoopBackOff, never.
 //
 // snap.Known is the discriminator: Registry.Disconnect leaves it true, so a
 // proxy whose agent connected and then died still counts as occupied, which is
@@ -1147,8 +1147,8 @@ func (r *ProxyGroupReconciler) reconcileReplicas(
 	// timeout.
 	//
 	// Whether that is reachable was not settled. Four candidate states were
-	// traced -- scale-down then up with a create pending, a rollback with the
-	// surge pod lost, replicas raised mid-rollout, and a mixed-generation
+	// traced -- scale-down then up with a create pending, a rollback with a
+	// replacement pod lost, replicas raised mid-rollout, and a mixed-generation
 	// surplus -- and in each either surplusMarks was empty or want did not
 	// cross 1 to 0, so none of them reaches it. That is not a proof it is
 	// unreachable. Note the direction is the opposite of the create cap's
