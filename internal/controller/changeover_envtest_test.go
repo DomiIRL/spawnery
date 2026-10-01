@@ -697,7 +697,7 @@ func TestAnUnreconciledProxyStageGatesAPersistentGroup(t *testing.T) {
 		t.Fatalf("world-0 is being taken down before the proxy stage has been reconciled")
 	}
 	if c := f.progressing(t, "world"); c.Reason != spawneryv1alpha1.ReasonWaitingForEarlierStage ||
-		c.Message != "waiting for stage -10: gateway" {
+		c.Message != "waiting for stage -10: gateway (not yet reconciled)" {
 		t.Fatalf("world Progressing = %s %q", c.Reason, c.Message)
 	}
 
@@ -778,6 +778,44 @@ func TestChangeoverSiblingsMarkAnUnobservedSpec(t *testing.T) {
 	}
 	if _, present := unobserved(); present {
 		t.Fatalf("a proxy group being deleted is still a changeover sibling")
+	}
+}
+
+func TestADeletedServerGroupIsNoChangeoverSibling(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.createPersistentGroup(t, "world", 1)
+	f.setStage(t, "world", -10)
+	f.reconcileNamedGroup(t, r, "world")
+	sibling := func() bool {
+		t.Helper()
+		views, err := changeoverSiblings(f.ctx, f.c, f.ns, f.network.Name, "ProxyGroup", "gateway")
+		if err != nil {
+			t.Fatalf("changeoverSiblings: %v", err)
+		}
+		return slices.ContainsFunc(views, func(v ChangeoverView) bool { return v.Kind == "ServerGroup" && v.Name == "world" })
+	}
+	if !sibling() {
+		t.Fatalf("world is not a changeover sibling before its deletion")
+	}
+
+	g := f.serverGroup(t, "world")
+	g.Finalizers = append(g.Finalizers, "spawnery.cloud/test-hold")
+	if err := f.c.Update(f.ctx, g); err != nil {
+		t.Fatalf("hold world: %v", err)
+	}
+	t.Cleanup(func() {
+		g := &spawneryv1alpha1.ServerGroup{}
+		if err := f.c.Get(context.Background(), types.NamespacedName{Name: "world", Namespace: f.ns}, g); err == nil {
+			g.Finalizers = nil
+			_ = f.c.Update(context.Background(), g)
+		}
+	})
+	if err := f.c.Delete(f.ctx, g); err != nil {
+		t.Fatalf("delete world: %v", err)
+	}
+	if sibling() {
+		t.Fatalf("a server group being deleted is still a changeover sibling")
 	}
 }
 

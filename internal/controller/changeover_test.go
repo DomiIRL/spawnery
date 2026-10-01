@@ -211,13 +211,13 @@ func TestAdmitChangeovers(t *testing.T) {
 			map[string]bool{},
 		},
 		{
-			"an unobserved failing earlier stage gates nothing",
+			"an unobserved earlier stage gates even when its stale status says failing",
 			[]ChangeoverView{
 				{Kind: "ProxyGroup", Name: "edge", Stage: -10, Unobserved: true, Failing: true},
 				{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting},
 			},
 			1,
-			map[string]bool{"ServerGroup/lobby": true},
+			map[string]bool{},
 		},
 		{
 			"an unobserved group takes no budget place",
@@ -278,7 +278,9 @@ func TestDescribeWait(t *testing.T) {
 		{"no earlier stage: the budget is named", []ChangeoverView{arena, lobby}, 1,
 			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForChangeoverBudget, "waiting for a changeover place; changing over: arena"}},
 		{"an unobserved earlier stage is named", []ChangeoverView{{Kind: "ProxyGroup", Name: "edge", Stage: -10, Unobserved: true}, lobby}, 0,
-			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForEarlierStage, "waiting for stage -10: edge"}},
+			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForEarlierStage, "waiting for stage -10: edge (not yet reconciled)"}},
+		{"an unobserved group is named apart from an observed one", []ChangeoverView{edge, {Kind: "ProxyGroup", Name: "edge-b", Stage: -10, Unobserved: true}, lobby}, 0,
+			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForEarlierStage, "waiting for stage -10: edge, edge-b (not yet reconciled)"}},
 		{"no holder to name: no wait", []ChangeoverView{lobby}, 0, ChangeoverWait{}},
 		{"a failing self holds nothing: no wait", []ChangeoverView{{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting, Failing: true}}, 1, ChangeoverWait{}},
 	} {

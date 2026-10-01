@@ -51,8 +51,10 @@ func changeoverInFlight(g ChangeoverView) bool {
 	return !g.Failing && (g.State == spawneryv1alpha1.ChangeoverWaiting || g.State == spawneryv1alpha1.ChangeoverBegun)
 }
 
+// changeoverGates lets an unobserved group gate even when Failing: Failing is
+// read from the same status its unobserved spec change may have outdated.
 func changeoverGates(g ChangeoverView) bool {
-	return changeoverInFlight(g) || (g.Unobserved && !g.Failing)
+	return changeoverInFlight(g) || g.Unobserved
 }
 
 // earliestStageBefore is the lowest stage below stage with a group in flight,
@@ -71,9 +73,13 @@ func earliestStageBefore(groups []ChangeoverView, stage int32) (int32, []string,
 	seen := map[string]bool{}
 	var names []string
 	for _, g := range groups {
-		if changeoverGates(g) && g.Stage == lowest && !seen[g.Name] {
-			seen[g.Name] = true
-			names = append(names, g.Name)
+		name := g.Name
+		if g.Unobserved {
+			name += " (not yet reconciled)"
+		}
+		if changeoverGates(g) && g.Stage == lowest && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
 		}
 	}
 	sort.Strings(names)
