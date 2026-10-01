@@ -277,4 +277,32 @@ class NetworkMirrorTest {
         )
         assertEquals(12, mirror.servers().single().playableSlots())
     }
+
+    @Test
+    fun `a server with its door closed is in closedDoors`() {
+        val mirror = NetworkMirror()
+        mirror.apply(
+            NetworkState.newBuilder()
+                .addServers(ServerState.newBuilder().setName("lobby-a").setGroup("lobby").setPhase("Ready").setJoinsClosed(true))
+                .addServers(ServerState.newBuilder().setName("lobby-b").setGroup("lobby").setPhase("Ready"))
+                .build(),
+        )
+        assertEquals(setOf("lobby-a"), mirror.closedDoors())
+    }
+
+    @Test
+    fun `closed doors follow each NetworkState rather than accumulating`() {
+        val mirror = NetworkMirror()
+        mirror.apply(
+            NetworkState.newBuilder()
+                .addServers(ServerState.newBuilder().setName("lobby-a").setGroup("lobby").setPhase("Ready").setJoinsClosed(true))
+                .build(),
+        )
+        mirror.apply(
+            NetworkState.newBuilder()
+                .addServers(ServerState.newBuilder().setName("lobby-a").setGroup("lobby").setPhase("Ready"))
+                .build(),
+        )
+        assertEquals(emptySet(), mirror.closedDoors())
+    }
 }

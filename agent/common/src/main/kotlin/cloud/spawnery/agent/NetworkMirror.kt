@@ -55,6 +55,7 @@ class NetworkMirror {
          */
         val feedFormat: String,
         val admissions: Map<String, GroupAdmission> = emptyMap(),
+        val closedDoors: Set<String> = emptySet(),
     )
 
     @Volatile
@@ -65,6 +66,7 @@ class NetworkMirror {
         snapshot = Snapshot(
             feedFormat = state.feedFormat,
             admissions = state.groupsList.associate { it.name to GroupAdmission(it.playableSlots, it.enforcePlayableSlots) },
+            closedDoors = state.serversList.filter { it.joinsClosed }.mapTo(mutableSetOf()) { it.name },
             groups = state.groupsList.map {
                 Group(
                     it.name,
@@ -135,6 +137,8 @@ class NetworkMirror {
     fun feedFormat(): String = snapshot.feedFormat
 
     fun admission(group: String): GroupAdmission? = snapshot.admissions[group]
+
+    fun closedDoors(): Set<String> = snapshot.closedDoors
 }
 
 internal fun kindOf(kind: GroupState.Kind): Group.Kind =
