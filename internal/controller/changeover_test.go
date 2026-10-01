@@ -259,26 +259,49 @@ func TestOwnProxyChangeover(t *testing.T) {
 	}
 	terminating := func(p *corev1.Pod) { now := metav1.Now(); p.DeletionTimestamp = &now }
 	failed := func(p *corev1.Pod) { p.Status.Phase = corev1.PodFailed }
+	ready := func(p *corev1.Pod) {
+		p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	}
+	draining := func(p *corev1.Pod) {
+		p.Annotations = map[string]string{ProxyDrainingSinceAnnotation: "2026-10-01T12:00:00Z"}
+	}
 	cases := []struct {
-		name    string
-		pods    []corev1.Pod
-		pending int32
-		want    spawneryv1alpha1.ChangeoverState
+		name     string
+		pods     []corev1.Pod
+		pending  int32
+		replicas int32
+		was      spawneryv1alpha1.ChangeoverState
+		want     spawneryv1alpha1.ChangeoverState
 	}{
-		{"all current", []corev1.Pod{pod("new"), pod("new")}, 0, spawneryv1alpha1.ChangeoverNone},
-		{"stale only", []corev1.Pod{pod("old"), pod("old")}, 0, spawneryv1alpha1.ChangeoverWaiting},
-		{"stale and current", []corev1.Pod{pod("old"), pod("new")}, 0, spawneryv1alpha1.ChangeoverBegun},
-		{"stale only with a create the cache has not shown", []corev1.Pod{pod("old"), pod("old")}, 1,
+		{"all current", []corev1.Pod{pod("new"), pod("new")}, 0, 2, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverNone},
+		{"stale only", []corev1.Pod{pod("old"), pod("old")}, 0, 2, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverWaiting},
+		{"stale and current", []corev1.Pod{pod("old"), pod("new")}, 0, 2, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
+		{"stale only with a create the cache has not shown", []corev1.Pod{pod("old"), pod("old")}, 1, 2, spawneryv1alpha1.ChangeoverBegun,
 			spawneryv1alpha1.ChangeoverBegun},
-		{"terminating stale beside current", []corev1.Pod{pod("old", terminating), pod("new")}, 0,
+		{"terminating stale beside current", []corev1.Pod{pod("old", terminating), pod("new")}, 0, 2, spawneryv1alpha1.ChangeoverBegun,
 			spawneryv1alpha1.ChangeoverBegun},
-		{"terminating current is not begun", []corev1.Pod{pod("old"), pod("new", terminating)}, 0,
+		{"terminating current is not begun", []corev1.Pod{pod("old"), pod("new", terminating)}, 0, 2, spawneryv1alpha1.ChangeoverBegun,
 			spawneryv1alpha1.ChangeoverWaiting},
-		{"failed stale is gone", []corev1.Pod{pod("old", failed), pod("new")}, 0, spawneryv1alpha1.ChangeoverNone},
+		{"failed stale is gone", []corev1.Pod{pod("old", failed), pod("new")}, 0, 2, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverNone},
+		{"replicas current Ready and every stale pod draining is deferred",
+			[]corev1.Pod{pod("old", draining), pod("old", draining), pod("new", ready), pod("new", ready)}, 0, 2, spawneryv1alpha1.ChangeoverBegun,
+			spawneryv1alpha1.ChangeoverDeferred},
+		{"one current pod short of replicas is begun",
+			[]corev1.Pod{pod("old", draining), pod("old", draining), pod("new", ready), pod("new")}, 0, 2, spawneryv1alpha1.ChangeoverBegun,
+			spawneryv1alpha1.ChangeoverBegun},
+		{"a stale pod not yet draining is begun",
+			[]corev1.Pod{pod("old", draining), pod("old", ready), pod("new", ready), pod("new", ready)}, 0, 2, spawneryv1alpha1.ChangeoverBegun,
+			spawneryv1alpha1.ChangeoverBegun},
+		{"deferred stays deferred through a readiness blip",
+			[]corev1.Pod{pod("old", draining), pod("new", ready), pod("new")}, 0, 2, spawneryv1alpha1.ChangeoverDeferred,
+			spawneryv1alpha1.ChangeoverDeferred},
+		{"terminating stale pods count as leaving",
+			[]corev1.Pod{pod("old", terminating), pod("new", ready), pod("new", ready)}, 0, 2, spawneryv1alpha1.ChangeoverBegun,
+			spawneryv1alpha1.ChangeoverDeferred},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ownProxyChangeover(tc.pods, "new", tc.pending); got != tc.want {
+			if got := ownProxyChangeover(tc.pods, "new", tc.pending, tc.replicas, tc.was); got != tc.want {
 				t.Errorf("ownProxyChangeover = %q, want %q", got, tc.want)
 			}
 		})

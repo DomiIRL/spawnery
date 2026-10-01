@@ -332,9 +332,11 @@ func TestChangeoverBudgetUnsetDoesNotRefuseADegradedProxyGroup(t *testing.T) {
 	}
 }
 
-// A stale proxy that is draining or terminating still exists, so the group
-// keeps its place until it is gone.
-func TestChangeoverBudgetHeldUntilTheLastStaleProxyIsGone(t *testing.T) {
+// A stale proxy that is draining or terminating no longer blocks the group
+// from reaching Deferred once its replacements are Ready, so the place it
+// held is free for the next group in the budget's queue — it does not wait
+// for the stale pod to actually be gone.
+func TestChangeoverBudgetFreedOnceTheLastStaleProxyIsLeaving(t *testing.T) {
 	for _, leaving := range []string{"draining", "terminating"} {
 		t.Run(leaving, func(t *testing.T) {
 			f := newFixture(t)
@@ -366,11 +368,11 @@ func TestChangeoverBudgetHeldUntilTheLastStaleProxyIsGone(t *testing.T) {
 			f.setImage(t, "lobby", nextImage)
 			f.reconcileNamedGroup(t, gr, "lobby")
 
-			if got := f.proxyGroup("gateway").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
-				t.Fatalf("gateway status.changeover = %q with its last stale pod %s, want Begun", got, leaving)
+			if got := f.proxyGroup("gateway").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+				t.Fatalf("gateway status.changeover = %q with its last stale pod %s, want Deferred", got, leaving)
 			}
-			if n := len(f.serverNamesOfGroup(t, "lobby")); n != 1 {
-				t.Fatalf("lobby has %d servers, want 1: gateway still holds the place", n)
+			if n := len(f.serverNamesOfGroup(t, "lobby")); n != 2 {
+				t.Fatalf("lobby has %d servers, want 2: gateway no longer holds the place", n)
 			}
 		})
 	}

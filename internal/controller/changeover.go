@@ -270,9 +270,13 @@ func ownPersistentChangeover(views []ServerView, podHash string, takedown bool, 
 
 // ownProxyChangeover is a proxy group's changeover state from every pod of the
 // group that still exists: a stale one that is draining or terminating is
-// still the group's extra pod.
-func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates int32) spawneryv1alpha1.ChangeoverState {
-	var stale, current bool
+// still the group's extra pod. It is Deferred once at least replicas current
+// pods are Ready and every stale pod still present is leaving (draining or
+// terminating); it stays Deferred while that holds, so a readiness blip does
+// not take a budget place nobody admitted it to.
+func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates, replicas int32, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
+	var stale, staleServing, current bool
+	var readyCurrent int32
 	for i := range pods {
 		p := &pods[i]
 		if p.Status.Phase == corev1.PodFailed || p.Status.Phase == corev1.PodSucceeded {
@@ -280,13 +284,22 @@ func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates int32
 		}
 		if p.Labels[podspec.LabelPodHash] != wantHash {
 			stale = true
+			if _, marked := drainingSince(p); !marked && p.DeletionTimestamp.IsZero() {
+				staleServing = true
+			}
 		} else if p.DeletionTimestamp.IsZero() {
 			current = true
+			if isPodReady(p) {
+				readyCurrent++
+			}
 		}
 	}
 	switch {
 	case !stale:
 		return spawneryv1alpha1.ChangeoverNone
+	case !staleServing && current &&
+		(was == spawneryv1alpha1.ChangeoverDeferred || (readyCurrent >= replicas && pendingCreates == 0)):
+		return spawneryv1alpha1.ChangeoverDeferred
 	case current || pendingCreates > 0:
 		return spawneryv1alpha1.ChangeoverBegun
 	default:
@@ -305,7 +318,7 @@ func proxyChangeover(
 		client.MatchingLabels(podspec.ProxyLabels(network.Name, group.Name))); err != nil {
 		return "", false, nil, err
 	}
-	own := ownProxyChangeover(pods.Items, wantHash, pendingCreates)
+	own := ownProxyChangeover(pods.Items, wantHash, pendingCreates, group.Spec.Replicas, group.Status.Changeover)
 	budget := network.ChangeoverBudget()
 	if budget == 0 || own != spawneryv1alpha1.ChangeoverWaiting {
 		return own, true, nil, nil

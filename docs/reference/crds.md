@@ -292,7 +292,7 @@ Read by observers; the operator writes it and reads nothing back from it.
 <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
 <tbody>
 <tr><td><code>address</code></td><td>string</td><td align="center"></td><td></td><td>Address is where players connect.</td></tr>
-<tr><td><code>changeover</code></td><td>string (one of: , Waiting, Begun)</td><td align="center"></td><td></td><td>Changeover is this group&#x27;s changeover as the network&#x27;s budget sees it; written by its own reconcile and read by its siblings&#x27;.</td></tr>
+<tr><td><code>changeover</code></td><td>string (one of: , Waiting, Begun, Deferred)</td><td align="center"></td><td></td><td>Changeover is this group&#x27;s changeover as the network&#x27;s budget sees it; written by its own reconcile and read by its siblings&#x27;.</td></tr>
 <tr><td><code>conditions</code></td><td>array</td><td align="center"></td><td></td><td>Conditions follow the standard Kubernetes condition contract.</td></tr>
 <tr><td><code>conditions[].lastTransitionTime</code></td><td>string (date-time)</td><td align="center">&#10003;</td><td></td><td>lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.</td></tr>
 <tr><td><code>conditions[].message</code></td><td>string (length 0-32768)</td><td align="center">&#10003;</td><td></td><td>message is a human readable message indicating details about the transition. This may be an empty string.</td></tr>

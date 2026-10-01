@@ -3274,6 +3274,7 @@ spec:
                 - ""
                 - Waiting
                 - Begun
+                - Deferred
                 type: string
               conditions:
                 description: Conditions follow the standard Kubernetes condition contract.
