@@ -169,7 +169,9 @@ func TestRunPrintsOneJSONLineAndExitsZero(t *testing.T) {
 	}
 }
 
-func TestRunAcceptsFollowTransfers(t *testing.T) {
+func TestRunPassesFollowTransfersOn(t *testing.T) {
+	// This server reports 776, and following transfers is refused at any
+	// protocol but 777: the refusal is how the flag shows it arrived.
 	port := serveOneJoin(t)
 
 	var stdout, stderr bytes.Buffer
@@ -177,8 +179,11 @@ func TestRunAcceptsFollowTransfers(t *testing.T) {
 		"--host", "127.0.0.1", "--port", strconv.Itoa(port),
 		"--hold", "200ms", "--follow-transfers",
 	}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("exit code is %d, want 0; stderr: %s", code, stderr.String())
+	if code != 1 {
+		t.Errorf("exit code is %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "777") {
+		t.Errorf("stderr is %q, want the refusal naming protocol 777", stderr.String())
 	}
 }
 
