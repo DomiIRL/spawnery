@@ -32,7 +32,8 @@ limitations under the License.
 //
 // --hold keeps the connection open after a successful join, which is the only
 // way a proxy's status.connectedPlayers can be non-zero when the next line of
-// a runbook reads it.
+// a runbook reads it. --follow-transfers lets that hold survive a proxy that
+// transfers the player away; "transfers" in the output counts how often.
 package main
 
 import (
@@ -73,6 +74,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	username := fs.String("username", defaultUsername, "username to log in as")
 	timeout := fs.Duration("timeout", defaultTimeout, "deadline for the whole join")
 	hold := fs.Duration("hold", 0, "how long to stay connected after a successful join")
+	follow := fs.Bool("follow-transfers", false, "during --hold, reconnect where a Transfer points, as a vanilla client does, instead of failing")
 
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -88,7 +90,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	result, err := mcjoin.JoinAndHold(ctx, *host, *port, *username, *hold)
+	result, err := mcjoin.JoinWith(ctx, *host, *port, *username, mcjoin.Options{Hold: *hold, FollowTransfers: *follow})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "spawnery-join: %v\n", err)
 		return 1

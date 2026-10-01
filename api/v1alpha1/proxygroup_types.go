@@ -203,6 +203,24 @@ type ProxyUpdateSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxStaleSeconds int32 `json:"maxStaleSeconds,omitempty"`
+
+	// Transfer moves players to another proxy instead of waiting for them.
+	// +optional
+	Transfer *ProxyTransferSpec `json:"transfer,omitempty"`
+}
+
+// ProxyTransferSpec moves players off a leaving proxy with Minecraft's
+// transfer packet (clients 1.20.5 and newer): at once when they change
+// server, the rest after ForceAfterSeconds unless their server has closed
+// its door. Setting it rolls the group once.
+type ProxyTransferSpec struct {
+	// ForceAfterSeconds is how long a leaving proxy waits before it
+	// transfers players who have not changed server, counted from when its
+	// agent first sees it leaving. Default 120; keep it below
+	// drain.timeoutSeconds and any maxStaleSeconds.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	ForceAfterSeconds *int32 `json:"forceAfterSeconds,omitempty"`
 }
 
 // ProxyGroupSpec describes the Velocity layer of a network.
@@ -239,8 +257,9 @@ type ProxyGroupSpec struct {
 	// incident rather than during one. The value reaches the pod as
 	// terminationGracePeriodSeconds, so it is part of the rendered pod the
 	// group's hash covers -- which means raising a drain timeout, the thing an
-	// operator does in the middle of an incident, adds a surge pod and a full
-	// replacement cycle on top of whatever prompted it.
+	// operator does in the middle of an incident, rolls the group blue/green
+	// on top of whatever prompted it: a replacement for every proxy, not just
+	// one.
 	//
 	// Raising it while a drain is already in flight otherwise behaves: the
 	// marked pod keeps its mark, being now stale as well as draining, and the
@@ -249,6 +268,13 @@ type ProxyGroupSpec struct {
 	// +kubebuilder:default={timeoutSeconds:300}
 	// +optional
 	Drain *DrainSpec `json:"drain,omitempty"`
+
+	// ChangeoverStage orders this group's changeover against the network's
+	// other groups: a group waits while any group of a lower stage is still
+	// changing over. Groups of one stage change over together, within
+	// Network.spec.update.maxConcurrentChangeovers.
+	// +optional
+	ChangeoverStage int32 `json:"changeoverStage,omitempty"`
 
 	// Update bounds how long a draining proxy may wait for its players.
 	// +optional
@@ -307,7 +333,7 @@ type ProxyGroupSpec struct {
 	// and JAVA_TOOL_OPTIONS is the same seam: the Velocity entrypoint execs
 	// java with its own flag list too. It is in podspec.DesiredProxyHash for
 	// the same reason -- editing it rolls the group through the ordinary
-	// surge-1 path, and with the same limit: a valueFrom reference is
+	// blue/green path, and with the same limit: a valueFrom reference is
 	// digested, the value behind it is not.
 	// +optional
 	// +listType=map
@@ -401,7 +427,7 @@ type ProxyGroupStatus struct {
 	// Changeover is this group's changeover as the network's budget sees it;
 	// written by its own reconcile and read by its siblings'.
 	// +optional
-	// +kubebuilder:validation:Enum="";Waiting;Begun
+	// +kubebuilder:validation:Enum="";Waiting;Begun;Deferred
 	Changeover ChangeoverState `json:"changeover,omitempty"`
 
 	// Conditions follow the standard Kubernetes condition contract.
@@ -476,4 +502,22 @@ func (g *ProxyGroup) MaxStale() time.Duration {
 		return 0
 	}
 	return time.Duration(g.Spec.Update.MaxStaleSeconds) * time.Second
+}
+
+// defaultTransferForceAfter is spec.update.transfer.forceAfterSeconds when
+// transfer is set but the field itself is not. Well below the default drain
+// timeout of 300 s, because the agent learns it is leaving up to one resync
+// after the drain clock starts.
+const defaultTransferForceAfter = 120 * time.Second
+
+// TransferForceAfter is spec.update.transfer.forceAfterSeconds and whether
+// transfer is on at all. (0, false) when spec.update.transfer is unset.
+func (g *ProxyGroup) TransferForceAfter() (time.Duration, bool) {
+	if g.Spec.Update == nil || g.Spec.Update.Transfer == nil {
+		return 0, false
+	}
+	if g.Spec.Update.Transfer.ForceAfterSeconds == nil {
+		return defaultTransferForceAfter, true
+	}
+	return time.Duration(*g.Spec.Update.Transfer.ForceAfterSeconds) * time.Second, true
 }

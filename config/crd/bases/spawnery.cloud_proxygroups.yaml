@@ -73,6 +73,14 @@ spec:
                 x-kubernetes-validations:
                 - message: an attribute name may be 64 characters and a value 256
                   rule: self.all(k, size(k) <= 64 && size(self[k]) <= 256)
+              changeoverStage:
+                description: |-
+                  ChangeoverStage orders this group's changeover against the network's
+                  other groups: a group waits while any group of a lower stage is still
+                  changing over. Groups of one stage change over together, within
+                  Network.spec.update.maxConcurrentChangeovers.
+                format: int32
+                type: integer
               config:
                 description: Config are the rendered Velocity settings.
                 properties:
@@ -180,8 +188,9 @@ spec:
                   incident rather than during one. The value reaches the pod as
                   terminationGracePeriodSeconds, so it is part of the rendered pod the
                   group's hash covers -- which means raising a drain timeout, the thing an
-                  operator does in the middle of an incident, adds a surge pod and a full
-                  replacement cycle on top of whatever prompted it.
+                  operator does in the middle of an incident, rolls the group blue/green
+                  on top of whatever prompted it: a replacement for every proxy, not just
+                  one.
 
                   Raising it while a drain is already in flight otherwise behaves: the
                   marked pod keeps its mark, being now stale as well as draining, and the
@@ -206,7 +215,7 @@ spec:
                   and JAVA_TOOL_OPTIONS is the same seam: the Velocity entrypoint execs
                   java with its own flag list too. It is in podspec.DesiredProxyHash for
                   the same reason -- editing it rolls the group through the ordinary
-                  surge-1 path, and with the same limit: a valueFrom reference is
+                  blue/green path, and with the same limit: a valueFrom reference is
                   digested, the value behind it is not.
                 items:
                   description: EnvVar represents an environment variable present in
@@ -1885,6 +1894,20 @@ spec:
                     format: int32
                     minimum: 0
                     type: integer
+                  transfer:
+                    description: Transfer moves players to another proxy instead of
+                      waiting for them.
+                    properties:
+                      forceAfterSeconds:
+                        description: |-
+                          ForceAfterSeconds is how long a leaving proxy waits before it
+                          transfers players who have not changed server, counted from when its
+                          agent first sees it leaving. Default 120; keep it below
+                          drain.timeoutSeconds and any maxStaleSeconds.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
                 type: object
             required:
             - expose
@@ -1910,6 +1933,7 @@ spec:
                 - ""
                 - Waiting
                 - Begun
+                - Deferred
                 type: string
               conditions:
                 description: Conditions follow the standard Kubernetes condition contract.

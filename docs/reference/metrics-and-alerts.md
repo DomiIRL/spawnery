@@ -27,8 +27,8 @@ Generated from two sources that only agree with each other because this page che
 <tr><td><code>spawnery_group_players</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Players on the group&#39;s servers.</td></tr>
 <tr><td><code>spawnery_group_servers</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Servers of the group.</td></tr>
 <tr><td><code>spawnery_group_servers_ready</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>type</code></td><td>Ready servers of the group.</td></tr>
-<tr><td><code>spawnery_network_changeovers_in_flight</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Groups of the network currently holding a changeover budget place.</td></tr>
-<tr><td><code>spawnery_network_changeovers_waiting</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Groups of the network waiting for a changeover budget place.</td></tr>
+<tr><td><code>spawnery_network_changeovers_in_flight</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Groups of the network holding a changeover budget place.</td></tr>
+<tr><td><code>spawnery_network_changeovers_waiting</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Groups of the network waiting for a changeover budget place or an earlier stage.</td></tr>
 <tr><td><code>spawnery_network_players</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code></td><td>Players on the network&#39;s proxies.</td></tr>
 <tr><td><code>spawnery_permissions_missing</code></td><td>gauge</td><td><code>scope</code></td><td>Permissions the operator needs and the API server says it lacks, by scope.</td></tr>
 <tr><td><code>spawnery_proxy_heap_max_bytes</code></td><td>gauge</td><td><code>namespace</code>, <code>network</code>, <code>group</code>, <code>proxy</code>, <code>node</code></td><td>The proxy&#39;s JVM max heap.</td></tr>

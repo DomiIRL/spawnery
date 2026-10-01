@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,41 +36,80 @@ import (
 // ChangeoverView is what AdmitChangeovers needs of one group to decide
 // whether it may change over.
 type ChangeoverView struct {
-	Kind    string // "ServerGroup" or "ProxyGroup"
-	Name    string
-	State   spawneryv1alpha1.ChangeoverState
-	Failing bool
+	Kind       string // "ServerGroup" or "ProxyGroup"
+	Name       string
+	State      spawneryv1alpha1.ChangeoverState
+	Failing    bool
+	Stage      int32
+	Persistent bool // gated by stage, takes no budget place: it never surges
 }
 
 func changeoverKey(kind, name string) string { return kind + "/" + name }
 
+func changeoverInFlight(g ChangeoverView) bool {
+	return !g.Failing && (g.State == spawneryv1alpha1.ChangeoverWaiting || g.State == spawneryv1alpha1.ChangeoverBegun)
+}
+
+// earliestStageBefore is the lowest stage below stage with a group in flight,
+// and that stage's groups by name.
+func earliestStageBefore(groups []ChangeoverView, stage int32) (int32, []string, bool) {
+	found := false
+	var lowest int32
+	for _, g := range groups {
+		if changeoverInFlight(g) && g.Stage < stage && (!found || g.Stage < lowest) {
+			lowest, found = g.Stage, true
+		}
+	}
+	if !found {
+		return 0, nil, false
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, g := range groups {
+		if changeoverInFlight(g) && g.Stage == lowest && !seen[g.Name] {
+			seen[g.Name] = true
+			names = append(names, g.Name)
+		}
+	}
+	sort.Strings(names)
+	return lowest, names, true
+}
+
 // AdmitChangeovers returns the groups, keyed "Kind/Name", that may change over
-// now. budget < 1 means no cap.
+// now. budget < 1 means no cap; the stage gate applies either way.
 func AdmitChangeovers(groups []ChangeoverView, budget int32) map[string]bool {
 	admitted := map[string]bool{}
 	var waiting []ChangeoverView
 	var holders int32
 	for _, g := range groups {
-		if g.State == spawneryv1alpha1.ChangeoverNone || g.State == spawneryv1alpha1.ChangeoverDeferred || g.Failing {
+		if !changeoverInFlight(g) {
 			continue
 		}
-		if budget < 1 || g.State == spawneryv1alpha1.ChangeoverBegun {
+		if g.State == spawneryv1alpha1.ChangeoverBegun {
 			admitted[changeoverKey(g.Kind, g.Name)] = true
-			if g.State == spawneryv1alpha1.ChangeoverBegun {
+			if !g.Persistent {
 				holders++
 			}
 			continue
 		}
+		if _, _, gated := earliestStageBefore(groups, g.Stage); gated {
+			continue
+		}
+		if g.Persistent || budget < 1 {
+			admitted[changeoverKey(g.Kind, g.Name)] = true
+			continue
+		}
 		waiting = append(waiting, g)
 	}
-	if budget < 1 {
-		return admitted
-	}
 	sort.Slice(waiting, func(i, j int) bool {
-		if waiting[i].Name != waiting[j].Name {
-			return waiting[i].Name < waiting[j].Name
+		a, b := waiting[i], waiting[j]
+		if a.Stage != b.Stage {
+			return a.Stage < b.Stage
 		}
-		return waiting[i].Kind < waiting[j].Kind
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Kind < b.Kind
 	})
 	for _, g := range waiting {
 		if holders >= budget {
@@ -78,6 +119,59 @@ func AdmitChangeovers(groups []ChangeoverView, budget int32) map[string]bool {
 		holders++
 	}
 	return admitted
+}
+
+// ChangeoverWait is why a group that must change over was not admitted; the
+// zero value means it was.
+type ChangeoverWait struct {
+	Reason  string
+	Message string
+}
+
+func describeWait(groups []ChangeoverView, budget int32, self ChangeoverView) ChangeoverWait {
+	if stage, names, ok := earliestStageBefore(groups, self.Stage); ok {
+		return ChangeoverWait{
+			Reason:  spawneryv1alpha1.ReasonWaitingForEarlierStage,
+			Message: fmt.Sprintf("waiting for stage %d: %s", stage, strings.Join(names, ", ")),
+		}
+	}
+	holders := changeoverHolders(groups, AdmitChangeovers(groups, budget), self.Kind, self.Name)
+	if len(holders) == 0 {
+		return ChangeoverWait{}
+	}
+	return ChangeoverWait{
+		Reason:  spawneryv1alpha1.ReasonWaitingForChangeoverBudget,
+		Message: "waiting for a changeover place; changing over: " + strings.Join(holders, ", "),
+	}
+}
+
+func serverChangeoverSelf(group *spawneryv1alpha1.ServerGroup, state spawneryv1alpha1.ChangeoverState) ChangeoverView {
+	return ChangeoverView{
+		Kind: "ServerGroup", Name: group.Name, State: state,
+		Failing: changeoverFailing(group.Status.Conditions),
+		Stage:   group.Spec.ChangeoverStage, Persistent: !group.IsEphemeral(),
+	}
+}
+
+func serverChangeoverWait(group *spawneryv1alpha1.ServerGroup, siblings []ChangeoverView, budget int32) ChangeoverWait {
+	self := serverChangeoverSelf(group, spawneryv1alpha1.ChangeoverWaiting)
+	return describeWait(append(slices.Clip(siblings), self), budget, self)
+}
+
+// changeoverRefused reports whether self, a group that must change over, may
+// not begin. Without a budget, and for a persistent self, which takes no
+// place, only the stage gate refuses: a failing self is admitted by nothing,
+// and the pass on which its backoff has just expired still reads BackingOff
+// True from the last one.
+func changeoverRefused(siblings []ChangeoverView, budget int32, self ChangeoverView) bool {
+	if self.State != spawneryv1alpha1.ChangeoverWaiting {
+		return false
+	}
+	if budget < 1 || self.Persistent {
+		_, _, gated := earliestStageBefore(siblings, self.Stage)
+		return gated
+	}
+	return !AdmitChangeovers(append(slices.Clip(siblings), self), budget)[changeoverKey(self.Kind, self.Name)]
 }
 
 func changeoverFailing(conditions []metav1.Condition) bool {
@@ -97,12 +191,13 @@ func changeoverSiblings(
 	}
 	for i := range servers.Items {
 		g := &servers.Items[i]
-		if g.Spec.NetworkRef.Name != network || (selfKind == "ServerGroup" && g.Name == selfName) {
+		if g.Spec.NetworkRef.Name != network || (selfKind == "ServerGroup" && g.Name == selfName) || g.IsOnDemand() {
 			continue
 		}
 		views = append(views, ChangeoverView{
 			Kind: "ServerGroup", Name: g.Name,
 			State: g.Status.Changeover, Failing: changeoverFailing(g.Status.Conditions),
+			Stage: g.Spec.ChangeoverStage, Persistent: !g.IsEphemeral(),
 		})
 	}
 	proxies := &spawneryv1alpha1.ProxyGroupList{}
@@ -117,6 +212,7 @@ func changeoverSiblings(
 		views = append(views, ChangeoverView{
 			Kind: "ProxyGroup", Name: g.Name,
 			State: g.Status.Changeover, Failing: changeoverFailing(g.Status.Conditions),
+			Stage: g.Spec.ChangeoverStage,
 		})
 	}
 	return views, nil
@@ -144,9 +240,12 @@ func changeoverHolders(groups []ChangeoverView, admitted map[string]bool, selfKi
 // group's extra server. A WhenEmpty group with a Ready current server is
 // Deferred instead: what remains waits for its players, not for the budget.
 // It stays Deferred while any current server still counts, Ready or not, so a
-// readiness loss does not take a budget place nobody admitted it to.
+// readiness loss does not take a budget place nobody admitted it to. A
+// RollingUpdate group is Deferred the same way once every stale server is
+// retiring and a current one is up, so the last retiree's own drain does not
+// hold a budget place nobody still needs.
 func ownServerChangeover(views []ServerView, podHash string, pendingCreates int32, whenEmpty bool, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
-	var stale, current, readyCurrent bool
+	var stale, staleServing, current, readyCurrent, unreadyCurrent bool
 	for _, v := range views {
 		if v.Hold {
 			continue
@@ -154,18 +253,27 @@ func ownServerChangeover(views []ServerView, podHash string, pendingCreates int3
 		if staleSpec(v, podHash) {
 			if !phase.Terminal(v.Phase) {
 				stale = true
+				if !v.leaving() && !v.Retire {
+					staleServing = true
+				}
 			}
 		} else if v.countsTowardSize() {
 			current = true
 			if v.Phase == phase.Ready {
 				readyCurrent = true
+			} else {
+				unreadyCurrent = true
 			}
 		}
 	}
+	wasDeferred := was == spawneryv1alpha1.ChangeoverDeferred
 	switch {
 	case !stale:
 		return spawneryv1alpha1.ChangeoverNone
-	case whenEmpty && (readyCurrent || (was == spawneryv1alpha1.ChangeoverDeferred && current)):
+	case whenEmpty && (readyCurrent || (wasDeferred && current)):
+		return spawneryv1alpha1.ChangeoverDeferred
+	case !whenEmpty && !staleServing && current &&
+		(wasDeferred || (pendingCreates == 0 && !unreadyCurrent)):
 		return spawneryv1alpha1.ChangeoverDeferred
 	case current || pendingCreates > 0:
 		return spawneryv1alpha1.ChangeoverBegun
@@ -174,11 +282,41 @@ func ownServerChangeover(views []ServerView, podHash string, pendingCreates int3
 	}
 }
 
+// ownPersistentChangeover is a persistent group's changeover state. It begins
+// with its first stale takedown and stays begun while stale ordinals remain; a
+// current ordinal added meanwhile does not begin it.
+func ownPersistentChangeover(views []ServerView, podHash string, pendingDeletes map[string]bool, replicas int32, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
+	stale, takedown := false, false
+	for _, v := range views {
+		if v.Hold || !staleSpec(v, podHash) {
+			continue
+		}
+		if !phase.Terminal(v.Phase) {
+			stale = true
+		}
+		if v.Ordinal != nil && *v.Ordinal < replicas && (v.leaving() || pendingDeletes[v.Name]) {
+			takedown = true
+		}
+	}
+	switch {
+	case !stale:
+		return spawneryv1alpha1.ChangeoverNone
+	case takedown || was == spawneryv1alpha1.ChangeoverBegun:
+		return spawneryv1alpha1.ChangeoverBegun
+	default:
+		return spawneryv1alpha1.ChangeoverWaiting
+	}
+}
+
 // ownProxyChangeover is a proxy group's changeover state from every pod of the
 // group that still exists: a stale one that is draining or terminating is
-// still the group's extra pod.
-func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates int32) spawneryv1alpha1.ChangeoverState {
-	var stale, current bool
+// still the group's extra pod. It is Deferred once at least replicas current
+// pods are Ready and every stale pod still present is leaving (draining or
+// terminating); it stays Deferred while that holds, so a readiness blip does
+// not take a budget place nobody admitted it to.
+func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates, replicas int32, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
+	var stale, staleServing, current bool
+	var readyCurrent int32
 	for i := range pods {
 		p := &pods[i]
 		if p.Status.Phase == corev1.PodFailed || p.Status.Phase == corev1.PodSucceeded {
@@ -186,13 +324,22 @@ func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates int32
 		}
 		if p.Labels[podspec.LabelPodHash] != wantHash {
 			stale = true
+			if _, marked := drainingSince(p); !marked && p.DeletionTimestamp.IsZero() {
+				staleServing = true
+			}
 		} else if p.DeletionTimestamp.IsZero() {
 			current = true
+			if isPodReady(p) {
+				readyCurrent++
+			}
 		}
 	}
 	switch {
 	case !stale:
 		return spawneryv1alpha1.ChangeoverNone
+	case !staleServing && current &&
+		(was == spawneryv1alpha1.ChangeoverDeferred || (readyCurrent >= replicas && pendingCreates == 0)):
+		return spawneryv1alpha1.ChangeoverDeferred
 	case current || pendingCreates > 0:
 		return spawneryv1alpha1.ChangeoverBegun
 	default:
@@ -201,32 +348,31 @@ func ownProxyChangeover(pods []corev1.Pod, wantHash string, pendingCreates int32
 }
 
 // proxyChangeover is a proxy group's own changeover state, whether it may
-// surge, and, when it may not, the groups holding the places.
+// surge, and, when it may not, why.
 func proxyChangeover(
 	ctx context.Context, c client.Reader, network *spawneryv1alpha1.Network,
 	group *spawneryv1alpha1.ProxyGroup, wantHash string, pendingCreates int32,
-) (spawneryv1alpha1.ChangeoverState, bool, []string, error) {
+) (spawneryv1alpha1.ChangeoverState, bool, ChangeoverWait, error) {
 	pods := &corev1.PodList{}
 	if err := c.List(ctx, pods, client.InNamespace(group.Namespace),
 		client.MatchingLabels(podspec.ProxyLabels(network.Name, group.Name))); err != nil {
-		return "", false, nil, err
+		return "", false, ChangeoverWait{}, err
 	}
-	own := ownProxyChangeover(pods.Items, wantHash, pendingCreates)
-	budget := network.ChangeoverBudget()
-	if budget == 0 || own != spawneryv1alpha1.ChangeoverWaiting {
-		return own, true, nil, nil
+	own := ownProxyChangeover(pods.Items, wantHash, pendingCreates, group.Spec.Replicas, group.Status.Changeover)
+	if own != spawneryv1alpha1.ChangeoverWaiting {
+		return own, true, ChangeoverWait{}, nil
 	}
 	siblings, err := changeoverSiblings(ctx, c, group.Namespace, network.Name, "ProxyGroup", group.Name)
 	if err != nil {
-		return "", false, nil, err
+		return "", false, ChangeoverWait{}, err
 	}
-	groups := append(slices.Clip(siblings), ChangeoverView{
+	self := ChangeoverView{
 		Kind: "ProxyGroup", Name: group.Name, State: own,
-		Failing: changeoverFailing(group.Status.Conditions),
-	})
-	admitted := AdmitChangeovers(groups, budget)
-	if admitted[changeoverKey("ProxyGroup", group.Name)] {
-		return own, true, nil, nil
+		Failing: changeoverFailing(group.Status.Conditions), Stage: group.Spec.ChangeoverStage,
 	}
-	return own, false, changeoverHolders(groups, admitted, "ProxyGroup", group.Name), nil
+	budget := network.ChangeoverBudget()
+	if !changeoverRefused(siblings, budget, self) {
+		return own, true, ChangeoverWait{}, nil
+	}
+	return own, false, describeWait(append(slices.Clip(siblings), self), budget, self), nil
 }

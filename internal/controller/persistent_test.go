@@ -436,6 +436,47 @@ func equalOrdinals(got, want []int32) bool {
 	return true
 }
 
+func TestDecidePersistentSizeRefusedNominatesNoStaleOrdinal(t *testing.T) {
+	stale := func(name string, o int32) ServerView {
+		v := ordinalView(name, o, phase.Ready)
+		v.PodHash = "old"
+		return v
+	}
+
+	t.Run("refused on a fully recovered group nominates nothing", func(t *testing.T) {
+		in := PersistentInputs{
+			Group: "survival", Replicas: 2, PodHash: "new", ChangeoverRefused: true,
+			Views: []ServerView{stale("survival-0", 0), stale("survival-1", 1)},
+		}
+		got := DecidePersistentSize(in)
+		if len(got.Delete) != 0 {
+			t.Fatalf("Delete = %v, want none: the changeover is refused", got.Delete)
+		}
+	})
+
+	t.Run("the same group unrefused nominates the stale ordinal", func(t *testing.T) {
+		in := PersistentInputs{
+			Group: "survival", Replicas: 2, PodHash: "new", ChangeoverRefused: false,
+			Views: []ServerView{stale("survival-0", 0), stale("survival-1", 1)},
+		}
+		got := DecidePersistentSize(in)
+		if got.DeleteReason != "StaleSpec" {
+			t.Fatalf("DeleteReason = %q, want StaleSpec", got.DeleteReason)
+		}
+	})
+
+	t.Run("a missing ordinal is still replaced under refusal", func(t *testing.T) {
+		in := PersistentInputs{
+			Group: "survival", Replicas: 3, PodHash: "new", ChangeoverRefused: true,
+			Views: []ServerView{stale("survival-0", 0), stale("survival-2", 2)},
+		}
+		got := DecidePersistentSize(in)
+		if !equalOrdinals(got.CreateOrdinals, []int32{1}) {
+			t.Fatalf("CreateOrdinals = %v, want [1]: a missing ordinal is still replaced", got.CreateOrdinals)
+		}
+	})
+}
+
 func TestOrdinalOf(t *testing.T) {
 	tests := []struct {
 		name   string

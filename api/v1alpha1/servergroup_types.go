@@ -151,6 +151,7 @@ type StorageSpec struct {
 // +kubebuilder:validation:XValidation:rule="self.type != 'OnDemand' || has(self.storage)",message="spec.storage is required for type OnDemand"
 // +kubebuilder:validation:XValidation:rule="self.type != 'OnDemand' || has(self.maxInstances)",message="spec.maxInstances is required for type OnDemand"
 // +kubebuilder:validation:XValidation:rule="self.type == 'OnDemand' || !has(self.maxInstances)",message="spec.maxInstances is only allowed for type OnDemand"
+// +kubebuilder:validation:XValidation:rule="self.type != 'OnDemand' || !has(self.changeoverStage) || self.changeoverStage == 0",message="spec.changeoverStage is not allowed for type OnDemand"
 // +kubebuilder:validation:XValidation:rule="!has(self.scaling) || self.scaling.minReplicas <= self.scaling.maxReplicas",message="scaling.minReplicas must not exceed scaling.maxReplicas"
 // +kubebuilder:validation:XValidation:rule="!has(self.update) || !has(self.update.minAvailable) || !has(self.scaling) || self.update.minAvailable < self.scaling.maxReplicas",message="spec.update.minAvailable must be less than spec.scaling.maxReplicas: keeping the floor needs room for one extra server"
 // +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || (has(self.storage.storageClassName) == has(oldSelf.storage.storageClassName) && (!has(self.storage.storageClassName) || self.storage.storageClassName == oldSelf.storage.storageClassName))",message="storage.storageClassName is immutable"
@@ -358,6 +359,13 @@ type ServerGroupSpec struct {
 	// a player spike without a changeover.
 	// +optional
 	Scaling *ScalingSpec `json:"scaling,omitempty"`
+
+	// ChangeoverStage orders this group's changeover against the network's
+	// other groups: a group waits while any group of a lower stage is still
+	// changing over. Groups of one stage change over together, within
+	// Network.spec.update.maxConcurrentChangeovers. Not for type OnDemand.
+	// +optional
+	ChangeoverStage int32 `json:"changeoverStage,omitempty"`
 
 	// Update configures the rolling update. Ephemeral only.
 	// +optional

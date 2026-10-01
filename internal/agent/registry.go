@@ -487,22 +487,30 @@ func (r *Registry) ReportAnnouncement(key, namespace, server string, a Announcem
 	return nil
 }
 
-// ReportAcceptJoins records whether a server wants new players.
+// ReportAcceptJoins records whether a server wants new players, and reports
+// whether its door moved.
+//
+// namespace comes from the authenticated identity, as it does for
+// ReportAnnouncement. No server name is needed here: ClosedDoors keys its
+// answer by key, the registry's own pod identity, and not by server name --
+// see ClosedDoors for why.
 //
 // A proxy is refused, for a plainer reason than the announcement's: a proxy is
 // not in anybody's routing table -- it is the routing table -- so there is
 // nothing for this to close.
-func (r *Registry) ReportAcceptJoins(key string, accept, roundEnded bool) error {
+func (r *Registry) ReportAcceptJoins(key, namespace string, accept, roundEnded bool) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	e, ok := r.entries[key]
 	if !ok || !e.connected {
-		return fmt.Errorf("no live stream for %q", key)
+		return false, fmt.Errorf("no live stream for %q", key)
 	}
 	if e.role != RoleServer {
-		return fmt.Errorf("accept-joins from a %s agent %q", e.role, key)
+		return false, fmt.Errorf("accept-joins from a %s agent %q", e.role, key)
 	}
+	e.namespace = namespace
+	changed := e.joinsClosed == accept
 	e.joinsClosed = !accept
 	// Only ever set. A server that ends a round and then reopens its door --
 	// which nothing does today -- has still ended that round, and the pod it
@@ -510,7 +518,7 @@ func (r *Registry) ReportAcceptJoins(key string, accept, roundEnded bool) error 
 	if roundEnded {
 		e.roundEnded = true
 	}
-	return nil
+	return changed, nil
 }
 
 // Announcements is what every server in a namespace last said about itself,
@@ -532,6 +540,36 @@ func (r *Registry) Announcements(namespace string) map[string]Announcement {
 			attributes[k] = v
 		}
 		out[e.server] = Announcement{State: e.announcement.State, Attributes: attributes}
+	}
+	return out
+}
+
+// ClosedDoors is every pod in a namespace whose server has closed its door,
+// keyed by the registry key -- the pod UID, the same value Build sends as a
+// ServerState's Incarnation -- and not by server name.
+//
+// A persistent server keeps its name across a pod restart; this registry
+// does not. The old pod's entry survives the restart -- joinsClosed outlives
+// a disconnect on purpose, for the make-before-break reconnect -- until the
+// orphan sweep forgets it a minute or so later, so between a restart and
+// that sweep two entries can claim the same server name, one closed and one
+// not. A reader keyed by name would have to guess which one is current; a
+// reader keyed by pod UID instead asks the same question the caller already
+// has the answer to, because it is sitting on the Server's own status.
+//
+// A pod that never reported, or that reopened, is absent rather than
+// present and false, so a caller ranging over this sees only what is
+// actually closed.
+func (r *Registry) ClosedDoors(namespace string) map[string]bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[string]bool)
+	for key, e := range r.entries {
+		if e.role != RoleServer || e.namespace != namespace || !e.joinsClosed {
+			continue
+		}
+		out[key] = true
 	}
 	return out
 }

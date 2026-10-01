@@ -3872,6 +3872,9 @@ type ServerState struct {
 	// How many of slots count as capacity, as the operator resolved it. 0 from
 	// an operator older than this field; read it as equal to slots.
 	PlayableSlots int32 `protobuf:"varint,13,opt,name=playable_slots,json=playableSlots,proto3" json:"playable_slots,omitempty"`
+	// True while the server has closed its door (AcceptJoins false). False for
+	// a server that never said.
+	JoinsClosed   bool `protobuf:"varint,14,opt,name=joins_closed,json=joinsClosed,proto3" json:"joins_closed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3997,6 +4000,13 @@ func (x *ServerState) GetPlayableSlots() int32 {
 	return 0
 }
 
+func (x *ServerState) GetJoinsClosed() bool {
+	if x != nil {
+		return x.JoinsClosed
+	}
+	return false
+}
+
 // ProxyState is one proxy pod as the operator last saw it.
 type ProxyState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -4005,11 +4015,14 @@ type ProxyState struct {
 	Group string `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`
 	Ready bool   `protobuf:"varint,3,opt,name=ready,proto3" json:"ready,omitempty"`
 	// Taking no new connections.
-	Draining      bool   `protobuf:"varint,4,opt,name=draining,proto3" json:"draining,omitempty"`
-	Players       int32  `protobuf:"varint,5,opt,name=players,proto3" json:"players,omitempty"`
-	Node          string `protobuf:"bytes,6,opt,name=node,proto3" json:"node,omitempty"` // as ServerState.node
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Draining bool   `protobuf:"varint,4,opt,name=draining,proto3" json:"draining,omitempty"`
+	Players  int32  `protobuf:"varint,5,opt,name=players,proto3" json:"players,omitempty"`
+	Node     string `protobuf:"bytes,6,opt,name=node,proto3" json:"node,omitempty"` // as ServerState.node
+	// Whether the pod's Velocity accepts transfer handshakes. A proxy that
+	// does not disconnects a transferred player instead of taking them.
+	AcceptsTransfers bool `protobuf:"varint,7,opt,name=accepts_transfers,json=acceptsTransfers,proto3" json:"accepts_transfers,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ProxyState) Reset() {
@@ -4082,6 +4095,13 @@ func (x *ProxyState) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *ProxyState) GetAcceptsTransfers() bool {
+	if x != nil {
+		return x.AcceptsTransfers
+	}
+	return false
 }
 
 type ProxyMessage struct {
@@ -5111,7 +5131,7 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\n" +
 	"PERSISTENT\x10\x02\x12\t\n" +
 	"\x05PROXY\x10\x03\x12\r\n" +
-	"\tON_DEMAND\x10\x04\"\xd1\x03\n" +
+	"\tON_DEMAND\x10\x04\"\xf4\x03\n" +
 	"\vServerState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12\x14\n" +
@@ -5130,10 +5150,11 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	" \x01(\x05R\x06number\x12\x12\n" +
 	"\x04held\x18\v \x01(\bR\x04held\x12\x12\n" +
 	"\x04node\x18\f \x01(\tR\x04node\x12%\n" +
-	"\x0eplayable_slots\x18\r \x01(\x05R\rplayableSlots\x1a=\n" +
+	"\x0eplayable_slots\x18\r \x01(\x05R\rplayableSlots\x12!\n" +
+	"\fjoins_closed\x18\x0e \x01(\bR\vjoinsClosed\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc3\x01\n" +
 	"\n" +
 	"ProxyState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
@@ -5141,7 +5162,8 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x05ready\x18\x03 \x01(\bR\x05ready\x12\x1a\n" +
 	"\bdraining\x18\x04 \x01(\bR\bdraining\x12\x18\n" +
 	"\aplayers\x18\x05 \x01(\x05R\aplayers\x12\x12\n" +
-	"\x04node\x18\x06 \x01(\tR\x04node\"\x82\x05\n" +
+	"\x04node\x18\x06 \x01(\tR\x04node\x12+\n" +
+	"\x11accepts_transfers\x18\a \x01(\bR\x10acceptsTransfers\"\x82\x05\n" +
 	"\fProxyMessage\x126\n" +
 	"\x05hello\x18\x01 \x01(\v2\x1e.spawnery.agent.v1alpha1.HelloH\x00R\x05hello\x12I\n" +
 	"\fplayer_count\x18\x02 \x01(\v2$.spawnery.agent.v1alpha1.PlayerCountH\x00R\vplayerCount\x12_\n" +

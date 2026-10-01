@@ -145,6 +145,7 @@ func TestRunPrintsOneJSONLineAndExitsZero(t *testing.T) {
 		Username   string `json:"username"`
 		UUID       string `json:"uuid"`
 		Compressed bool   `json:"compressed"`
+		Transfers  *int   `json:"transfers"`
 	}
 	if err := json.Unmarshal([]byte(line), &got); err != nil {
 		t.Fatalf("stdout is not JSON: %v (%q)", err, line)
@@ -162,6 +163,27 @@ func TestRunPrintsOneJSONLineAndExitsZero(t *testing.T) {
 	}
 	if got.Compressed {
 		t.Error(`"compressed" is true, but this server never sent Set Compression`)
+	}
+	if got.Transfers == nil || *got.Transfers != 0 {
+		t.Errorf(`"transfers" is %v, want 0 present`, got.Transfers)
+	}
+}
+
+func TestRunPassesFollowTransfersOn(t *testing.T) {
+	// This server reports 776, and following transfers is refused at any
+	// protocol but 777: the refusal is how the flag shows it arrived.
+	port := serveOneJoin(t)
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"--host", "127.0.0.1", "--port", strconv.Itoa(port),
+		"--hold", "200ms", "--follow-transfers",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Errorf("exit code is %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "777") {
+		t.Errorf("stderr is %q, want the refusal naming protocol 777", stderr.String())
 	}
 }
 

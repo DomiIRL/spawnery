@@ -195,6 +195,7 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 	// zero values below, which is the same picture as a server whose agent
 	// predates the verb.
 	announcements := s.Agents.Announcements(namespace)
+	closedDoors := s.Agents.ClosedDoors(namespace)
 
 	var servers spawneryv1alpha1.ServerList
 	if err := s.Reader.List(ctx, &servers, client.InNamespace(namespace)); err != nil {
@@ -243,6 +244,10 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			Number: srv.Spec.Number,
 			Held:   srv.Spec.Hold,
 			Node:   nodeOf[srv.Status.PodName],
+			// Keyed by Incarnation above and not by name: ClosedDoors answers
+			// per pod, and a persistent server's name outlives the pod that
+			// closed this door.
+			JoinsClosed: closedDoors[srv.Status.PodUID],
 		})
 	}
 
@@ -282,12 +287,13 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			continue
 		}
 		state.Proxies = append(state.Proxies, &agentpb.ProxyState{
-			Name:     pod.Name,
-			Group:    pod.Labels[podspec.LabelGroup],
-			Ready:    podReady(pod),
-			Draining: pod.Annotations[podspec.AnnotationProxyDrainingSince] != "",
-			Players:  s.Agents.Lookup(string(pod.UID)).Players,
-			Node:     pod.Spec.NodeName,
+			Name:             pod.Name,
+			Group:            pod.Labels[podspec.LabelGroup],
+			Ready:            podReady(pod),
+			Draining:         pod.Annotations[podspec.AnnotationProxyDrainingSince] != "",
+			Players:          s.Agents.Lookup(string(pod.UID)).Players,
+			Node:             pod.Spec.NodeName,
+			AcceptsTransfers: acceptsTransfers(pod),
 		})
 	}
 
@@ -315,6 +321,22 @@ func serverGroupKind(g *spawneryv1alpha1.ServerGroup) agentpb.GroupState_Kind {
 	default:
 		return agentpb.GroupState_KIND_UNSPECIFIED
 	}
+}
+
+// acceptsTransfers reads the pod and not its group: a roll is exactly when
+// the two disagree, and the pod is what Velocity was started with.
+func acceptsTransfers(pod *corev1.Pod) bool {
+	for _, c := range pod.Spec.Containers {
+		if c.Name != podspec.ProxyContainerName {
+			continue
+		}
+		for _, e := range c.Env {
+			if e.Name == podspec.EnvTransferForceAfterSeconds {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func podReady(pod *corev1.Pod) bool {

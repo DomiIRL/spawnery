@@ -191,6 +191,8 @@ type ProxyFleet interface {
 	// events to. It reports nothing: an agent that says so about a session
 	// that no longer exists is ordinary, not an error.
 	SetInterest(podUID string, wanted bool)
+	// SendState is *proxyreg.Fleet.SendState.
+	SendState(ctx context.Context, namespace string)
 }
 
 // ServerFanout is the backend side's counterpart, narrowed to the one method

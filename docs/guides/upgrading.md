@@ -14,36 +14,38 @@ kubectl get pods -n <ns> -l spawnery.cloud/role=proxy -L spawnery.cloud/pod-hash
 Two distinct values inside one group means that group is mid-roll; one value
 everywhere means done or never started.
 
-**The group's status will not tell you.** The surge pod comes up before any
-old pod is withdrawn, so `readyReplicas` holds at `replicas` and the phase
-reads `Ready` throughout, exactly as when nothing is happening.
+**The group's status will not tell you.** The replacement pods come up before
+any old pod is withdrawn, so `readyReplicas` holds at `replicas` and the phase
+reads `Ready` throughout, as at rest.
 
 ## What an upgrade rolls, with no spec edited
 
-Nobody has to edit a spec. A proxy pod is stale when its
-`spawnery.cloud/pod-hash` label differs from a digest of the pod the operator
-*would* render for its group right now, and that digest is taken over the
-rendered pod rather than over a chosen list of spec fields. So a change to the
-*rendering code* -- a new default in `internal/podspec`, an added environment
-variable, a renamed label -- moves the digest for every `ProxyGroup` while
-every spec stays byte for byte what it was.
+A proxy pod is stale when its `spawnery.cloud/pod-hash` label differs from a
+digest of the pod the operator *would* render for its group right now, and
+that digest is taken over the rendered pod rather than over a chosen list of
+spec fields. So a change to the *rendering code* -- a new default in
+`internal/podspec`, an added environment variable, a renamed label -- moves
+the digest for every `ProxyGroup` while every spec stays byte for byte what it
+was.
 
-There is a second trigger nobody would guess from the spec: the
-`agentEndpoint` handed to the renderer feeds the digest, and it is
+A second trigger is invisible in the spec: the `agentEndpoint` handed to the
+renderer feeds the digest, and it is
 `spawnery-operator.<operator-namespace>.svc:9443`. Moving the operator to a
 different namespace, or restarting it with a different `--operator-namespace`
-or `POD_NAMESPACE`, rolls the whole fleet with no image, no rendering change
-and no spec edit involved.
+or `POD_NAMESPACE`, rolls the whole fleet with nothing else changed.
 
-Every group starts within a reconcile of the new operator coming up, one pod
-at a time per group, and all groups at once unless the Network caps
-concurrent changeovers. Each replaced pod takes no new connections and is
-stopped once its players have left, however long that takes; nobody is
-disconnected unless the group sets `spec.update.maxStaleSeconds`, the pod's
-node is leaving, or its player count cannot be read for
-`spec.drain.timeoutSeconds`. A busy fleet upgraded at peak therefore rolls
-slowly rather than disconnecting anybody. See [Rolling a
+Every group starts as soon as the new operator is up: a server group one pod
+at a time, a proxy group blue/green across every stale pod at once, and every
+group at once unless the Network caps concurrent changeovers or the groups set
+changeover stages. Each replaced pod takes no new connections and is stopped
+once its players have left; nobody is disconnected unless the group sets
+`spec.update.maxStaleSeconds`, the pod's node is leaving, or its player count
+cannot be read for `spec.drain.timeoutSeconds`. See [Rolling a
 group](updates-and-drain.md#proxies-wait-for-their-players-too).
+
+From a release without changeover stages, the first reconcile takes a proxy
+group mid-roll from one extra pod to one per stale pod, and a `RollingUpdate`
+group whose stale servers are all leaving may release its budget place.
 
 Rolling on the rendered pod rather than on any `metadata.generation` change is
 deliberate: `replicas` is the routine edit on a proxy group, and a generation

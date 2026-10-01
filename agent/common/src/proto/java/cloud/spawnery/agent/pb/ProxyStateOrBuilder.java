@@ -83,4 +83,15 @@ public interface ProxyStateOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeBytes();
+
+  /**
+   * <pre>
+   * Whether the pod's Velocity accepts transfer handshakes. A proxy that
+   * does not disconnects a transferred player instead of taking them.
+   * </pre>
+   *
+   * <code>bool accepts_transfers = 7;</code>
+   * @return The acceptsTransfers.
+   */
+  boolean getAcceptsTransfers();
 }

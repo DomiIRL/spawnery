@@ -593,7 +593,7 @@ func TestAFinishedRoundIsReplacedWithoutCountingAFailure(t *testing.T) {
 	finished := servers[0].Name
 
 	uid := bringUpNamed(t, f, finished)
-	if err := f.agents.ReportAcceptJoins(uid, false, true); err != nil {
+	if _, err := f.agents.ReportAcceptJoins(uid, f.ns, false, true); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 	f.reconcile(finished)
@@ -4530,7 +4530,7 @@ func TestProgressingSaysWhetherTheGroupHasArrived(t *testing.T) {
 			group := &spawneryv1alpha1.ServerGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "lobby"},
 			}
-			reportProgressing(group, tc.views, gen, nil, FloorReport{})
+			reportProgressing(group, tc.views, gen, ChangeoverWait{}, FloorReport{})
 			got := meta.FindStatusCondition(group.Status.Conditions,
 				spawneryv1alpha1.ConditionProgressing)
 			if got == nil {
@@ -4850,7 +4850,7 @@ func TestAFailedRetireeIsNamedOnProgressing(t *testing.T) {
 		{Name: "lobby-old", PodHash: "old", Phase: phase.Failed, Retire: true},
 	}
 
-	reportProgressing(group, views, "current", nil, FloorReport{})
+	reportProgressing(group, views, "current", ChangeoverWait{}, FloorReport{})
 
 	cond := meta.FindStatusCondition(group.Status.Conditions, spawneryv1alpha1.ConditionProgressing)
 	if cond == nil || cond.Status != metav1.ConditionTrue {
@@ -4884,7 +4884,7 @@ func TestAnOrdinaryRetireeIsNotReportedAsStuck(t *testing.T) {
 			reportProgressing(group, []ServerView{
 				{Name: "lobby-new", PodHash: "current", Phase: phase.Ready},
 				{Name: "lobby-old", PodHash: "old", Phase: p, Retire: true},
-			}, "current", nil, FloorReport{})
+			}, "current", ChangeoverWait{}, FloorReport{})
 			cond := meta.FindStatusCondition(group.Status.Conditions, spawneryv1alpha1.ConditionProgressing)
 			if cond != nil && cond.Reason == spawneryv1alpha1.ReasonRetireeStuck {
 				t.Errorf("a %s retiree was reported as stuck: %q", p, cond.Message)
@@ -5265,7 +5265,7 @@ func TestProgressingNamesTheFloor(t *testing.T) {
 		{Name: "lobby-new", PodHash: "current", Phase: phase.Ready},
 		{Name: "lobby-old", PodHash: "old", Phase: phase.Ready},
 	}
-	reportProgressing(group, views, "current", nil, FloorReport{Joinable: 2, Min: 2})
+	reportProgressing(group, views, "current", ChangeoverWait{}, FloorReport{Joinable: 2, Min: 2})
 	cond := meta.FindStatusCondition(group.Status.Conditions, spawneryv1alpha1.ConditionProgressing)
 	if cond == nil || cond.Reason != spawneryv1alpha1.ReasonWaitingForMinAvailable {
 		t.Fatalf("Progressing = %+v, want reason %s", cond, spawneryv1alpha1.ReasonWaitingForMinAvailable)
@@ -5276,7 +5276,7 @@ func TestProgressingNamesTheFloor(t *testing.T) {
 
 	group.Status.Conditions = nil
 	views = append(views, ServerView{Name: "lobby-surge", PodHash: "current", Phase: phase.Starting})
-	reportProgressing(group, views, "current", nil, FloorReport{Joinable: 2, Min: 2})
+	reportProgressing(group, views, "current", ChangeoverWait{}, FloorReport{Joinable: 2, Min: 2})
 	cond = meta.FindStatusCondition(group.Status.Conditions, spawneryv1alpha1.ConditionProgressing)
 	if cond == nil || cond.Reason != spawneryv1alpha1.ReasonServersStarting {
 		t.Errorf("Progressing = %+v, want %s while the extra server starts", cond, spawneryv1alpha1.ReasonServersStarting)
@@ -5288,7 +5288,7 @@ func TestProgressingDoesNotCountAHeldServer(t *testing.T) {
 	reportProgressing(group, []ServerView{
 		{Name: "lobby-new", PodHash: "current", Phase: phase.Ready},
 		{Name: "lobby-old", PodHash: "old", Phase: phase.Ready, Hold: true},
-	}, "current", nil, FloorReport{})
+	}, "current", ChangeoverWait{}, FloorReport{})
 	cond := meta.FindStatusCondition(group.Status.Conditions, spawneryv1alpha1.ConditionProgressing)
 	if cond == nil || cond.Reason != spawneryv1alpha1.ReasonAtDesiredState {
 		t.Errorf("Progressing = %+v, want AtDesiredState: a held server is not being replaced", cond)

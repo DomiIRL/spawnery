@@ -552,6 +552,22 @@ java.lang.String defaultValue) {
     return playableSlots_;
   }
 
+  public static final int JOINS_CLOSED_FIELD_NUMBER = 14;
+  private boolean joinsClosed_ = false;
+  /**
+   * <pre>
+   * True while the server has closed its door (AcceptJoins false). False for
+   * a server that never said.
+   * </pre>
+   *
+   * <code>bool joins_closed = 14;</code>
+   * @return The joinsClosed.
+   */
+  @java.lang.Override
+  public boolean getJoinsClosed() {
+    return joinsClosed_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -607,6 +623,9 @@ java.lang.String defaultValue) {
     }
     if (playableSlots_ != 0) {
       output.writeInt32(13, playableSlots_);
+    }
+    if (joinsClosed_ != false) {
+      output.writeBool(14, joinsClosed_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -664,6 +683,10 @@ java.lang.String defaultValue) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(13, playableSlots_);
     }
+    if (joinsClosed_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(14, joinsClosed_);
+    }
     return size;
   }
   @java.lang.Override
@@ -714,6 +737,8 @@ java.lang.String defaultValue) {
         .equals(other.getNode())) return false;
     if (getPlayableSlots()
         != other.getPlayableSlots()) return false;
+    if (getJoinsClosed()
+        != other.getJoinsClosed()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -755,6 +780,9 @@ java.lang.String defaultValue) {
     hash = (53 * hash) + getNode().hashCode();
     hash = (37 * hash) + PLAYABLE_SLOTS_FIELD_NUMBER;
     hash = (53 * hash) + getPlayableSlots();
+    hash = (37 * hash) + JOINS_CLOSED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getJoinsClosed());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -925,6 +953,7 @@ java.lang.String defaultValue) {
       held_ = false;
       node_ = "";
       playableSlots_ = 0;
+      joinsClosed_ = false;
       return this;
     }
 
@@ -998,6 +1027,9 @@ java.lang.String defaultValue) {
       if (((from_bitField0_ & 0x00001000) != 0)) {
         result.playableSlots_ = playableSlots_;
       }
+      if (((from_bitField0_ & 0x00002000) != 0)) {
+        result.joinsClosed_ = joinsClosed_;
+      }
     }
 
     @java.lang.Override
@@ -1062,6 +1094,9 @@ java.lang.String defaultValue) {
       }
       if (other.getPlayableSlots() != 0) {
         setPlayableSlots(other.getPlayableSlots());
+      }
+      if (other.getJoinsClosed() != false) {
+        setJoinsClosed(other.getJoinsClosed());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1158,6 +1193,11 @@ java.lang.String defaultValue) {
               bitField0_ |= 0x00001000;
               break;
             } // case 104
+            case 112: {
+              joinsClosed_ = input.readBool();
+              bitField0_ |= 0x00002000;
+              break;
+            } // case 112
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2196,6 +2236,53 @@ java.lang.String defaultValue) {
     public Builder clearPlayableSlots() {
       bitField0_ = (bitField0_ & ~0x00001000);
       playableSlots_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private boolean joinsClosed_ ;
+    /**
+     * <pre>
+     * True while the server has closed its door (AcceptJoins false). False for
+     * a server that never said.
+     * </pre>
+     *
+     * <code>bool joins_closed = 14;</code>
+     * @return The joinsClosed.
+     */
+    @java.lang.Override
+    public boolean getJoinsClosed() {
+      return joinsClosed_;
+    }
+    /**
+     * <pre>
+     * True while the server has closed its door (AcceptJoins false). False for
+     * a server that never said.
+     * </pre>
+     *
+     * <code>bool joins_closed = 14;</code>
+     * @param value The joinsClosed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setJoinsClosed(boolean value) {
+
+      joinsClosed_ = value;
+      bitField0_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * True while the server has closed its door (AcceptJoins false). False for
+     * a server that never said.
+     * </pre>
+     *
+     * <code>bool joins_closed = 14;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearJoinsClosed() {
+      bitField0_ = (bitField0_ & ~0x00002000);
+      joinsClosed_ = false;
       onChanged();
       return this;
     }

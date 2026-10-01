@@ -116,6 +116,18 @@ func TestServerGroupOnDemandRefusesSizingFields(t *testing.T) {
 	}
 }
 
+func TestServerGroupOnDemandRefusesChangeoverStage(t *testing.T) {
+	c, ctx := testenv.Client(t)
+	ns := testenv.Namespace(t, ctx, c)
+
+	g := onDemandGroup(ns, "od-stage")
+	g.Spec.ChangeoverStage = 5
+	err := c.Create(ctx, g)
+	if err == nil || !strings.Contains(err.Error(), "spec.changeoverStage is not allowed for type OnDemand") {
+		t.Fatalf("create = %v, want the changeoverStage refusal", err)
+	}
+}
+
 func TestServerGroupOnDemandRequiresStorageAndCeiling(t *testing.T) {
 	c, ctx := testenv.Client(t)
 	ns := testenv.Namespace(t, ctx, c)

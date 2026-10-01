@@ -142,13 +142,13 @@ spec:
 Optional, minimum `1`. Unset means no cap — today's behaviour, unchanged.
 
 A group is changing over from the moment it has a stale server (a stale pod,
-for a proxy group) until the last one is gone, including one that is draining
-or terminating, and it holds its place for that whole window — never paused
-halfway. A group that must change over but has not begun waits its turn;
-server groups and proxy groups are admitted together, by name. While it
-waits, nothing about it changes except the roll: its stale servers keep
-running and keep taking players, and only the cold start (for a proxy group,
-the surge pod) is withheld until it is admitted. Player demand is not
+for a proxy group) until it is `Deferred` (see [Stages](#stages)) or its last
+stale server or pod is gone, and it holds its place for that window — never
+paused halfway. A group that must change over but has not begun waits its turn;
+groups are admitted by stage, then by name (see [Stages](#stages) below).
+While it waits, nothing about it changes except the roll: its stale servers
+keep running and keep taking players, and only the cold start (for a proxy
+group, the surge pods) is withheld until it is admitted. Player demand is not
 withheld: a waiting group that still needs a new server to answer it builds
 one at the current generation like any other, and that server is a begun
 changeover holding a place of its own — a second way, besides the race below,
@@ -189,6 +189,68 @@ changeover first — minutes, not seconds, once a drain is part of it. That is
 accepted rather than locked against: what it prevents is a sustained surge
 across the whole network, not a race between two groups.
 
+### Stages
+
+The budget says how many groups change over at once; it says nothing about
+which ones go first. `changeoverStage` does:
+
+```yaml
+kind: ProxyGroup
+metadata:
+  name: edge
+spec:
+  changeoverStage: -10
+---
+kind: ServerGroup
+metadata:
+  name: arena
+spec:
+  changeoverStage: 10
+```
+
+Optional `int32` on `ServerGroup` and `ProxyGroup`, default `0`, negative
+values allowed, so a group can be moved ahead of every group that sets
+nothing. A group with a stale server waits while any group of a lower stage
+is still changing over; groups of one stage change over together, within the
+budget. The gate applies whether or not a budget is set — an unset budget
+caps nothing, but it does not reorder anything either. A group whose
+changeover is failing (`BackingOff` or `Degraded`) gates nothing, the same as
+for the budget, and so does one whose cold start the `maxReplicas` ceiling
+refuses; its `ScalingLimited` condition says why. A group gated by its stage
+that builds a server for player demand has begun, and is not paused, the same
+as with the budget.
+
+A group stops gating once its new generation stands, regardless of what its
+old one is still doing. `status.changeover` reports this as `Deferred`:
+
+- A `RollingUpdate` server group reaches it once every stale server still
+  around is retiring or draining and every current server is Ready.
+- A proxy group reaches it once at least `replicas` current pods are Ready
+  and every stale pod still present is draining or terminating.
+
+`Deferred` holds no budget place and gates no later stage, and a readiness
+blip does not take either back once reached. That is also its cost: the old
+pods keep their memory while the next stage starts its own extra server. On
+a cluster sized for exactly one extra server at a time, that server stays
+`Pending` until the earlier group's drain actually ends — the same trade
+`WhenEmpty` groups have made since they were introduced.
+
+Persistent groups wait for their stage and gate later ones until no stale
+ordinal is left, but take no budget place of their own: they never surge.
+On-demand groups refuse the field; their members never roll.
+
+A group gated by its stage reports it the same way as the budget, in its own
+`Progressing` condition (a proxy group's `ChangingOver`):
+
+```bash
+kubectl get servergroup <name> -n minecraft \
+  -o jsonpath='{range .status.conditions[?(@.type=="Progressing")]}{.reason}: {.message}{"\n"}{end}'
+# WaitingForEarlierStage: waiting for stage -10: edge
+```
+
+Unset everywhere, every group is in stage 0 and admission is exactly as
+above: by name, within the budget.
+
 ## Proxies wait for their players too
 
 A proxy that a roll replaces, that a lowered `replicas` removes, or that an
@@ -211,12 +273,107 @@ is stale — is removed once it has been unreadable that long, so a dead proxy
 does not drain forever; an operator restart, after which every count is
 unreadable until the agents reconnect, does not end a drain.
 
-Proxies drain one at a time, so a roll of a group of N proxies waits N times
-for the last player on a proxy to leave, and the proxies still waiting their
-turn keep taking new players meanwhile. With
-`Network.spec.update.maxConcurrentChangeovers` set, the proxy group holds its
-changeover place for that whole time, and every server group in the network
-waits behind it. `spec.update.maxStaleSeconds` is what bounds both.
+A roll replaces proxies blue/green, not one at a time: every stale pod gets
+its own replacement up front, one extra pod for each proxy being replaced. A
+stale pod serving nobody is marked to drain at once, so a crashlooping proxy
+cannot hold its own replacement back; once at least `replicas` of the new
+pods are Ready, every other stale pod still around is marked in the same
+pass, each on its own `maxStaleSeconds` deadline. A `replicas` lowered
+mid-roll, while fewer than `replicas` new pods are Ready, takes its surplus
+from the new pods, never from the old ones still serving.
+
+The group reports `status.changeover` as `Deferred` once at least `replicas`
+current pods are Ready and every stale pod still present is draining or
+terminating: it holds neither a changeover place nor a later stage for as
+long as the last players take to leave. `spec.update.maxStaleSeconds` is
+what bounds that drain.
+
+### Moving players to another proxy
+
+Since Minecraft 1.20.5 a server can hand a client a *transfer*: the client
+closes its connection and opens a new one elsewhere, and the proxy it lands
+on can read back a cookie the old one set. `spec.update.transfer` puts that
+to use instead of waiting for `maxStaleSeconds`, or for the player to leave
+on their own:
+
+```yaml
+kind: ProxyGroup
+spec:
+  update:
+    transfer:                 # unset = today's behaviour
+      forceAfterSeconds: 120  # default 120, minimum 0
+```
+
+**Enabling it rolls the group once.** A proxy only accepts a transferred
+client with `accepts-transfers = true` in `velocity.toml`, which the
+operator renders only for a group with `transfer` set, and that line is part
+of the rendered config the group's pod hash covers. The proxies doing that
+first roll do not have the setting yet, so they still drain the old way;
+every roll after that transfers.
+
+**Disabling it is safe.** It rolls the group the same way, and the old
+proxies, which still transfer, only send players to proxies that accept
+them: the new ones do not, so the old ones drain the old way.
+
+Once enabled, a leaving proxy moves players in two moments:
+
+- **At once, on a server switch.** A player who is about to connect to a
+  different backend — `/server arena`, a plugin sending them on — is
+  transferred there instead, landing on another proxy of the group along the
+  way.
+- **Forced, after `forceAfterSeconds`.** Counted from when the proxy's agent
+  first sees itself leaving, which is within one resync (30 s) of the
+  operator starting the drain. Keep it below `drain.timeoutSeconds` and any
+  `maxStaleSeconds`, or those disconnect the players first. After that,
+  every player whose current server's door is open is transferred back to
+  that same server. A player on a server whose door is
+  closed (`AcceptJoins` false, a round in progress) is never forced; once the
+  door opens and the deadline has passed, they go on the next pass, which
+  runs once a second.
+
+A transfer only happens while another proxy of the same group is Ready, not
+itself leaving, and accepts transfers — otherwise there is nowhere to send
+the player, and the proxy leaves them where they are. Each player is tried
+once per leaving proxy, so one who comes back to it is not sent round again;
+anyone whose client is older than 1.20.5 cannot be transferred and stays
+behind, same as before, bounded by `maxStaleSeconds` and the drain deadline.
+
+The transfer sends the client to the host and port it typed in, not to a
+particular proxy: it is the Service in front of the group that picks where
+the player lands. An SRV record or a front end that maps ports works as
+long as that name still leads to the group. With `expose.type: HostPort`
+the address is a node's, and there the port still belongs to the leaving
+pod, so the transfer brings the player back to it; it does not transfer
+them a second time, but they do not move either.
+
+The player lands on the new proxy at the server they were going to, or were
+already on, via a signed cookie keyed off the forwarding secret every proxy
+in the network already mounts. That gives the secret a second job: whoever
+holds it can mint a cookie that sends their own player to any registered
+server, past whatever the proxy would have chosen, so treat a plugin that
+can read it as one that can route.
+
+A cookie that does not check out — expired (they are good for 60 s),
+another player's, naming a server the receiving proxy does not know, or
+written before a forwarding-secret rotation — routes the player as an
+ordinary fresh join rather than to the named server.
+
+What the player sees is a loading screen; what the backend sees is a quit
+followed by a join, the same as any reconnect. That has not been measured
+against a real client yet, so take "loading screen" as the shape of it, not
+a claim that it feels seamless.
+
+The agent logs every transfer and every cookie it refuses:
+
+```
+spawnery: transferred 'Notch' (switch) toward 'arena'
+spawnery: transfer cookie from 'Notch' refused: expired
+```
+
+A roll replaces proxies blue/green — the new pods come up and serve while
+the old ones drain — so during a roll there is always somewhere for a
+transfer to land. Retiring or scaling down a single replica has no such
+guarantee: when no other proxy of the group is Ready, nobody is transferred.
 
 ## Taking a retirement back
 

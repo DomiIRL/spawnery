@@ -84,11 +84,53 @@ const (
 	// same id in both directions and is answered by echoing its payload.
 	idConfigurationDisconnect = 0x02
 	idConfigurationKeepAlive  = 0x04
+
+	// From 1.20.5 on. Login: clientbound request, serverbound response.
+	idLoginCookieRequest  = 0x05
+	idLoginCookieResponse = 0x04
+	// Configuration: clientbound request, serverbound response.
+	idConfigurationCookieRequest  = 0x00
+	idConfigurationCookieResponse = 0x01
 )
 
-// nextStateLogin is the handshake's final field. internal/slp sends 1 for a
-// status request; this is the other half of the same enum.
-const nextStateLogin = 2
+// Configuration state from 1.20.5 on, used only when following transfers:
+// clientbound Known Packs is postEffectsProtocol's id.
+const (
+	idConfigurationKnownPacks       = 0x0f
+	idConfigurationKnownPacksAnswer = 0x07
+	idConfigurationFinish           = 0x03
+	idConfigurationFinishAnswer     = 0x03
+)
+
+// Play state, playProtocol only: these ids move with nearly every release.
+const (
+	playProtocol = 777
+
+	idPlayDisconnect         = 0x20
+	idPlayKeepAlive          = 0x2d
+	idPlayKeepAliveAnswer    = 0x1c
+	idPlayCookieRequest      = 0x15
+	idPlayCookieResponse     = 0x15
+	idPlayStoreCookie        = 0x7a
+	idPlayTransfer           = 0x84
+	idPlayStartConfiguration = 0x78
+	idPlayAcknowledgeConfig  = 0x10
+)
+
+// cookieProtocol (1.20.5) introduced cookies and transfers. Store Cookie and
+// Transfer are the configuration-state packets whose ids moved since: 26.3
+// (postEffectsProtocol) inserted Post Effects ahead of both.
+const (
+	cookieProtocol      = 766
+	postEffectsProtocol = 777
+)
+
+// nextStateLogin and nextStateTransfer are the handshake's final field.
+// internal/slp sends 1 for a status request.
+const (
+	nextStateLogin    = 2
+	nextStateTransfer = 3
+)
 
 // announceUnsupported is the protocol version this client announces when it
 // asks a server which version it speaks, and it is deliberately one no server
@@ -116,6 +158,10 @@ const announceUnsupported = -1
 // zlib stream claims to expand to.
 const maxPacketLen = 2 << 20
 
+// maxInflatedLen is the vanilla client's bound on a decompressed packet. A
+// play-state hold receives chunk data, which can inflate past maxPacketLen.
+const maxInflatedLen = 8 << 20
+
 // validUsername is what a Minecraft username may be, and what Paper enforces
 // on a player arriving through a proxy.
 var validUsername = regexp.MustCompile(`^[A-Za-z0-9_]{1,16}$`)
@@ -136,6 +182,17 @@ type Result struct {
 	// login. Velocity's default compression-threshold is 256, so a false here
 	// against a real proxy means the framing was never exercised.
 	Compressed bool `json:"compressed"`
+	Transfers  int  `json:"transfers"`
+}
+
+type Options struct {
+	Hold time.Duration
+	// FollowTransfers holds the player in the play state, which is where a
+	// proxy counts them as on a server and so where it transfers them from,
+	// and reconnects where a Transfer points until Hold is up. Without it the
+	// hold stays in the configuration state and a Transfer ends it with an
+	// error. Play-state packet ids are known for playProtocol only.
+	FollowTransfers bool
 }
 
 // Join connects, logs in as username against an offline-mode server, and
@@ -169,6 +226,11 @@ func Join(ctx context.Context, host string, port int, username string) (*Result,
 // rather than silently truncated, because a truncated hold and a completed one
 // end with the same read timeout and would be indistinguishable here.
 func JoinAndHold(ctx context.Context, host string, port int, username string, hold time.Duration) (*Result, error) {
+	return JoinWith(ctx, host, port, username, Options{Hold: hold})
+}
+
+func JoinWith(ctx context.Context, host string, port int, username string, opts Options) (*Result, error) {
+	hold := opts.Hold
 	if hold < 0 {
 		return nil, fmt.Errorf("a hold of %s is negative", hold)
 	}
@@ -196,7 +258,71 @@ func JoinAndHold(ctx context.Context, host string, port int, username string, ho
 	if protocol <= 0 {
 		return nil, fmt.Errorf("the server reported protocol version %d, which cannot be announced in a handshake", protocol)
 	}
+	if opts.FollowTransfers && protocol != playProtocol {
+		return nil, fmt.Errorf("following transfers holds the player in the play state, whose packet ids this client knows for protocol %d only; the server reported %d",
+			playProtocol, protocol)
+	}
 
+	s := newSession(protocol, username, opts)
+	result := &Result{Protocol: protocol}
+	nextState := int32(nextStateLogin)
+	for {
+		to, err := s.visit(ctx, host, port, nextState, result)
+		if err != nil {
+			if result.Transfers > 0 {
+				return nil, fmt.Errorf("after %d transfers, at %s: %w",
+					result.Transfers, net.JoinHostPort(host, strconv.Itoa(port)), err)
+			}
+			return nil, err
+		}
+		if to == nil {
+			return result, nil
+		}
+		result.Transfers++
+		host, port, nextState = to.host, to.port, nextStateTransfer
+	}
+}
+
+type transfer struct {
+	host string
+	port int
+}
+
+// session is what outlives one connection: a transfer reconnects with the
+// same protocol and identity, the cookies stored so far, and the end of the
+// hold that began on the first connection.
+type session struct {
+	protocol int
+	username string
+	opts     Options
+	cookies  map[string][]byte
+	holdEnd  time.Time
+
+	transfers     bool
+	idStoreCookie int32
+	idTransfer    int32
+}
+
+func newSession(protocol int, username string, opts Options) *session {
+	s := &session{
+		protocol:  protocol,
+		username:  username,
+		opts:      opts,
+		cookies:   map[string][]byte{},
+		transfers: protocol >= cookieProtocol,
+	}
+	if protocol >= postEffectsProtocol {
+		s.idStoreCookie, s.idTransfer = 0x0b, 0x0c
+	} else {
+		s.idStoreCookie, s.idTransfer = 0x0a, 0x0b
+	}
+	return s
+}
+
+// visit is one connection: handshake, login, routing, and the hold. It
+// returns where a followed Transfer points, or nil once the join or the hold
+// is done.
+func (s *session) visit(ctx context.Context, host string, port int, nextState int32, result *Result) (*transfer, error) {
 	var dialer net.Dialer
 	c, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
@@ -213,10 +339,10 @@ func JoinAndHold(ctx context.Context, host string, port int, username string, ho
 	conn := &framedConn{rw: c, threshold: -1}
 
 	var handshake []byte
-	handshake = mcproto.AppendVarInt(handshake, int32(protocol))
+	handshake = mcproto.AppendVarInt(handshake, int32(s.protocol))
 	handshake = mcproto.AppendString(handshake, host)
 	handshake = binary.BigEndian.AppendUint16(handshake, uint16(port))
-	handshake = mcproto.AppendVarInt(handshake, nextStateLogin)
+	handshake = mcproto.AppendVarInt(handshake, nextState)
 	if err := conn.writePacket(idHandshake, handshake); err != nil {
 		return nil, fmt.Errorf("write handshake: %w", err)
 	}
@@ -225,15 +351,15 @@ func JoinAndHold(ctx context.Context, host string, port int, username string, ho
 	// so the client does not present an identity the proxy would reject: the
 	// MD5 name-based UUID of "OfflinePlayer:<username>", with the version
 	// nibble forced to 3 and the variant to RFC 4122.
-	offline := OfflineUUID(username)
+	offline := OfflineUUID(s.username)
 	var loginStart []byte
-	loginStart = mcproto.AppendString(loginStart, username)
+	loginStart = mcproto.AppendString(loginStart, s.username)
 	loginStart = append(loginStart, offline[:]...)
 	if err := conn.writePacket(idLoginStart, loginStart); err != nil {
 		return nil, fmt.Errorf("write login start: %w", err)
 	}
 
-	result := &Result{Protocol: protocol}
+	result.Compressed = false
 	for {
 		id, payload, err := conn.readPacket()
 		if err != nil {
@@ -268,6 +394,10 @@ func JoinAndHold(ctx context.Context, host string, port int, username string, ho
 			// alternative: a server that gets no response waits forever, and
 			// the symptom would be a timeout naming nothing.
 			return nil, errors.New("the server sent a login plugin request, which this client does not implement")
+		case idLoginCookieRequest:
+			if err := s.answerCookie(conn, idLoginCookieResponse, payload); err != nil {
+				return nil, err
+			}
 		case idLoginSuccess:
 			if err := readLoginSuccess(payload, result); err != nil {
 				return nil, err
@@ -277,99 +407,231 @@ func JoinAndHold(ctx context.Context, host string, port int, username string, ho
 			}
 			// Login Acknowledged is what makes Velocity dial a backend; see
 			// the package comment. What comes back says whether it found one.
-			if err := conn.awaitRouting(); err != nil {
+			id, payload, err := conn.awaitRouting()
+			if err != nil {
 				return nil, err
 			}
-			if hold > 0 {
-				// The read timeout is how the hold ends, so the deadline is
-				// moved in from ctx's to the end of the hold. The check at the
-				// top of this function is what makes that a shortening.
-				if err := c.SetDeadline(time.Now().Add(hold)); err != nil {
-					return nil, fmt.Errorf("set hold deadline: %w", err)
-				}
-				if err := conn.holdOpen(); err != nil {
-					return nil, err
-				}
+			if s.opts.Hold == 0 {
+				return nil, nil
 			}
-			return result, nil
+			if s.holdEnd.IsZero() {
+				s.holdEnd = time.Now().Add(s.opts.Hold)
+			}
+			// The read timeout is how the hold ends, so the deadline is moved
+			// in from ctx's to the end of the hold. The check at the top of
+			// JoinWith is what makes that a shortening.
+			if err := c.SetDeadline(s.holdEnd); err != nil {
+				return nil, fmt.Errorf("set hold deadline: %w", err)
+			}
+			return s.holdOpen(conn, id, payload)
 		default:
 			return nil, fmt.Errorf("unexpected packet id 0x%02x during login", id)
 		}
 	}
 }
 
-// holdOpen reads until the connection's deadline expires, which is how a
-// successful hold ends: there is nothing this client wants from those packets
-// except the two it has to act on.
+// answerCookie answers a Cookie Request from the cookies stored so far, with
+// no payload for a key never stored.
+func (s *session) answerCookie(c *framedConn, responseID int32, request []byte) error {
+	key, err := readString(request)
+	if err != nil {
+		return fmt.Errorf("read a cookie request: %w", err)
+	}
+	answer := mcproto.AppendString(nil, key)
+	if value, ok := s.cookies[key]; ok {
+		answer = append(answer, 1)
+		answer = mcproto.AppendVarInt(answer, int32(len(value)))
+		answer = append(answer, value...)
+	} else {
+		answer = append(answer, 0)
+	}
+	if err := c.writePacket(responseID, answer); err != nil {
+		return fmt.Errorf("answer the cookie request for %q: %w", key, err)
+	}
+	return nil
+}
+
+func (s *session) storeCookie(payload []byte) error {
+	r := bytes.NewReader(payload)
+	key, err := nextString(r)
+	if err != nil {
+		return fmt.Errorf("read a stored cookie's key: %w", err)
+	}
+	value, err := nextBytes(r)
+	if err != nil {
+		return fmt.Errorf("read the cookie stored as %q: %w", key, err)
+	}
+	s.cookies[key] = value
+	return nil
+}
+
+func readTransfer(payload []byte) (*transfer, error) {
+	r := bytes.NewReader(payload)
+	host, err := nextString(r)
+	if err != nil {
+		return nil, fmt.Errorf("read a transfer's host: %w", err)
+	}
+	port, err := mcproto.ReadVarInt(r)
+	if err != nil {
+		return nil, fmt.Errorf("read a transfer's port: %w", err)
+	}
+	if port <= 0 || port > 65535 {
+		return nil, fmt.Errorf("a transfer to %s names port %d", host, port)
+	}
+	return &transfer{host: host, port: int(port)}, nil
+}
+
+// holdOpen acts on first, the packet awaitRouting read, and then on every
+// packet until the connection's deadline expires, which is how a successful
+// hold ends, or until a Transfer is followed.
 //
-// # What a held connection is not
+// # What a held connection is not, unless it follows transfers
 //
-// It stops one packet after Login Acknowledged, in the configuration state,
-// which is as far as Velocity needs before it dials a backend. Paper's
-// getOnlinePlayers() never contains such a client, because it never finishes
-// the configuration phase Paper is waiting for -- so the Paper agent reports
-// zero players and Server.status.players reads zero for a connection the
-// proxy is actively holding open. A held player therefore cannot stand in for
-// a real one wherever the *backend's* count is what is read.
+// Without FollowTransfers it stays one packet after Login Acknowledged, in the
+// configuration state, which is as far as Velocity needs before it dials a
+// backend. Paper's getOnlinePlayers() never contains such a client, because
+// it never finishes the configuration phase -- so Server.status.players reads
+// zero for a connection the proxy is holding open, and Velocity never sets the
+// player's current server, which it does only on Join Game.
 //
-// Closing that needs this client to drive the exchange rather than answer it,
-// which is the part a reading of the protocol gets wrong. After Login
-// Acknowledged the server sends Plugin Message 0x01 (minecraft:brand),
-// Feature Flags 0x0c and Select Known Packs 0x0e, and then nothing but Keep
-// Alive 0x04 for as long as the client waits: it never sends Finish
-// Configuration unprompted, so a case that answers one packet waits for a
-// packet that never comes. What moves it:
+// Finishing it needs this client to drive the exchange rather than answer it.
+// After Login Acknowledged the server sends Plugin Message 0x01
+// (minecraft:brand), Feature Flags and Known Packs (0x0d and 0x0f at protocol
+// 777), and then nothing but Keep Alive 0x04 for as long as the client waits.
+// What moves it:
 //
 //   - serverbound Known Packs 0x07 with an empty list, after which the server
-//     sends its Registry Data 0x07 and Update Tags 0x0d, tens of kilobytes
+//     sends its Registry Data and Update Tags, tens of kilobytes
 //   - clientbound Finish Configuration 0x03, empty payload
 //   - serverbound Acknowledge Finish Configuration 0x03, empty -- after which
-//     the server counts the player
+//     the client is in the play state and the server sends Join Game
 //
-// The hold then sits in the play state, where Keep Alive is 0x2c carrying a
-// millisecond timestamp rather than the configuration state's 0x04. So it is
-// four constants and a small state machine that leads, not two constants and
-// a case.
-func (c *framedConn) holdOpen() error {
+// In the play state Keep Alive is 0x2d out and 0x1c back at protocol 777, and
+// a server switch sends Start Configuration, which leads back through the
+// same exchange. Every other play packet, chunks included, is ignored.
+func (s *session) holdOpen(c *framedConn, id int32, payload []byte) (*transfer, error) {
+	play := false
 	for {
-		id, payload, err := c.readPacket()
+		var to *transfer
+		var err error
+		if play {
+			to, play, err = s.playPacket(c, id, payload)
+		} else {
+			to, play, err = s.configurationPacket(c, id, payload)
+		}
+		if err != nil || to != nil {
+			return to, err
+		}
+		id, payload, err = c.readPacket()
 		if err != nil {
 			var timeout net.Error
 			if errors.As(err, &timeout) && timeout.Timeout() {
-				return nil
+				return nil, nil
 			}
-			return fmt.Errorf("hold the connection open: %w", err)
-		}
-		switch id {
-		case idConfigurationDisconnect:
-			return fmt.Errorf("the player was disconnected during the hold: %s", nbtText(payload))
-		case idConfigurationKeepAlive:
-			// Echoed whole: the payload is the id the server wants back, and
-			// a server that does not get it drops the connection. Measured
-			// against the pinned pair — which sends one about every second —
-			// by holding a real join open for 40 seconds, several times any
-			// keep-alive timeout: the proxy logged the disconnect only when
-			// this client closed the socket, 40s after the connect.
-			//
-			//	[19:04:13 INFO]: [server connection] spawnery_probe -> lobby has connected
-			//	[19:04:54 INFO]: [connected player] spawnery_probe has disconnected
-			if err := c.writePacket(idConfigurationKeepAlive, payload); err != nil {
-				return fmt.Errorf("answer a keep alive: %w", err)
-			}
+			return nil, fmt.Errorf("hold the connection open: %w", err)
 		}
 	}
 }
 
-// awaitRouting reads the one packet that follows Login Acknowledged.
-func (c *framedConn) awaitRouting() error {
+// configurationPacket acts on one configuration-state packet and says whether
+// the client is now in the play state.
+func (s *session) configurationPacket(c *framedConn, id int32, payload []byte) (*transfer, bool, error) {
+	switch id {
+	case idConfigurationDisconnect:
+		return nil, false, fmt.Errorf("the player was disconnected during the hold: %s", nbtText(payload))
+	case idConfigurationKeepAlive:
+		// Echoed whole: the payload is the id the server wants back, and
+		// a server that does not get it drops the connection. Measured
+		// against the pinned pair — which sends one about every second —
+		// by holding a real join open for 40 seconds, several times any
+		// keep-alive timeout: the proxy logged the disconnect only when
+		// this client closed the socket, 40s after the connect.
+		//
+		//	[19:04:13 INFO]: [server connection] spawnery_probe -> lobby has connected
+		//	[19:04:54 INFO]: [connected player] spawnery_probe has disconnected
+		if err := c.writePacket(idConfigurationKeepAlive, payload); err != nil {
+			return nil, false, fmt.Errorf("answer a keep alive: %w", err)
+		}
+		return nil, false, nil
+	}
+	if !s.transfers {
+		return nil, false, nil
+	}
+	switch id {
+	case idConfigurationCookieRequest:
+		return nil, false, s.answerCookie(c, idConfigurationCookieResponse, payload)
+	case s.idStoreCookie:
+		return nil, false, s.storeCookie(payload)
+	case s.idTransfer:
+		to, err := s.transferTo(payload)
+		return to, false, err
+	}
+	if !s.opts.FollowTransfers {
+		return nil, false, nil
+	}
+	switch id {
+	case idConfigurationKnownPacks:
+		if err := c.writePacket(idConfigurationKnownPacksAnswer, mcproto.AppendVarInt(nil, 0)); err != nil {
+			return nil, false, fmt.Errorf("answer known packs: %w", err)
+		}
+	case idConfigurationFinish:
+		if err := c.writePacket(idConfigurationFinishAnswer, nil); err != nil {
+			return nil, false, fmt.Errorf("acknowledge finish configuration: %w", err)
+		}
+		return nil, true, nil
+	}
+	return nil, false, nil
+}
+
+// playPacket acts on one play-state packet and says whether the client is
+// still in the play state.
+func (s *session) playPacket(c *framedConn, id int32, payload []byte) (*transfer, bool, error) {
+	switch id {
+	case idPlayDisconnect:
+		return nil, true, fmt.Errorf("the player was disconnected during the hold: %s", nbtText(payload))
+	case idPlayKeepAlive:
+		if err := c.writePacket(idPlayKeepAliveAnswer, payload); err != nil {
+			return nil, true, fmt.Errorf("answer a keep alive: %w", err)
+		}
+	case idPlayCookieRequest:
+		return nil, true, s.answerCookie(c, idPlayCookieResponse, payload)
+	case idPlayStoreCookie:
+		return nil, true, s.storeCookie(payload)
+	case idPlayTransfer:
+		to, err := s.transferTo(payload)
+		return to, true, err
+	case idPlayStartConfiguration:
+		if err := c.writePacket(idPlayAcknowledgeConfig, nil); err != nil {
+			return nil, true, fmt.Errorf("acknowledge configuration: %w", err)
+		}
+		return nil, false, nil
+	}
+	return nil, true, nil
+}
+
+func (s *session) transferTo(payload []byte) (*transfer, error) {
+	to, err := readTransfer(payload)
+	if err != nil {
+		return nil, err
+	}
+	if !s.opts.FollowTransfers {
+		return nil, fmt.Errorf("the player was transferred to %s during the hold, and following transfers is off",
+			net.JoinHostPort(to.host, strconv.Itoa(to.port)))
+	}
+	return to, nil
+}
+
+// awaitRouting reads the one packet that follows Login Acknowledged and
+// returns it for the hold to act on.
+func (c *framedConn) awaitRouting() (int32, []byte, error) {
 	id, payload, err := c.readPacket()
 	if err != nil {
-		return fmt.Errorf("read the proxy's answer to login acknowledged: %w", err)
+		return 0, nil, fmt.Errorf("read the proxy's answer to login acknowledged: %w", err)
 	}
 	if id == idConfigurationDisconnect {
-		return fmt.Errorf("the login succeeded but the player was not routed: %s", nbtText(payload))
+		return 0, nil, fmt.Errorf("the login succeeded but the player was not routed: %s", nbtText(payload))
 	}
-	return nil
+	return id, payload, nil
 }
 
 // OfflineUUID is the UUID an offline-mode server assigns to username: the MD5
@@ -416,19 +678,27 @@ func readLoginSuccess(payload []byte, result *Result) error {
 
 // readString reads one length-prefixed string from the front of b.
 func readString(b []byte) (string, error) {
-	r := bytes.NewReader(b)
+	return nextString(bytes.NewReader(b))
+}
+
+func nextString(r *bytes.Reader) (string, error) {
+	b, err := nextBytes(r)
+	return string(b), err
+}
+
+func nextBytes(r *bytes.Reader) ([]byte, error) {
 	length, err := mcproto.ReadVarInt(r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if length < 0 || int(length) > r.Len() {
-		return "", fmt.Errorf("string length %d exceeds the %d bytes that follow it", length, r.Len())
+		return nil, fmt.Errorf("length %d exceeds the %d bytes that follow it", length, r.Len())
 	}
-	s := make([]byte, length)
-	if _, err := io.ReadFull(r, s); err != nil {
-		return "", err
+	b := make([]byte, length)
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, err
 	}
-	return string(s), nil
+	return b, nil
 }
 
 // nbtText renders a configuration-state disconnect reason readably.
@@ -554,7 +824,7 @@ func (c *framedConn) readPacket() (int32, []byte, error) {
 	switch {
 	case dataLen == 0:
 		body = rest
-	case dataLen < 0 || dataLen > maxPacketLen:
+	case dataLen < 0 || dataLen > maxInflatedLen:
 		return 0, nil, fmt.Errorf("read data length: implausible value %d", dataLen)
 	default:
 		zr, err := zlib.NewReader(rest)

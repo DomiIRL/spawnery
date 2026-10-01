@@ -86,6 +86,33 @@ func TestAProxyGroupsEnvIsAppendedAfterTheOperatorsOwn(t *testing.T) {
 	}
 }
 
+func TestTheTransferVariablesSitWithTheOperatorsOwn(t *testing.T) {
+	group := testProxyGroup()
+	group.Spec.Update = &spawneryv1alpha1.ProxyUpdateSpec{Transfer: &spawneryv1alpha1.ProxyTransferSpec{}}
+	group.Spec.Env = []corev1.EnvVar{{Name: "JAVA_TOOL_OPTIONS", Value: "-Dvelocity.x=1"}}
+
+	pod, err := BuildProxyPod(testNetwork(), group, "gateway-abcd", testEndpoint, nil)
+	if err != nil {
+		t.Fatalf("BuildProxyPod: %v", err)
+	}
+
+	got := envNames(pod)
+	want := []string{
+		"SPAWNERY_NETWORK", "SPAWNERY_GROUP", EnvProxy, EnvPlayerLimit,
+		EnvFallbackGroups, EnvOperatorEndpoint,
+		EnvTransferForceAfterSeconds, EnvForwardingSecretFile, "JAVA_TOOL_OPTIONS",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("env = %v, want %v", got, want)
+	}
+	for _, name := range []string{EnvTransferForceAfterSeconds, EnvForwardingSecretFile} {
+		if !strings.HasPrefix(name, spawneryv1alpha1.ReservedEnvPrefix) {
+			t.Errorf("%s is outside the reserved prefix %s, so a group's spec.env could shadow it",
+				name, spawneryv1alpha1.ReservedEnvPrefix)
+		}
+	}
+}
+
 func TestAGroupWithNoEnvRendersExactlyWhatItRenderedBefore(t *testing.T) {
 	// Every installation that never touches this field must get the pod it got
 	// before, which is also what keeps the golden digests in hash_golden_test.go

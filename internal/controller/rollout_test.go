@@ -25,27 +25,11 @@ func at(min int) time.Time {
 	return time.Date(2026, 8, 14, 12, min, 0, 0, time.UTC)
 }
 
-// TestDecideRolloutCountsDrainingIndependentlyOfStale isolates one clause of
-// the one-at-a-time guard: draining is counted from ProxyView.Draining alone,
-// not from Draining together with Stale. Every other table case below that
-// reaches the guard pairs the two on the same pod -- "one already draining"
-// has its draining pod also Stale: true -- so none of them tells the guard's
-// own reading of Draining apart from stale entailing draining in practice.
-// This pod is draining and explicitly not stale: the state a proxy is in the
-// moment after whatever made it stale stops being true, which for a node
-// drain is exactly what releasing the node produces. The guard still holds,
-// which is what this case adds over the others.
-//
-// It does not by itself establish spec §3.6's promise that releasing a node
-// mid-drain does not undo the drain already begun. DecideRollout has no
-// concept of a mark already made -- it only sees this pass's Draining flag,
-// which reconcileReplicas derives from the annotation, not from Stale -- so
-// nothing here says the mark survives a real reconcile that recomputes Stale
-// fresh and feeds it back through the surplus-marks budget.
+// TestDecideRolloutCountsDrainingIndependentlyOfStale pins that the draining
+// guard reads ProxyView.Draining alone: a draining pod that is no longer
+// stale, as after a node is released mid-drain, still holds it.
 // TestAnUncordonedNodeKeepsTheMarkAlreadyMade in proxygroup_controller_test.go
-// drives that whole path end to end and is what actually establishes §3.6;
-// this case only pins the one clause of DecideRollout the guard depends on
-// while doing so.
+// is what establishes that the mark survives a real reconcile.
 func TestDecideRolloutCountsDrainingIndependentlyOfStale(t *testing.T) {
 	pods := []ProxyView{
 		{Name: "old", Stale: false, Ready: false, Draining: true, Players: 2},
@@ -84,52 +68,52 @@ func TestDecideRollout(t *testing.T) {
 			want:     RolloutDecision{},
 		},
 		{
-			name: "all stale: the surge pod is created before anything is marked",
+			name: "all stale: a replacement for each is created before anything is marked",
 			pods: []ProxyView{
 				{Name: "a", Stale: true, Ready: true, CreatedAt: at(0)},
 				{Name: "b", Stale: true, Ready: true, CreatedAt: at(1)},
 			},
 			replicas: 2,
-			want:     RolloutDecision{Create: 1},
+			want:     RolloutDecision{Create: 2},
 		},
 		{
-			name: "the surge pod is not ready yet, so nothing is marked",
+			name: "a replacement not ready yet: the missing one is created and nothing is marked",
 			pods: []ProxyView{
 				{Name: "a", Stale: true, Ready: true, CreatedAt: at(0)},
 				{Name: "b", Stale: true, Ready: true, CreatedAt: at(1)},
 				{Name: "c", Ready: false, CreatedAt: at(2)},
 			},
 			replicas: 2,
-			want:     RolloutDecision{},
+			want:     RolloutDecision{Create: 1},
 		},
 		{
-			name: "the surge pod is ready, so exactly one stale pod is marked",
+			name: "one Ready replacement for two stale pods: the second is created, nothing is marked",
 			pods: []ProxyView{
 				{Name: "a", Stale: true, Ready: true, Players: 3, CreatedAt: at(0)},
 				{Name: "b", Stale: true, Ready: true, Players: 1, CreatedAt: at(1)},
 				{Name: "c", Ready: true, CreatedAt: at(2)},
 			},
 			replicas: 2,
-			want:     RolloutDecision{Drain: []string{"b"}},
+			want:     RolloutDecision{Create: 1},
 		},
 		{
-			name: "one already draining: no second replacement begins",
+			name: "one already draining: the other stale pod's replacement is still created",
 			pods: []ProxyView{
 				{Name: "a", Stale: true, Ready: true, CreatedAt: at(0)},
 				{Name: "b", Stale: true, Draining: true, Players: 1, CreatedAt: at(1)},
 				{Name: "c", Ready: true, CreatedAt: at(2)},
 			},
 			replicas: 2,
-			want:     RolloutDecision{},
+			want:     RolloutDecision{Create: 1},
 		},
 		{
-			name: "the surge pod dying mid-drain is replaced, because surge outlives the mark",
+			name: "replacements lost mid-drain are rebuilt, because surge outlives the mark",
 			pods: []ProxyView{
 				{Name: "draining", Stale: true, Draining: true, Players: 1, CreatedAt: at(0)},
 				{Name: "waiting", Stale: true, Ready: true, CreatedAt: at(1)},
 			},
 			replicas: 2,
-			want:     RolloutDecision{Create: 1},
+			want:     RolloutDecision{Create: 2},
 		},
 		{
 			name: "scale-down takes the emptiest",
@@ -203,7 +187,7 @@ func TestDecideRollout(t *testing.T) {
 				{Name: "old-b", Stale: true, Ready: true, Players: 1, CreatedAt: at(1)},
 			},
 			replicas: 1,
-			want:     RolloutDecision{Drain: []string{"old-b"}},
+			want:     RolloutDecision{Create: 1},
 		},
 		{
 			name: "a stale pod does not block the group from reaching zero",
@@ -214,11 +198,6 @@ func TestDecideRollout(t *testing.T) {
 			want:     RolloutDecision{Drain: []string{"last"}},
 		},
 		{
-			// The same case with the pod not Ready. readyBeyond counts ready,
-			// non-draining pods, so this one contributes nothing and the gate
-			// that reads it alone would hold shut against a group asked to
-			// reach zero -- which is what the case above's name denies in
-			// general, not only for a pod the kubelet happens to like.
 			name: "a stale pod that is not ready does not block the group from reaching zero either",
 			pods: []ProxyView{
 				{Name: "last", Stale: true, Ready: false, CreatedAt: at(0)},
@@ -227,18 +206,12 @@ func TestDecideRollout(t *testing.T) {
 			want:     RolloutDecision{Drain: []string{"last"}},
 		},
 		{
-			// The permanent stall, before the readiness clause existed:
-			// stale=2 so target=3, total=3, so no create and no surplus;
-			// nothing is draining; and readyBeyond counts a and s, which is 2
-			// and not more than replicas. Every branch declines, and no
-			// branch changed the state they declined on -- so the next pass
-			// declines identically, and the pod holding the gate shut is the
-			// crashlooping one the image bump was issued to replace.
 			name: "a stale pod that is not ready is marked, because retiring it costs no ready capacity",
 			pods: []ProxyView{
 				{Name: "a", Stale: true, Ready: true, CreatedAt: at(0)},
 				{Name: "b", Stale: true, Ready: false, CreatedAt: at(1)},
 				{Name: "s", Ready: true, CreatedAt: at(2)},
+				{Name: "t", Ready: false, CreatedAt: at(3)},
 			},
 			replicas: 2,
 			want:     RolloutDecision{Drain: []string{"b"}},
@@ -254,6 +227,7 @@ func TestDecideRollout(t *testing.T) {
 				{Name: "quiet", Stale: true, Ready: true, Players: 0, CreatedAt: at(0)},
 				{Name: "fallen", Stale: true, Ready: false, Players: 9, PlayersStale: true, CreatedAt: at(1)},
 				{Name: "s", Ready: true, CreatedAt: at(2)},
+				{Name: "t", Ready: false, CreatedAt: at(3)},
 			},
 			replicas: 2,
 			want:     RolloutDecision{Drain: []string{"fallen"}},
@@ -278,6 +252,103 @@ func TestDecideRollout(t *testing.T) {
 			},
 			replicas: 2,
 			want:     RolloutDecision{Drain: []string{"b"}},
+		},
+		{
+			name: "blue/green: every stale pod gets its replacement up front",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Ready: true, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, CreatedAt: at(1)},
+				{Name: "c", Stale: true, Ready: true, CreatedAt: at(2)},
+			},
+			replicas: 3,
+			want:     RolloutDecision{Create: 3},
+		},
+		{
+			name: "blue/green: replacements not ready: nothing marked",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Ready: true, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, CreatedAt: at(1)},
+				{Name: "n1", Ready: true, CreatedAt: at(3)},
+				{Name: "n2", CreatedAt: at(4)},
+			},
+			replicas: 2,
+			want:     RolloutDecision{},
+		},
+		{
+			name: "blue/green: replicas current pods Ready marks every stale pod at once",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Ready: true, Players: 1, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, Players: 20, CreatedAt: at(1)},
+				{Name: "n1", Ready: true, CreatedAt: at(3)},
+				{Name: "n2", Ready: true, CreatedAt: at(4)},
+			},
+			replicas: 2,
+			want:     RolloutDecision{Drain: []string{"a", "b"}},
+		},
+		{
+			name: "blue/green: a stale pod not yet marked is marked beside one already draining",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Draining: true, Players: 1, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, CreatedAt: at(1)},
+				{Name: "n1", Ready: true, CreatedAt: at(3)},
+				{Name: "n2", Ready: true, CreatedAt: at(4)},
+			},
+			replicas: 2,
+			want:     RolloutDecision{Drain: []string{"b"}},
+		},
+		{
+			name: "blue/green: a replacement dying mid-drain is rebuilt",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Draining: true, Players: 1, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Draining: true, Players: 3, CreatedAt: at(1)},
+				{Name: "n1", Ready: true, CreatedAt: at(3)},
+			},
+			replicas: 2,
+			want:     RolloutDecision{Create: 1},
+		},
+		{
+			name: "blue/green: a stale pod serving nobody is marked before the replacements are Ready",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, CreatedAt: at(1)},
+				{Name: "n1", CreatedAt: at(3)},
+				{Name: "n2", CreatedAt: at(4)},
+			},
+			replicas: 2,
+			want:     RolloutDecision{Drain: []string{"a"}},
+		},
+		{
+			name: "a reverted spec mid-roll marks nothing while the old pods are the current ones",
+			pods: []ProxyView{
+				{Name: "a", Ready: true, Players: 5, CreatedAt: at(0)},
+				{Name: "b", Ready: true, Players: 5, CreatedAt: at(1)},
+				{Name: "n1", Stale: true, CreatedAt: at(3)},
+				{Name: "n2", Stale: true, CreatedAt: at(4)},
+			},
+			replicas: 2,
+			want:     RolloutDecision{Drain: []string{"n1", "n2"}},
+		},
+		{
+			name: "a surplus mid-roll takes current pods while no replacement is Ready",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Ready: true, Players: 1, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, Players: 2, CreatedAt: at(1)},
+				{Name: "n1", CreatedAt: at(3)},
+				{Name: "n2", CreatedAt: at(4)},
+				{Name: "n3", CreatedAt: at(5)},
+			},
+			replicas: 1,
+			want:     RolloutDecision{Drain: []string{"n3", "n2"}},
+		},
+		{
+			name: "a lowered replicas with nothing stale drains the surplus as today",
+			pods: []ProxyView{
+				{Name: "a", Ready: true, Players: 1, CreatedAt: at(0)},
+				{Name: "b", Ready: true, Players: 2, CreatedAt: at(1)},
+				{Name: "c", Ready: true, Players: 3, CreatedAt: at(2)},
+			},
+			replicas: 1,
+			want:     RolloutDecision{Drain: []string{"a", "b"}},
 		},
 	}
 
@@ -354,7 +425,7 @@ func TestARetireRequestIsDrainedFirstAmongStalePods(t *testing.T) {
 		{Name: "b", Ready: true, Stale: true, RetireRequested: true, Players: 5, CreatedAt: at(1)},
 		{Name: "c", Ready: true, Players: 0, CreatedAt: at(2)},
 		{Name: "d", Ready: true, Players: 0, CreatedAt: at(3)},
-	}, 3, true)
+	}, 3, false)
 	if len(got.Drain) != 1 || got.Drain[0] != "b" {
 		t.Errorf("Drain = %v, want [b]: an admin asked for that one", got.Drain)
 	}

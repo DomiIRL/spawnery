@@ -196,7 +196,7 @@ func (s *Server) answerCloudRequest(
 	case req.GetAnnounce() != nil:
 		return s.answerAnnounce(logger, id, req.GetId(), req.GetAnnounce())
 	case req.GetAcceptJoins() != nil:
-		return s.answerAcceptJoins(logger, id, req.GetId(), req.GetAcceptJoins())
+		return s.answerAcceptJoins(ctx, logger, id, req.GetId(), req.GetAcceptJoins())
 	case req.GetStartServer() != nil:
 		return s.answerStartServer(ctx, logger, id, req.GetId(), req.GetStartServer())
 	case req.GetStopServer() != nil:
@@ -587,6 +587,7 @@ func (s *Server) namesAnOnDemandGroup(ctx context.Context, namespace string, req
 // A proxy is refused for a plainer reason than the announcement's: a proxy is
 // not in anybody's routing table, it is the routing table.
 func (s *Server) answerAcceptJoins(
+	ctx context.Context,
 	logger logr.Logger,
 	id grpcauth.Identity,
 	reqID uint64,
@@ -596,10 +597,15 @@ func (s *Server) answerAcceptJoins(
 		return refuse(reqID, agentpb.RequestError_REFUSED,
 			"only a server has a door to close: a proxy is not in a routing table, it is the routing table")
 	}
-	if err := s.opts.Agents.ReportAcceptJoins(id.PodUID, req.GetAccept(), req.GetRoundEnded()); err != nil {
+	changed, err := s.opts.Agents.ReportAcceptJoins(id.PodUID, id.Namespace,
+		req.GetAccept(), req.GetRoundEnded())
+	if err != nil {
 		logger.V(1).Info("could not record a join preference", "reason", err.Error())
 		return refuse(reqID, agentpb.RequestError_UNAVAILABLE,
 			"the operator could not record that just now")
+	}
+	if changed {
+		s.opts.Proxies.SendState(ctx, id.Namespace)
 	}
 
 	return &agentpb.CloudResponse{
