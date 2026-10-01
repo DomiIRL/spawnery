@@ -135,22 +135,39 @@ func describeWait(groups []ChangeoverView, budget int32, self ChangeoverView) Ch
 			Message: fmt.Sprintf("waiting for stage %d: %s", stage, strings.Join(names, ", ")),
 		}
 	}
+	holders := changeoverHolders(groups, AdmitChangeovers(groups, budget), self.Kind, self.Name)
+	if len(holders) == 0 {
+		return ChangeoverWait{}
+	}
 	return ChangeoverWait{
-		Reason: spawneryv1alpha1.ReasonWaitingForChangeoverBudget,
-		Message: "waiting for a changeover place; changing over: " +
-			strings.Join(changeoverHolders(groups, AdmitChangeovers(groups, budget), self.Kind, self.Name), ", "),
+		Reason:  spawneryv1alpha1.ReasonWaitingForChangeoverBudget,
+		Message: "waiting for a changeover place; changing over: " + strings.Join(holders, ", "),
 	}
 }
 
+func serverChangeoverSelf(group *spawneryv1alpha1.ServerGroup, state spawneryv1alpha1.ChangeoverState) ChangeoverView {
+	return ChangeoverView{
+		Kind: "ServerGroup", Name: group.Name, State: state,
+		Failing: changeoverFailing(group.Status.Conditions),
+		Stage:   group.Spec.ChangeoverStage, Persistent: !group.IsEphemeral(),
+	}
+}
+
+func serverChangeoverWait(group *spawneryv1alpha1.ServerGroup, siblings []ChangeoverView, budget int32) ChangeoverWait {
+	self := serverChangeoverSelf(group, spawneryv1alpha1.ChangeoverWaiting)
+	return describeWait(append(slices.Clip(siblings), self), budget, self)
+}
+
 // changeoverRefused reports whether self, a group that must change over, may
-// not begin. Without a budget only the stage gate refuses: a failing self is
-// admitted by nothing, and the pass on which its backoff has just expired still
-// reads BackingOff True from the last one.
+// not begin. Without a budget, and for a persistent self, which takes no
+// place, only the stage gate refuses: a failing self is admitted by nothing,
+// and the pass on which its backoff has just expired still reads BackingOff
+// True from the last one.
 func changeoverRefused(siblings []ChangeoverView, budget int32, self ChangeoverView) bool {
 	if self.State != spawneryv1alpha1.ChangeoverWaiting {
 		return false
 	}
-	if budget < 1 {
+	if budget < 1 || self.Persistent {
 		_, _, gated := earliestStageBefore(siblings, self.Stage)
 		return gated
 	}
@@ -268,11 +285,17 @@ func ownServerChangeover(views []ServerView, podHash string, pendingCreates int3
 // ownPersistentChangeover is a persistent group's changeover state. It begins
 // with its first stale takedown and stays begun while stale ordinals remain; a
 // current ordinal added meanwhile does not begin it.
-func ownPersistentChangeover(views []ServerView, podHash string, takedown bool, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
-	stale := false
+func ownPersistentChangeover(views []ServerView, podHash string, pendingDeletes map[string]bool, replicas int32, was spawneryv1alpha1.ChangeoverState) spawneryv1alpha1.ChangeoverState {
+	stale, takedown := false, false
 	for _, v := range views {
-		if !v.Hold && staleSpec(v, podHash) && !phase.Terminal(v.Phase) {
+		if v.Hold || !staleSpec(v, podHash) {
+			continue
+		}
+		if !phase.Terminal(v.Phase) {
 			stale = true
+		}
+		if v.Ordinal != nil && *v.Ordinal < replicas && (v.leaving() || pendingDeletes[v.Name]) {
+			takedown = true
 		}
 	}
 	switch {

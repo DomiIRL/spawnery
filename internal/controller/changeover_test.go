@@ -240,12 +240,29 @@ func TestDescribeWait(t *testing.T) {
 			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForEarlierStage, "waiting for stage -20: outer"}},
 		{"no earlier stage: the budget is named", []ChangeoverView{arena, lobby}, 1,
 			ChangeoverWait{spawneryv1alpha1.ReasonWaitingForChangeoverBudget, "waiting for a changeover place; changing over: arena"}},
+		{"no holder to name: no wait", []ChangeoverView{lobby}, 0, ChangeoverWait{}},
+		{"a failing self holds nothing: no wait", []ChangeoverView{{Kind: "ServerGroup", Name: "lobby", State: spawneryv1alpha1.ChangeoverWaiting, Failing: true}}, 1, ChangeoverWait{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := describeWait(tc.groups, tc.budget, lobby); got != tc.want {
 				t.Errorf("describeWait = %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestServerChangeoverWaitOfAFailingGroup(t *testing.T) {
+	alpha := &spawneryv1alpha1.ServerGroup{}
+	alpha.Name = "alpha"
+	alpha.Spec.Type = spawneryv1alpha1.ServerGroupEphemeral
+	alpha.Status.Conditions = []metav1.Condition{{Type: spawneryv1alpha1.ConditionBackingOff, Status: metav1.ConditionTrue}}
+	beta := ChangeoverView{Kind: "ServerGroup", Name: "beta", State: spawneryv1alpha1.ChangeoverWaiting}
+	want := ChangeoverWait{spawneryv1alpha1.ReasonWaitingForChangeoverBudget, "waiting for a changeover place; changing over: beta"}
+	if got := serverChangeoverWait(alpha, []ChangeoverView{beta}, 1); got != want {
+		t.Errorf("serverChangeoverWait = %+v, want %+v", got, want)
+	}
+	if got := serverChangeoverWait(alpha, nil, 1); got != (ChangeoverWait{}) {
+		t.Errorf("serverChangeoverWait with nobody changing over = %+v, want none", got)
 	}
 }
 
@@ -348,22 +365,27 @@ func TestOwnPersistentChangeover(t *testing.T) {
 	stale := ServerView{Name: "w-0", PodHash: "old", Phase: phase.Ready, Ordinal: ptr.To[int32](0)}
 	current := ServerView{Name: "w-1", PodHash: "current", Phase: phase.Ready, Ordinal: ptr.To[int32](1)}
 	held := ServerView{Name: "w-0", PodHash: "old", Phase: phase.Ready, Ordinal: ptr.To[int32](0), Hold: true}
+	staleDraining := ServerView{Name: "w-0", PodHash: "old", Phase: phase.Draining, Ordinal: ptr.To[int32](0)}
+	surplus := ServerView{Name: "w-2", PodHash: "old", Phase: phase.Ready, Ordinal: ptr.To[int32](2)}
 	for _, tc := range []struct {
-		name     string
-		views    []ServerView
-		takedown bool
-		was      spawneryv1alpha1.ChangeoverState
-		want     spawneryv1alpha1.ChangeoverState
+		name           string
+		views          []ServerView
+		pendingDeletes map[string]bool
+		was            spawneryv1alpha1.ChangeoverState
+		want           spawneryv1alpha1.ChangeoverState
 	}{
-		{"nothing stale", []ServerView{current}, false, "", spawneryv1alpha1.ChangeoverNone},
-		{"stale, nothing down", []ServerView{stale}, false, "", spawneryv1alpha1.ChangeoverWaiting},
-		{"a takedown in flight has begun", []ServerView{stale}, true, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverBegun},
-		{"begun stays begun between takedowns", []ServerView{stale, current}, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
-		{"a new current ordinal beside stale ones while Waiting stays Waiting", []ServerView{stale, current}, false, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverWaiting},
-		{"a held stale server is no changeover", []ServerView{held, current}, false, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverNone},
+		{"nothing stale", []ServerView{current}, nil, "", spawneryv1alpha1.ChangeoverNone},
+		{"stale, nothing down", []ServerView{stale}, nil, "", spawneryv1alpha1.ChangeoverWaiting},
+		{"a stale takedown in flight has begun", []ServerView{staleDraining}, nil, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverBegun},
+		{"a stale delete pending has begun", []ServerView{stale}, map[string]bool{"w-0": true}, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverBegun},
+		{"begun stays begun between takedowns", []ServerView{stale, current}, nil, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverBegun},
+		{"a new current ordinal beside stale ones while Waiting stays Waiting", []ServerView{stale, current}, nil, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverWaiting},
+		{"a held stale server is no changeover", []ServerView{held, current}, nil, spawneryv1alpha1.ChangeoverBegun, spawneryv1alpha1.ChangeoverNone},
+		{"a surplus ordinal being deleted while a stale one waits stays Waiting", []ServerView{stale, current, surplus}, map[string]bool{"w-2": true}, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverWaiting},
+		{"a current ordinal leaving while a stale one waits stays Waiting", []ServerView{stale, {Name: "w-1", PodHash: "current", Phase: phase.Draining, Ordinal: ptr.To[int32](1)}}, nil, spawneryv1alpha1.ChangeoverWaiting, spawneryv1alpha1.ChangeoverWaiting},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ownPersistentChangeover(tc.views, "current", tc.takedown, tc.was); got != tc.want {
+			if got := ownPersistentChangeover(tc.views, "current", tc.pendingDeletes, 2, tc.was); got != tc.want {
 				t.Errorf("ownPersistentChangeover = %q, want %q", got, tc.want)
 			}
 		})
@@ -379,6 +401,12 @@ func TestChangeoverRefused(t *testing.T) {
 	laterArena.Stage = 10
 	failingLaterArena := laterArena
 	failingLaterArena.Failing = true
+	persistentArena := arena
+	persistentArena.Persistent = true
+	failingPersistentArena := persistentArena
+	failingPersistentArena.Failing = true
+	laterPersistentArena := persistentArena
+	laterPersistentArena.Stage = 10
 	for _, tc := range []struct {
 		name     string
 		siblings []ChangeoverView
@@ -394,6 +422,9 @@ func TestChangeoverRefused(t *testing.T) {
 		{"budget spent refuses", []ChangeoverView{lobby}, 1, arena, true},
 		{"budget free admits", []ChangeoverView{lobby}, 2, arena, false},
 		{"budget set, a failing self is admitted by nothing", nil, 2, failingArena, true},
+		{"budget set, a failing persistent self with no earlier stage in flight is not refused", []ChangeoverView{lobby}, 1, failingPersistentArena, false},
+		{"budget spent, a persistent self takes no place", []ChangeoverView{lobby}, 1, persistentArena, false},
+		{"budget set, an earlier stage refuses a persistent self", []ChangeoverView{lobby}, 1, laterPersistentArena, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := changeoverRefused(tc.siblings, tc.budget, tc.self); got != tc.want {

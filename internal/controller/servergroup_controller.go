@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -534,10 +533,7 @@ func (r *ServerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	var wait ChangeoverWait
 	if decision.ChangeoverWaiting {
-		wait = describeWait(append(slices.Clip(siblings), ChangeoverView{
-			Kind: "ServerGroup", Name: group.Name, State: spawneryv1alpha1.ChangeoverWaiting,
-			Stage: group.Spec.ChangeoverStage, Persistent: !group.IsEphemeral(),
-		}), budget, ChangeoverView{Kind: "ServerGroup", Name: group.Name, Stage: group.Spec.ChangeoverStage})
+		wait = serverChangeoverWait(group, siblings, budget)
 	}
 	sized := mayResize
 
@@ -925,16 +921,15 @@ func (r *ServerGroupReconciler) size(
 	var decision SizeDecision
 	was := group.Status.Changeover
 	group.Status.Changeover = spawneryv1alpha1.ChangeoverNone
-	self := ChangeoverView{
-		Kind: "ServerGroup", Name: group.Name,
-		Failing: changeoverFailing(group.Status.Conditions),
-		Stage:   group.Spec.ChangeoverStage, Persistent: !group.IsEphemeral(),
-	}
+	self := serverChangeoverSelf(group, "")
 	switch {
 	case !mayResize:
 		// No size is decided, and the condemnation attached below is the whole
 		// of what this function does on this path: every loop under it is fed
 		// by a field no rule filled in.
+		if was != spawneryv1alpha1.ChangeoverWaiting {
+			group.Status.Changeover = was
+		}
 	case group.IsEphemeral():
 		if group.Spec.Scaling != nil {
 			own := ownServerChangeover(views, podHash, int32(len(pendingCreates)), group.UpdateWhenEmpty(), was)
@@ -981,8 +976,7 @@ func (r *ServerGroupReconciler) size(
 		// views that carry no spec.ordinal, which is a rule about adopted
 		// persistent servers and no promise made to this type.
 	default:
-		own := ownPersistentChangeover(views, podHash,
-			takedownInFlight(PersistentInputs{Views: views, PendingDeletes: pendingDeletes}), was)
+		own := ownPersistentChangeover(views, podHash, pendingDeletes, group.DesiredReplicas(), was)
 		self.State = own
 		refused := changeoverRefused(siblings, budget, self)
 		decision = DecidePersistentSize(PersistentInputs{

@@ -305,6 +305,36 @@ func TestAPersistentGroupWaitsForItsStage(t *testing.T) {
 	}
 }
 
+func TestABegunPersistentGroupStaysBegunWhileItsNetworkIsUnusable(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.createPersistentGroup(t, "world", 1)
+	f.reconcileNamedGroup(t, r, "world")
+	f.readyAllServersOf(t, "world")
+	f.setImage(t, "world", nextImage)
+	f.reconcileNamedGroup(t, r, "world")
+	if got := f.serverGroup(t, "world").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
+		t.Fatalf("world status.changeover = %q, want Begun before the network goes", got)
+	}
+
+	net := &spawneryv1alpha1.Network{}
+	if err := f.c.Get(f.ctx, types.NamespacedName{Name: f.network.Name, Namespace: f.ns}, net); err != nil {
+		t.Fatalf("get network: %v", err)
+	}
+	meta.SetStatusCondition(&net.Status.Conditions, metav1.Condition{
+		Type: spawneryv1alpha1.ConditionAccepted, Status: metav1.ConditionFalse,
+		Reason: spawneryv1alpha1.ReasonDuplicateNetwork, Message: "test",
+	})
+	if err := f.c.Status().Update(f.ctx, net); err != nil {
+		t.Fatalf("update network status: %v", err)
+	}
+	f.reconcileNamedGroup(t, r, "world")
+
+	if got := f.serverGroup(t, "world").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
+		t.Fatalf("world status.changeover = %q with its network unusable, want Begun", got)
+	}
+}
+
 func TestAWhenEmptyGroupStaysDeferredThroughAReadinessLoss(t *testing.T) {
 	f := newFixture(t)
 	r := groupReconciler(f)
