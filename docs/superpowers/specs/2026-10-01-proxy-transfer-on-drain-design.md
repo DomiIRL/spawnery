@@ -83,9 +83,12 @@ transfer.
 Key `spawnery:transfer`. Value: player UUID, target server name, expiry (60 s
 after it is written), and an HMAC-SHA256 over the three. The HMAC key is
 derived from the network's forwarding secret (SHA-256 of a fixed label and
-the secret), which every proxy of the network already mounts. While a
-forwarding-secret rotation has two secrets in place, the receiver accepts a
-signature made with either.
+the secret), which every proxy of the network already mounts; the agent reads
+it from the file named by `SPAWNERY_FORWARDING_SECRET_FILE`, set beside the
+transfer variable. A rotation of that secret replaces every proxy with one
+that reads the new value, and Velocity holds only one at a time: a cookie
+written by an old proxy fails on a new one, and that player is routed as a
+fresh join. Rotations are rare and announced; this is accepted.
 
 ### 3.2 Arriving
 
@@ -123,7 +126,7 @@ In every other case the player is routed as a fresh join.
 ## 6. Testing
 
 - **Kotlin unit tests (agent):** cookie round trip, wrong UUID, expired, bad
-  signature, signature under the second secret during rotation; the
+  signature; the
   decision who is transferred when (before the deadline only on a switch,
   after it everyone behind an open door, a closed door shields, a player is
   tried once, nothing while no other Ready proxy exists, nothing while not
