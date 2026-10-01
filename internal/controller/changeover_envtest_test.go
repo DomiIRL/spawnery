@@ -158,9 +158,8 @@ func TestChangeoverBudgetUnsetDoesNotRefuseAFailingGroup(t *testing.T) {
 	}
 }
 
-// A stale server that is leaving but not gone is still the group's extra
-// server, so the group keeps its place until it is gone.
-func TestChangeoverBudgetHeldUntilTheLastStaleServerIsGone(t *testing.T) {
+// A group whose stale servers are all leaving and whose current one is Ready holds no place.
+func TestARollingUpdateGroupReleasesItsPlaceOnceDeferred(t *testing.T) {
 	for _, p := range []phase.Phase{phase.Retiring, phase.Draining, phase.Terminating} {
 		t.Run(string(p), func(t *testing.T) {
 			f := newFixture(t)
@@ -188,11 +187,11 @@ func TestChangeoverBudgetHeldUntilTheLastStaleServerIsGone(t *testing.T) {
 			f.reconcileNamedGroup(t, r, "arena")
 			f.reconcileNamedGroup(t, r, "lobby")
 
-			if got := f.serverGroup(t, "arena").Status.Changeover; got != spawneryv1alpha1.ChangeoverBegun {
-				t.Fatalf("arena status.changeover = %q with its stale server %s, want Begun", got, p)
+			if got := f.serverGroup(t, "arena").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+				t.Fatalf("arena status.changeover = %q with its stale server %s, want Deferred", got, p)
 			}
-			if n := len(f.serverNamesOfGroup(t, "lobby")); n != 1 {
-				t.Fatalf("lobby has %d servers, want 1: arena still holds the place", n)
+			if n := len(f.serverNamesOfGroup(t, "lobby")); n != 2 {
+				t.Fatalf("lobby has %d servers, want 2: the place is free, lobby's cold start comes", n)
 			}
 		})
 	}
