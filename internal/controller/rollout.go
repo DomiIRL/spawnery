@@ -51,7 +51,9 @@ type RolloutDecision struct {
 // While the group may surge it rolls blue/green: every stale pod gets its
 // replacement up front, and once replicas current pods are Ready every stale
 // pod is marked at once. Pods beyond that target drain as a surplus always
-// did, while nothing else is draining. Without surge the group waits at its
+// did, while nothing else is draining; until replicas current pods are Ready
+// that surplus comes from current pods only, since stale pods are still the
+// ones serving. Without surge the group waits at its
 // size, and a stale pod is replaced in place only when it serves nobody or
 // the group has ready capacity to spare.
 func DecideRollout(pods []ProxyView, replicas int32, surgeAllowed bool) RolloutDecision {
@@ -83,7 +85,11 @@ func DecideRollout(pods []ProxyView, replicas int32, surgeAllowed bool) RolloutD
 	}
 
 	if draining == 0 && total > target {
-		return RolloutDecision{Drain: pick(pods, total-target)}
+		candidates := pods
+		if surgeAllowed && stale > 0 && currentReady < replicas {
+			candidates = currentOnly(pods)
+		}
+		return RolloutDecision{Drain: pick(candidates, total-target)}
 	}
 
 	if surgeAllowed && len(markable) > 0 && currentReady >= replicas {
@@ -128,6 +134,16 @@ func readyBeyond(pods []ProxyView, replicas int32) bool {
 		}
 	}
 	return readyTotal > replicas
+}
+
+func currentOnly(pods []ProxyView) []ProxyView {
+	out := make([]ProxyView, 0, len(pods))
+	for _, p := range pods {
+		if !p.Stale {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func staleOnly(pods []ProxyView) []ProxyView {

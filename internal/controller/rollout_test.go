@@ -329,6 +329,18 @@ func TestDecideRollout(t *testing.T) {
 			want:     RolloutDecision{Drain: []string{"n1", "n2"}},
 		},
 		{
+			name: "a surplus mid-roll takes current pods while no replacement is Ready",
+			pods: []ProxyView{
+				{Name: "a", Stale: true, Ready: true, Players: 1, CreatedAt: at(0)},
+				{Name: "b", Stale: true, Ready: true, Players: 2, CreatedAt: at(1)},
+				{Name: "n1", CreatedAt: at(3)},
+				{Name: "n2", CreatedAt: at(4)},
+				{Name: "n3", CreatedAt: at(5)},
+			},
+			replicas: 1,
+			want:     RolloutDecision{Drain: []string{"n3", "n2"}},
+		},
+		{
 			name: "a lowered replicas with nothing stale drains the surplus as today",
 			pods: []ProxyView{
 				{Name: "a", Ready: true, Players: 1, CreatedAt: at(0)},
