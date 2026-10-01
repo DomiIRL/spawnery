@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
 )
@@ -655,6 +656,51 @@ func TestProxyWithNoExtraFilesRendersNoVolume(t *testing.T) {
 	for _, m := range pod.Spec.Containers[0].VolumeMounts {
 		if m.Name == FileSourceVolumeName {
 			t.Fatal("an extra-files mount was rendered for a group that named none")
+		}
+	}
+}
+
+func TestAProxyGroupWithTransferCarriesItsDeadlineAndSecretPath(t *testing.T) {
+	group := testProxyGroup()
+	group.Spec.Update = &spawneryv1alpha1.ProxyUpdateSpec{
+		Transfer: &spawneryv1alpha1.ProxyTransferSpec{ForceAfterSeconds: ptr.To(int32(90))},
+	}
+	pod, err := BuildProxyPod(testNetwork(), group, "gateway-abcd", testEndpoint, nil)
+	if err != nil {
+		t.Fatalf("BuildProxyPod: %v", err)
+	}
+	if got := proxyEnv(pod, EnvTransferForceAfterSeconds); got != "90" {
+		t.Errorf("%s = %q, want 90", EnvTransferForceAfterSeconds, got)
+	}
+	if got := proxyEnv(pod, EnvForwardingSecretFile); got != "/etc/spawnery/forwarding.secret" {
+		t.Errorf("%s = %q, want /etc/spawnery/forwarding.secret", EnvForwardingSecretFile, got)
+	}
+}
+
+func TestAProxyGroupWithTransferDefaultsItsDeadline(t *testing.T) {
+	group := testProxyGroup()
+	group.Spec.Update = &spawneryv1alpha1.ProxyUpdateSpec{Transfer: &spawneryv1alpha1.ProxyTransferSpec{}}
+	pod, err := BuildProxyPod(testNetwork(), group, "gateway-abcd", testEndpoint, nil)
+	if err != nil {
+		t.Fatalf("BuildProxyPod: %v", err)
+	}
+	if got := proxyEnv(pod, EnvTransferForceAfterSeconds); got != "300" {
+		t.Errorf("%s = %q, want 300", EnvTransferForceAfterSeconds, got)
+	}
+}
+
+func TestAProxyGroupWithoutTransferCarriesNeitherVariable(t *testing.T) {
+	for _, update := range []*spawneryv1alpha1.ProxyUpdateSpec{nil, {}} {
+		group := testProxyGroup()
+		group.Spec.Update = update
+		pod, err := BuildProxyPod(testNetwork(), group, "gateway-abcd", testEndpoint, nil)
+		if err != nil {
+			t.Fatalf("BuildProxyPod: %v", err)
+		}
+		for _, e := range pod.Spec.Containers[0].Env {
+			if e.Name == EnvTransferForceAfterSeconds || e.Name == EnvForwardingSecretFile {
+				t.Errorf("update %+v: the pod carries %s", update, e.Name)
+			}
 		}
 	}
 }

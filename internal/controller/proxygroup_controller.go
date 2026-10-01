@@ -1907,6 +1907,7 @@ func proxyConfigValues(group *spawneryv1alpha1.ProxyGroup) render.Values {
 		onlineMode = *cfg.OnlineMode
 	}
 	values.OnlineMode = &onlineMode
+	_, values.AcceptsTransfers = group.TransferForceAfter()
 	if cfg := group.Spec.Config; cfg != nil && cfg.Motd != "" {
 		motd := cfg.Motd
 		values.Motd = &motd

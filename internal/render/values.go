@@ -45,6 +45,10 @@ type Values struct {
 	// server rendered by this package is always online-mode=false, because the
 	// proxy in front of it is what authenticates. See RequireOnlineMode.
 	OnlineMode *bool `yaml:"onlineMode,omitempty" json:"onlineMode,omitempty"`
+	// AcceptsTransfers is a plain bool because absent and false mean the same
+	// here, and omitting false keeps the config.yaml of a group without
+	// transfer, and with it the group's pod hash, as it was.
+	AcceptsTransfers bool `yaml:"acceptsTransfers,omitempty" json:"acceptsTransfers,omitempty"`
 }
 
 // RequireMaxPlayers refuses a backend that does not know its own capacity.

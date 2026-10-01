@@ -35,7 +35,7 @@ const velocityConfigVersion = "2.9"
 
 // Velocity renders the one file a Spawnery-managed Velocity proxy reads.
 //
-// Four fields are in the critical layer and no overlay can move them:
+// Five fields are in the critical layer and no overlay can move them:
 //
 //   - bind, because internal/podspec names 25565 and the Service targets it
 //     by name, not Velocity's own default of 25577;
@@ -51,7 +51,10 @@ const velocityConfigVersion = "2.9"
 //   - player-info-forwarding-mode, because anything but "modern" leaves the
 //     backends unable to verify a forwarded player;
 //   - forwarding-secret-file, so the secret is read from its mount rather
-//     than copied into a writable layer — see the secretPath doc below.
+//     than copied into a writable layer — see the secretPath doc below;
+//   - advanced.accepts-transfers, from v.AcceptsTransfers, because whether
+//     a proxy takes transferred players is ProxyGroup.spec.update.transfer's
+//     decision and nothing else's.
 //
 // secretPath is the forwarding secret's path, not its content: unlike Paper,
 // which has no file reference for the secret and must write it into
@@ -170,7 +173,15 @@ func velocityToml(v Values, secretPath, overlay string) (string, error) {
 		return "", fmt.Errorf("velocity.toml: forced-hosts is a %T, want a table", doc["forced-hosts"])
 	}
 
-	// Reasserted last: whatever the overlay said about these four keys is
+	if _, present := doc["advanced"]; !present {
+		doc["advanced"] = map[string]any{}
+	}
+	advanced, ok := doc["advanced"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("velocity.toml: advanced is a %T, want a table", doc["advanced"])
+	}
+
+	// Reasserted last: whatever the overlay said about these five keys is
 	// overwritten rather than merged around.
 	//
 	// online-mode takes its value from Values rather than a literal, and is
@@ -186,6 +197,7 @@ func velocityToml(v Values, secretPath, overlay string) (string, error) {
 	doc["online-mode"] = *v.OnlineMode
 	doc["player-info-forwarding-mode"] = "modern"
 	doc["forwarding-secret-file"] = secretPath
+	advanced["accepts-transfers"] = v.AcceptsTransfers
 
 	// go-toml/v2 prefers TOML's literal (single-quoted) string form over the
 	// basic (double-quoted) one whenever a value permits it; both are the

@@ -21,6 +21,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,6 +57,10 @@ const (
 	EnvFallbackGroups = "SPAWNERY_FALLBACK_GROUPS"
 	// EnvProxy names the container env var carrying the pod's own name.
 	EnvProxy = "SPAWNERY_PROXY"
+	// EnvTransferForceAfterSeconds and EnvForwardingSecretFile are set only
+	// on a group with spec.update.transfer.
+	EnvTransferForceAfterSeconds = "SPAWNERY_TRANSFER_FORCE_AFTER_SECONDS"
+	EnvForwardingSecretFile      = "SPAWNERY_FORWARDING_SECRET_FILE"
 
 	// DefaultPlayerLimit is what a ProxyGroup that sets none gets. Zero would
 	// be worse than a guess: the registry rejects every report where players
@@ -299,14 +304,14 @@ func renderProxyPod(
 		// The group's own variables come last; see BuildServerPod for why
 		// the position is a readability decision rather than the thing that
 		// keeps the six below intact.
-		Env: append(append([]corev1.EnvVar{
+		Env: append(append(append([]corev1.EnvVar{
 			{Name: "SPAWNERY_NETWORK", Value: net.Name},
 			{Name: "SPAWNERY_GROUP", Value: group.Name},
 			{Name: EnvProxy, Value: name},
 			{Name: EnvPlayerLimit, Value: strconv.FormatInt(int64(playerLimit), 10)},
 			{Name: EnvFallbackGroups, Value: strings.Join(group.Spec.Routing.FallbackGroups, ",")},
 			{Name: EnvOperatorEndpoint, Value: agentEndpoint},
-		}, substitutionEnv(group.Spec.Substitution)...), group.Spec.Env...),
+		}, transferEnv(group)...), substitutionEnv(group.Spec.Substitution)...), group.Spec.Env...),
 		VolumeMounts: mounts,
 		// Readiness only, for the same reason the server pod has no liveness
 		// probe: a restart would disconnect every player on this proxy, and
@@ -385,4 +390,15 @@ func renderProxyPod(
 	}
 
 	return pod, nil
+}
+
+func transferEnv(group *spawneryv1alpha1.ProxyGroup) []corev1.EnvVar {
+	after, ok := group.TransferForceAfter()
+	if !ok {
+		return nil
+	}
+	return []corev1.EnvVar{
+		{Name: EnvTransferForceAfterSeconds, Value: strconv.FormatInt(int64(after/time.Second), 10)},
+		{Name: EnvForwardingSecretFile, Value: path.Join(ConfigMountPath, configSecretFile)},
+	}
 }

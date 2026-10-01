@@ -134,15 +134,15 @@ func TestVelocityWritesThePinnedConfigVersion(t *testing.T) {
 }
 
 // velocityTomlKeysOf reads the key names out of a velocity.toml document: every
-// top-level key, plus servers.try. It fails rather than returning an empty set
-// when the document has no keys, so a truncated fixture cannot pass by having
-// nothing to compare.
+// top-level key, plus servers.try and every key under [advanced]. It fails
+// rather than returning an empty set when the document has no keys, so a
+// truncated fixture cannot pass by having nothing to compare.
 //
 // [servers] is the one table whose keys are not Velocity's to declare — each
 // is a server name somebody chose, and the fixture's are Velocity's three
 // example servers — so only try, the reserved key in there, is carried
 // through. [forced-hosts] is the same shape and contributes nothing but its
-// own name. Nothing else the renderer writes nests.
+// own name. [advanced] is Velocity's own and is carried through whole.
 func velocityTomlKeysOf(t *testing.T, doc []byte, what string) map[string]bool {
 	t.Helper()
 	var parsed map[string]any
@@ -155,6 +155,11 @@ func velocityTomlKeysOf(t *testing.T, doc []byte, what string) map[string]bool {
 	keys := make(map[string]bool, len(parsed))
 	for k, v := range parsed {
 		keys[k] = true
+		if table, ok := v.(map[string]any); ok && k == "advanced" {
+			for sub := range table {
+				keys["advanced."+sub] = true
+			}
+		}
 		if k != "servers" {
 			continue
 		}
@@ -557,5 +562,65 @@ func TestVelocityRefusesAKeyItHasNeverHeardOf(t *testing.T) {
 	if !strings.Contains(err.Error(), "haproxy-protocol") {
 		t.Errorf("error = %q, want the keys [advanced] does declare, which is how a "+
 			"misspelling is spotted", err)
+	}
+}
+
+func TestVelocityCarriesAcceptsTransfers(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   bool
+		overlay string
+		want    bool
+	}{
+		{"off without an overlay", false, "", false},
+		{"on without an overlay", true, "", true},
+		{"an overlay cannot turn it on", false, "[advanced]\naccepts-transfers = true\n", false},
+		{"an overlay cannot turn it off", true, "[advanced]\naccepts-transfers = false\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := velocityValues()
+			v.AcceptsTransfers = tc.value
+			files, err := Velocity(v, testSecretPath, map[string]string{"velocity.toml": tc.overlay})
+			if err != nil {
+				t.Fatalf("Velocity: %v", err)
+			}
+			var doc struct {
+				Advanced map[string]any `toml:"advanced"`
+			}
+			if err := toml.Unmarshal(files["velocity.toml"], &doc); err != nil {
+				t.Fatalf("velocity.toml does not parse: %v", err)
+			}
+			got, ok := doc.Advanced["accepts-transfers"].(bool)
+			if !ok || got != tc.want {
+				t.Errorf("advanced.accepts-transfers = %v (present %v), want %v:\n%s",
+					doc.Advanced["accepts-transfers"], ok, tc.want, files["velocity.toml"])
+			}
+		})
+	}
+}
+
+func TestVelocityKeepsAnOverlaysOtherAdvancedKeys(t *testing.T) {
+	v := velocityValues()
+	v.AcceptsTransfers = true
+	files, err := Velocity(v, testSecretPath, map[string]string{
+		"velocity.toml": "[advanced]\nhaproxy-protocol = true\n",
+	})
+	if err != nil {
+		t.Fatalf("Velocity: %v", err)
+	}
+	rendered := string(files["velocity.toml"])
+	for _, want := range []string{"haproxy-protocol = true", "accepts-transfers = true"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("velocity.toml does not contain %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestVelocityRefusesAMisshapenAdvancedTable(t *testing.T) {
+	_, err := Velocity(velocityValues(), testSecretPath, map[string]string{
+		"velocity.toml": "advanced = \"x\"\n",
+	})
+	if err == nil {
+		t.Fatal("an advanced that is not a table was accepted")
 	}
 }

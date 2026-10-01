@@ -3789,3 +3789,20 @@ func TestAHealthyProxyGroupIsNotReportedAsCrashLooping(t *testing.T) {
 		t.Errorf("a healthy group reports a crash loop: %q", cond.Message)
 	}
 }
+
+func TestProxyConfigValuesCarriesTheTransferOptIn(t *testing.T) {
+	group := &spawneryv1alpha1.ProxyGroup{ObjectMeta: metav1.ObjectMeta{Name: "edge", Namespace: "ns"}}
+
+	off, err := yaml.Marshal(proxyConfigValues(group))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(off), "acceptsTransfers") {
+		t.Errorf("config.yaml without transfer mentions acceptsTransfers, which moves every proxy's hash:\n%s", off)
+	}
+
+	group.Spec.Update = &spawneryv1alpha1.ProxyUpdateSpec{Transfer: &spawneryv1alpha1.ProxyTransferSpec{}}
+	if !proxyConfigValues(group).AcceptsTransfers {
+		t.Error("a group with transfer renders a proxy that refuses transferred players")
+	}
+}
