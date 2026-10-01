@@ -11,6 +11,7 @@ class TransferPolicy(private val forceAfterMillis: Long, private val clock: () -
         val group: String,
         val proxies: List<ProxyInfo>,
         val closedDoors: Set<String>,
+        val acceptingTransfers: Set<String>,
     )
     data class Occupant(val id: UUID, val server: String?)
 
@@ -18,9 +19,15 @@ class TransferPolicy(private val forceAfterMillis: Long, private val clock: () -
     private val tried = ConcurrentHashMap.newKeySet<UUID>()
 
     fun leaving(picture: Picture): Boolean {
-        val leaving = picture.proxies.any { it.name() == picture.self && it.draining() }
-        if (leaving) firstLeavingAt.compareAndSet(0, clock())
-        return leaving
+        val me = picture.proxies.firstOrNull { it.name() == picture.self } ?: return false
+        if (!me.draining()) {
+            firstLeavingAt.set(0)
+            tried.clear()
+            return false
+        }
+        if (me.ready()) return false
+        firstLeavingAt.compareAndSet(0, clock())
+        return true
     }
 
     fun forced(picture: Picture, occupants: List<Occupant>): List<Pair<UUID, String>> {
@@ -41,10 +48,13 @@ class TransferPolicy(private val forceAfterMillis: Long, private val clock: () -
         return tried.add(player)
     }
 
-    fun forget(player: UUID) {
-        tried.remove(player)
+    fun forget(picture: Picture, player: UUID) {
+        if (!leaving(picture)) tried.remove(player)
     }
 
     private fun somewhereElse(picture: Picture): Boolean =
-        picture.proxies.any { it.group() == picture.group && it.name() != picture.self && it.ready() && !it.draining() }
+        picture.proxies.any {
+            it.group() == picture.group && it.name() != picture.self && it.ready() && !it.draining() &&
+                it.name() in picture.acceptingTransfers
+        }
 }

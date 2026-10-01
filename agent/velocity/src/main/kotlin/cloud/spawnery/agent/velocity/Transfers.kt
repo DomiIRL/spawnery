@@ -92,7 +92,7 @@ class Transfers(
         waiting.remove(player)?.invoke()
         asked.remove(player)
         arrivals.remove(player)
-        policy.forget(player)
+        policy.forget(picture(), player)
     }
 
     private fun refused(username: String, reason: String) {

@@ -395,7 +395,7 @@ class AgentPlugin @Inject constructor(
         val transfers = Transfers(
             cookie = TransferCookie(transfer.secret) { System.currentTimeMillis() / 1000 },
             policy = TransferPolicy(transfer.forceAfterSeconds * 1000, System::currentTimeMillis),
-            picture = { TransferPolicy.Picture(self.name(), self.group(), mirror.proxies(), mirror.closedDoors()) },
+            picture = { TransferPolicy.Picture(self.name(), self.group(), mirror.proxies(), mirror.closedDoors(), mirror.acceptingTransfers()) },
             registered = { name ->
                 proxy.getServer(name).isPresent && mirror.servers().any { it.name() == name && it.registered() }
             },

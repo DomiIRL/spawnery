@@ -19,10 +19,11 @@ class TransferPolicyTest {
         self: String = "edge-1",
         group: String = "edge",
         closedDoors: Set<String> = emptySet(),
-    ) = TransferPolicy.Picture(self, group, proxies, closedDoors)
+        accepting: Set<String> = proxies.map { it.name() }.toSet(),
+    ) = TransferPolicy.Picture(self, group, proxies, closedDoors, accepting)
 
     private val leavingAlone = listOf(
-        ProxyInfo("edge-1", "edge", true, true, 0, ""),
+        ProxyInfo("edge-1", "edge", false, true, 0, ""),
         ProxyInfo("edge-2", "edge", true, false, 0, ""),
     )
 
@@ -40,7 +41,7 @@ class TransferPolicyTest {
         val p = policy()
         val pic = picture(
             listOf(
-                ProxyInfo("edge-1", "edge", true, true, 0, ""),
+                ProxyInfo("edge-1", "edge", false, true, 0, ""),
                 ProxyInfo("hub-1", "hub", true, false, 0, ""),
             ),
         )
@@ -108,12 +109,48 @@ class TransferPolicyTest {
     }
 
     @Test
-    fun `forget lets a reconnecting player with the same UUID be tried again`() {
+    fun `a peer whose Velocity refuses transfers is nowhere to land`() {
+        val p = policy(forceAfterMillis = 0L)
+        val pic = picture(leavingAlone, accepting = setOf("edge-1"))
+
+        assertFalse(p.onSwitch(pic, alice))
+        assertEquals(emptyList(), p.forced(pic, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
+    }
+
+    @Test
+    fun `a draining proxy that is still ready is not leaving yet`() {
+        val p = policy(forceAfterMillis = 0L)
+        val pic = picture(listOf(ProxyInfo("edge-1", "edge", true, true, 0, ""), ProxyInfo("edge-2", "edge", true, false, 0, "")))
+
+        assertFalse(p.leaving(pic))
+        assertFalse(p.onSwitch(pic, alice))
+        assertEquals(emptyList(), p.forced(pic, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
+    }
+
+    @Test
+    fun `a player who comes back to the leaving proxy is not transferred again`() {
         val p = policy(forceAfterMillis = 0L)
         val pic = picture(leavingAlone)
 
         assertEquals(listOf(alice to "lobby-1"), p.forced(pic, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
-        p.forget(alice)
-        assertEquals(listOf(alice to "lobby-1"), p.forced(pic, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
+        p.forget(pic, alice)
+
+        assertEquals(emptyList(), p.forced(pic, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
+        assertFalse(p.onSwitch(pic, alice))
+    }
+
+    @Test
+    fun `a cancelled scale-down starts the clock and the tried players afresh`() {
+        val p = policy(forceAfterMillis = 1_000L)
+        val leaving = picture(leavingAlone)
+        val stayed = picture(listOf(ProxyInfo("edge-1", "edge", true, false, 0, ""), ProxyInfo("edge-2", "edge", true, false, 0, "")))
+        assertTrue(p.leaving(leaving))
+        now += 1_000
+        assertEquals(listOf(alice to "lobby-1"), p.forced(leaving, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
+
+        assertFalse(p.leaving(stayed))
+        assertEquals(emptyList(), p.forced(leaving, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
+        now += 1_000
+        assertEquals(listOf(alice to "lobby-1"), p.forced(leaving, listOf(TransferPolicy.Occupant(alice, "lobby-1"))))
     }
 }

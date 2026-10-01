@@ -16,7 +16,7 @@ class TransfersTest {
     private val host = InetSocketAddress.createUnresolved("play.example.net", 25565)
 
     private val leaving = listOf(
-        ProxyInfo("edge-1", "edge", true, true, 0, ""),
+        ProxyInfo("edge-1", "edge", false, true, 0, ""),
         ProxyInfo("edge-2", "edge", true, false, 0, ""),
     )
     private val staying = listOf(
@@ -32,7 +32,7 @@ class TransfersTest {
     private val transfers = Transfers(
         cookie = cookie,
         policy = TransferPolicy(0L) { seconds * 1000 },
-        picture = { TransferPolicy.Picture("edge-1", "edge", proxies, emptySet()) },
+        picture = { TransferPolicy.Picture("edge-1", "edge", proxies, emptySet(), setOf("edge-1", "edge-2")) },
         registered = { it in registered },
         info = { infos += it },
         warn = { message, error -> warnings += message to error },
