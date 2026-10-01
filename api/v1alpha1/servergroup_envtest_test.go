@@ -519,14 +519,20 @@ func TestServerGroupStorageKeepRefusesBadEntries(t *testing.T) {
 		"closing":        {"a]b"},
 		"backslash":      {`a\b`},
 		"too long":       {strings.Repeat("a", 257)},
+		"newline":        {"a\nb"},
+		"carriage":       {"a\rb"},
 		"one bad entry":  {"worlds/world", "a//b"},
 	}
 	for name, keep := range tests {
 		t.Run(name, func(t *testing.T) {
 			g := onDemandGroup(ns, "keep-"+strings.ReplaceAll(name, " ", "-"))
 			g.Spec.Storage.Keep = keep
-			if err := c.Create(ctx, g); err == nil {
+			err := c.Create(ctx, g)
+			if err == nil {
 				t.Fatalf("keep %q was accepted", keep)
+			}
+			if name != "too long" && !strings.Contains(err.Error(), "a keep entry is a relative path") {
+				t.Errorf("err = %v, want the keep entry message", err)
 			}
 		})
 	}
@@ -546,7 +552,11 @@ func TestServerGroupStorageKeepRefusesAnEmptyList(t *testing.T) {
 	if err := unstructured.SetNestedSlice(u.Object, []any{}, "spec", "storage", "keep"); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Create(ctx, u); err == nil {
+	err = c.Create(ctx, u)
+	if err == nil {
 		t.Fatal("an empty keep list was accepted")
+	}
+	if !strings.Contains(err.Error(), "spec.storage.keep") {
+		t.Errorf("err = %v, want it to name spec.storage.keep", err)
 	}
 }

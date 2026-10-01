@@ -5354,11 +5354,12 @@ spec:
                       maxLength: 256
                       type: string
                       x-kubernetes-validations:
-                      - message: a keep entry is a relative path without [ ] \ or
-                          empty, . and .. segments
+                      - message: a keep entry is a relative path without [ ] \, line
+                          breaks or empty, . and .. segments
                         rule: '!self.startsWith(''/'') && !self.contains(''['') &&
-                          !self.contains('']'') && !self.contains(''\\'') && self.split(''/'').all(s,
-                          s != '''' && s != ''.'' && s != ''..'')'
+                          !self.contains('']'') && !self.contains(''\\'') && !self.contains(''\n'')
+                          && !self.contains(''\r'') && self.split(''/'').all(s, s
+                          != '''' && s != ''.'' && s != ''..'')'
                     maxItems: 64
                     minItems: 1
                     type: array

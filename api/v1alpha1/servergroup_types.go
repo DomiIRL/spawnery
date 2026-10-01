@@ -147,7 +147,7 @@ type StorageSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:items:MaxLength=256
-	// +kubebuilder:validation:items:XValidation:rule="!self.startsWith('/') && !self.contains('[') && !self.contains(']') && !self.contains('\\\\') && self.split('/').all(s, s != '' && s != '.' && s != '..')",message="a keep entry is a relative path without [ ] \\ or empty, . and .. segments"
+	// +kubebuilder:validation:items:XValidation:rule="!self.startsWith('/') && !self.contains('[') && !self.contains(']') && !self.contains('\\\\') && !self.contains('\\n') && !self.contains('\\r') && self.split('/').all(s, s != '' && s != '.' && s != '..')",message="a keep entry is a relative path without [ ] \\, line breaks or empty, . and .. segments"
 	// +optional
 	Keep []string `json:"keep,omitempty"`
 }
