@@ -91,6 +91,8 @@ func (stubFleet) Move(string, string, string) {}
 
 func (stubFleet) SetInterest(string, bool) {}
 
+func (stubFleet) SendState(context.Context, string) {}
+
 // The opening sends are the one part of a session nothing could end.
 //
 // stream.Send blocks on the client's flow-control window and observes no

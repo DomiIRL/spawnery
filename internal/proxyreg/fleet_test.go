@@ -813,6 +813,45 @@ func TestAJoiningProxyIsSentTheNetworkStateAfterItsFullSync(t *testing.T) {
 	}
 }
 
+func TestSendStateCarriesADoorToEveryProxyOfTheNamespace(t *testing.T) {
+	start := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	lobby := registered("lobby-0", "10.0.0.1:25565")
+	lobby.Status.PodUID = "pod-lobby"
+	reader := newReader(t, proxyGroup(), lobby)
+	agents := agent.New(func() time.Time { return start }, 5*time.Second, start)
+	f := proxyreg.New(proxyreg.Options{Reader: reader, State: netstate.Source{Reader: reader, Agents: agents}})
+
+	here, leaveHere, err := f.Join(context.Background(), ns, group, "proxy-a")
+	if err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	defer leaveHere()
+	elsewhere, leaveElsewhere, err := f.Join(context.Background(), "other", group, "proxy-b")
+	if err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	defer leaveElsewhere()
+	drain(t, here)
+	drain(t, elsewhere)
+
+	agents.Connect("pod-lobby", agent.RoleServer)
+	if _, err := agents.ReportAcceptJoins("pod-lobby", ns, false, false); err != nil {
+		t.Fatalf("ReportAcceptJoins: %v", err)
+	}
+	f.SendState(context.Background(), ns)
+
+	got := drain(t, here)
+	if len(got) != 1 || got[0].GetNetworkState() == nil {
+		t.Fatalf("sent %v, want one NetworkState", got)
+	}
+	if servers := got[0].GetNetworkState().GetServers(); len(servers) != 1 || !servers[0].GetJoinsClosed() {
+		t.Errorf("servers = %v, want lobby-0 with its door closed", servers)
+	}
+	if other := drain(t, elsewhere); len(other) != 0 {
+		t.Errorf("a proxy of another namespace was sent %v", other)
+	}
+}
+
 // Routing lives on the proxy and so does the plugin that asks for a private
 // server, which is why this is the one picture that carries them: the mirror a
 // proxy is sent is the whole namespace.

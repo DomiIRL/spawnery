@@ -648,7 +648,7 @@ func TestBuildCarriesAClosedDoor(t *testing.T) {
 	lobbyB.Status.PodUID = "pod-b"
 	src, reg := source(t, ephemeralGroup("ns", "lobby"), lobbyA, lobbyB)
 	reg.Connect("pod-a", agent.RoleServer)
-	if err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
+	if _, err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 
@@ -676,11 +676,11 @@ func TestAClosedDoorFollowsTheCurrentPodNotTheServerName(t *testing.T) {
 	src, reg := source(t, ephemeralGroup("ns", "survival"), srv)
 
 	reg.Connect("old-pod", agent.RoleServer)
-	if err := reg.ReportAcceptJoins("old-pod", "ns", false, false); err != nil {
+	if _, err := reg.ReportAcceptJoins("old-pod", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins(old-pod): %v", err)
 	}
 	reg.Connect("new-pod", agent.RoleServer)
-	if err := reg.ReportAcceptJoins("new-pod", "ns", true, false); err != nil {
+	if _, err := reg.ReportAcceptJoins("new-pod", "ns", true, false); err != nil {
 		t.Fatalf("ReportAcceptJoins(new-pod): %v", err)
 	}
 
@@ -699,7 +699,7 @@ func TestAClosedDoorOnTheCurrentPodIsCarried(t *testing.T) {
 	src, reg := source(t, ephemeralGroup("ns", "survival"), srv)
 
 	reg.Connect("pod-a", agent.RoleServer)
-	if err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
+	if _, err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 
@@ -718,7 +718,7 @@ func TestAClosedDoorOnTheCurrentPodSurvivesADisconnect(t *testing.T) {
 	src, reg := source(t, ephemeralGroup("ns", "survival"), srv)
 
 	reg.Connect("pod-a", agent.RoleServer)
-	if err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
+	if _, err := reg.ReportAcceptJoins("pod-a", "ns", false, false); err != nil {
 		t.Fatalf("ReportAcceptJoins: %v", err)
 	}
 	reg.Disconnect("pod-a")

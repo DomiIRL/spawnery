@@ -423,6 +423,31 @@ func (f *Fleet) Move(namespace, playerUUID, targetServer string) {
 	})
 }
 
+// SendState sends every session in a namespace a fresh NetworkState now
+// rather than at the next Resync.
+func (f *Fleet) SendState(ctx context.Context, namespace string) {
+	if f.opts.State.Reader == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	state, err := f.opts.State.Build(ctx, namespace, netstate.ForProxies)
+	if err != nil {
+		log.FromContext(ctx).V(1).Info("skipped a proxy state push",
+			"namespace", namespace, "reason", err.Error())
+		return
+	}
+	msg := &agentpb.OperatorToProxy{
+		Message: &agentpb.OperatorToProxy_NetworkState{NetworkState: state},
+	}
+	for _, s := range f.sessions {
+		if s.namespace == namespace {
+			f.send(s, msg)
+		}
+	}
+}
+
 // Register implements controller.Registrar.
 //
 // It returns nil when no proxy is connected. That is not a degraded state: a

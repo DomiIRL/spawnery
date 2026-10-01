@@ -432,7 +432,7 @@ func TestAnAnnouncementIsStoredUnderTheIdentitysOwnName(t *testing.T) {
 	// Built by hand rather than by New, which insists on the fleets and the
 	// certificates a real listener needs. This verb reaches none of them: it
 	// reads the identity, checks the bounds and writes to the registry.
-	s := &Server{opts: Options{Agents: registry}, requestRate: newRequestLimiter(time.Now)}
+	s := &Server{opts: Options{Agents: registry, Proxies: stubFleet{}}, requestRate: newRequestLimiter(time.Now)}
 
 	response := s.answerCloudRequest(context.Background(), logr.Discard(),
 		grpcauth.Identity{Namespace: "ns", PodName: "lobby-a", PodUID: "pod-a", Role: agent.RoleServer},
@@ -458,7 +458,7 @@ func TestAProxyAnnouncementIsRefusedRatherThanDropped(t *testing.T) {
 	// was never going to appear.
 	registry := agent.New(time.Now, time.Second, time.Now())
 	registry.Connect("proxy-a", agent.RoleProxy)
-	s := &Server{opts: Options{Agents: registry}, requestRate: newRequestLimiter(time.Now)}
+	s := &Server{opts: Options{Agents: registry, Proxies: stubFleet{}}, requestRate: newRequestLimiter(time.Now)}
 
 	response := s.answerCloudRequest(context.Background(), logr.Discard(),
 		grpcauth.Identity{Namespace: "ns", PodName: "gateway-0", PodUID: "proxy-a", Role: agent.RoleProxy},
@@ -482,7 +482,7 @@ func TestAServerClosesItsOwnDoorAndNobodyElses(t *testing.T) {
 	registry := agent.New(time.Now, time.Second, time.Now())
 	registry.Connect("pod-a", agent.RoleServer)
 	registry.Connect("pod-b", agent.RoleServer)
-	s := &Server{opts: Options{Agents: registry}, requestRate: newRequestLimiter(time.Now)}
+	s := &Server{opts: Options{Agents: registry, Proxies: stubFleet{}}, requestRate: newRequestLimiter(time.Now)}
 
 	response := s.answerCloudRequest(context.Background(), logr.Discard(),
 		grpcauth.Identity{Namespace: "ns", PodName: "lobby-a", PodUID: "pod-a", Role: agent.RoleServer},
@@ -504,6 +504,45 @@ func TestAServerClosesItsOwnDoorAndNobodyElses(t *testing.T) {
 	}
 }
 
+type stateRecorder struct {
+	stubFleet
+	namespaces []string
+}
+
+func (r *stateRecorder) SendState(_ context.Context, namespace string) {
+	r.namespaces = append(r.namespaces, namespace)
+}
+
+func TestADoorThatMovesReachesTheProxiesAtOnce(t *testing.T) {
+	registry := agent.New(time.Now, time.Second, time.Now())
+	registry.Connect("pod-a", agent.RoleServer)
+	proxies := &stateRecorder{}
+	s := &Server{opts: Options{Agents: registry, Proxies: proxies}, requestRate: newRequestLimiter(time.Now)}
+	id := grpcauth.Identity{Namespace: "ns", PodName: "lobby-a", PodUID: "pod-a", Role: agent.RoleServer}
+	door := func(reqID uint64, accept bool) {
+		response := s.answerCloudRequest(context.Background(), logr.Discard(), id, &agentpb.CloudRequest{
+			Id:      reqID,
+			Request: &agentpb.CloudRequest_AcceptJoins{AcceptJoins: &agentpb.AcceptJoinsRequest{Accept: accept}},
+		})
+		if response.GetAcceptJoins() == nil {
+			t.Fatalf("response = %+v, want accepted", response)
+		}
+	}
+
+	door(1, false)
+	if len(proxies.namespaces) != 1 || proxies.namespaces[0] != "ns" {
+		t.Fatalf("after closing: state pushes = %v, want one to ns", proxies.namespaces)
+	}
+	door(2, false)
+	if len(proxies.namespaces) != 1 {
+		t.Fatalf("a repeated close pushed again: %v", proxies.namespaces)
+	}
+	door(3, true)
+	if len(proxies.namespaces) != 2 {
+		t.Fatalf("after opening: state pushes = %v, want a second one", proxies.namespaces)
+	}
+}
+
 func TestAServerSaysItsRoundIsOver(t *testing.T) {
 	// The door and the round travel in one message, and until here nothing
 	// checked that the second field is read at all: every other test of this
@@ -512,7 +551,7 @@ func TestAServerSaysItsRoundIsOver(t *testing.T) {
 	// them.
 	registry := agent.New(time.Now, time.Second, time.Now())
 	registry.Connect("pod-a", agent.RoleServer)
-	s := &Server{opts: Options{Agents: registry}, requestRate: newRequestLimiter(time.Now)}
+	s := &Server{opts: Options{Agents: registry, Proxies: stubFleet{}}, requestRate: newRequestLimiter(time.Now)}
 
 	response := s.answerCloudRequest(context.Background(), logr.Discard(),
 		grpcauth.Identity{Namespace: "ns", PodName: "arena-a", PodUID: "pod-a", Role: agent.RoleServer},
@@ -534,7 +573,7 @@ func TestAServerSaysItsRoundIsOver(t *testing.T) {
 func TestAProxyIsRefusedADoor(t *testing.T) {
 	registry := agent.New(time.Now, time.Second, time.Now())
 	registry.Connect("proxy-a", agent.RoleProxy)
-	s := &Server{opts: Options{Agents: registry}, requestRate: newRequestLimiter(time.Now)}
+	s := &Server{opts: Options{Agents: registry, Proxies: stubFleet{}}, requestRate: newRequestLimiter(time.Now)}
 
 	response := s.answerCloudRequest(context.Background(), logr.Discard(),
 		grpcauth.Identity{Namespace: "ns", PodName: "gateway-0", PodUID: "proxy-a", Role: agent.RoleProxy},
