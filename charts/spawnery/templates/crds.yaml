@@ -1429,6 +1429,14 @@ spec:
                 x-kubernetes-validations:
                 - message: an attribute name may be 64 characters and a value 256
                   rule: self.all(k, size(k) <= 64 && size(self[k]) <= 256)
+              changeoverStage:
+                description: |-
+                  ChangeoverStage orders this group's changeover against the network's
+                  other groups: a group waits while any group of a lower stage is still
+                  changing over. Groups of one stage change over together, within
+                  Network.spec.update.maxConcurrentChangeovers.
+                format: int32
+                type: integer
               config:
                 description: Config are the rendered Velocity settings.
                 properties:
@@ -3568,6 +3576,14 @@ spec:
                 x-kubernetes-validations:
                 - message: an attribute name may be 64 characters and a value 256
                   rule: self.all(k, size(k) <= 64 && size(self[k]) <= 256)
+              changeoverStage:
+                description: |-
+                  ChangeoverStage orders this group's changeover against the network's
+                  other groups: a group waits while any group of a lower stage is still
+                  changing over. Groups of one stage change over together, within
+                  Network.spec.update.maxConcurrentChangeovers. Not for type OnDemand.
+                format: int32
+                type: integer
               configOverlay:
                 description: |-
                   ConfigOverlay names a ConfigMap whose keys are configuration files to
@@ -5425,6 +5441,9 @@ spec:
               rule: self.type != 'OnDemand' || has(self.maxInstances)
             - message: spec.maxInstances is only allowed for type OnDemand
               rule: self.type == 'OnDemand' || !has(self.maxInstances)
+            - message: spec.changeoverStage is not allowed for type OnDemand
+              rule: self.type != 'OnDemand' || !has(self.changeoverStage) || self.changeoverStage
+                == 0
             - message: scaling.minReplicas must not exceed scaling.maxReplicas
               rule: '!has(self.scaling) || self.scaling.minReplicas <= self.scaling.maxReplicas'
             - message: 'spec.update.minAvailable must be less than spec.scaling.maxReplicas:

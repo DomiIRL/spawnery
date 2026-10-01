@@ -250,6 +250,13 @@ type ProxyGroupSpec struct {
 	// +optional
 	Drain *DrainSpec `json:"drain,omitempty"`
 
+	// ChangeoverStage orders this group's changeover against the network's
+	// other groups: a group waits while any group of a lower stage is still
+	// changing over. Groups of one stage change over together, within
+	// Network.spec.update.maxConcurrentChangeovers.
+	// +optional
+	ChangeoverStage int32 `json:"changeoverStage,omitempty"`
+
 	// Update bounds how long a draining proxy may wait for its players.
 	// +optional
 	Update *ProxyUpdateSpec `json:"update,omitempty"`
