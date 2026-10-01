@@ -4015,11 +4015,14 @@ type ProxyState struct {
 	Group string `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`
 	Ready bool   `protobuf:"varint,3,opt,name=ready,proto3" json:"ready,omitempty"`
 	// Taking no new connections.
-	Draining      bool   `protobuf:"varint,4,opt,name=draining,proto3" json:"draining,omitempty"`
-	Players       int32  `protobuf:"varint,5,opt,name=players,proto3" json:"players,omitempty"`
-	Node          string `protobuf:"bytes,6,opt,name=node,proto3" json:"node,omitempty"` // as ServerState.node
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Draining bool   `protobuf:"varint,4,opt,name=draining,proto3" json:"draining,omitempty"`
+	Players  int32  `protobuf:"varint,5,opt,name=players,proto3" json:"players,omitempty"`
+	Node     string `protobuf:"bytes,6,opt,name=node,proto3" json:"node,omitempty"` // as ServerState.node
+	// Whether the pod's Velocity accepts transfer handshakes. A proxy that
+	// does not disconnects a transferred player instead of taking them.
+	AcceptsTransfers bool `protobuf:"varint,7,opt,name=accepts_transfers,json=acceptsTransfers,proto3" json:"accepts_transfers,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ProxyState) Reset() {
@@ -4092,6 +4095,13 @@ func (x *ProxyState) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *ProxyState) GetAcceptsTransfers() bool {
+	if x != nil {
+		return x.AcceptsTransfers
+	}
+	return false
 }
 
 type ProxyMessage struct {
@@ -5144,7 +5154,7 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\fjoins_closed\x18\x0e \x01(\bR\vjoinsClosed\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc3\x01\n" +
 	"\n" +
 	"ProxyState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
@@ -5152,7 +5162,8 @@ const file_spawnery_agent_v1alpha1_agent_proto_rawDesc = "" +
 	"\x05ready\x18\x03 \x01(\bR\x05ready\x12\x1a\n" +
 	"\bdraining\x18\x04 \x01(\bR\bdraining\x12\x18\n" +
 	"\aplayers\x18\x05 \x01(\x05R\aplayers\x12\x12\n" +
-	"\x04node\x18\x06 \x01(\tR\x04node\"\x82\x05\n" +
+	"\x04node\x18\x06 \x01(\tR\x04node\x12+\n" +
+	"\x11accepts_transfers\x18\a \x01(\bR\x10acceptsTransfers\"\x82\x05\n" +
 	"\fProxyMessage\x126\n" +
 	"\x05hello\x18\x01 \x01(\v2\x1e.spawnery.agent.v1alpha1.HelloH\x00R\x05hello\x12I\n" +
 	"\fplayer_count\x18\x02 \x01(\v2$.spawnery.agent.v1alpha1.PlayerCountH\x00R\vplayerCount\x12_\n" +

@@ -287,12 +287,13 @@ func (s Source) Build(ctx context.Context, namespace string, audience Audience) 
 			continue
 		}
 		state.Proxies = append(state.Proxies, &agentpb.ProxyState{
-			Name:     pod.Name,
-			Group:    pod.Labels[podspec.LabelGroup],
-			Ready:    podReady(pod),
-			Draining: pod.Annotations[podspec.AnnotationProxyDrainingSince] != "",
-			Players:  s.Agents.Lookup(string(pod.UID)).Players,
-			Node:     pod.Spec.NodeName,
+			Name:             pod.Name,
+			Group:            pod.Labels[podspec.LabelGroup],
+			Ready:            podReady(pod),
+			Draining:         pod.Annotations[podspec.AnnotationProxyDrainingSince] != "",
+			Players:          s.Agents.Lookup(string(pod.UID)).Players,
+			Node:             pod.Spec.NodeName,
+			AcceptsTransfers: acceptsTransfers(pod),
 		})
 	}
 
@@ -320,6 +321,22 @@ func serverGroupKind(g *spawneryv1alpha1.ServerGroup) agentpb.GroupState_Kind {
 	default:
 		return agentpb.GroupState_KIND_UNSPECIFIED
 	}
+}
+
+// acceptsTransfers reads the pod and not its group: a roll is exactly when
+// the two disagree, and the pod is what Velocity was started with.
+func acceptsTransfers(pod *corev1.Pod) bool {
+	for _, c := range pod.Spec.Containers {
+		if c.Name != podspec.ProxyContainerName {
+			continue
+		}
+		for _, e := range c.Env {
+			if e.Name == podspec.EnvTransferForceAfterSeconds {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func podReady(pod *corev1.Pod) bool {

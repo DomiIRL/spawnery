@@ -4,6 +4,7 @@ import cloud.spawnery.agent.api.Group
 import cloud.spawnery.agent.api.ServerPhase
 import cloud.spawnery.agent.pb.GroupState
 import cloud.spawnery.agent.pb.NetworkState
+import cloud.spawnery.agent.pb.ProxyState
 import cloud.spawnery.agent.pb.RosterEntry
 import cloud.spawnery.agent.pb.ServerState
 import java.util.UUID
@@ -304,5 +305,24 @@ class NetworkMirrorTest {
                 .build(),
         )
         assertEquals(emptySet(), mirror.closedDoors())
+    }
+
+    @Test
+    fun `the proxies that accept transfers are named, and follow each NetworkState`() {
+        val mirror = NetworkMirror()
+        mirror.apply(
+            NetworkState.newBuilder()
+                .addProxies(ProxyState.newBuilder().setName("edge-1").setGroup("edge").setAcceptsTransfers(true))
+                .addProxies(ProxyState.newBuilder().setName("edge-2").setGroup("edge"))
+                .build(),
+        )
+        assertEquals(setOf("edge-1"), mirror.acceptingTransfers())
+
+        mirror.apply(
+            NetworkState.newBuilder()
+                .addProxies(ProxyState.newBuilder().setName("edge-1").setGroup("edge"))
+                .build(),
+        )
+        assertEquals(emptySet(), mirror.acceptingTransfers())
     }
 }

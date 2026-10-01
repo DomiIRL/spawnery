@@ -590,6 +590,29 @@ func TestBuildListsEveryProxy(t *testing.T) {
 	}
 }
 
+func TestBuildSaysWhichProxiesAcceptTransfers(t *testing.T) {
+	transferring := proxyPodIn("ns", "gateway-a", true, false)
+	transferring.Spec.Containers = []corev1.Container{{
+		Name: podspec.ProxyContainerName,
+		Env:  []corev1.EnvVar{{Name: podspec.EnvTransferForceAfterSeconds, Value: "120"}},
+	}}
+	refusing := proxyPodIn("ns", "gateway-b", true, false)
+	refusing.Spec.Containers = []corev1.Container{{Name: podspec.ProxyContainerName}}
+	src, _ := source(t, proxyGroupNamed("ns", "gateway"), transferring, refusing)
+
+	got, err := src.Build(context.Background(), "ns", netstate.ForProxies)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	a, b := got.GetProxies()[0], got.GetProxies()[1]
+	if !a.GetAcceptsTransfers() {
+		t.Errorf("gateway-a = %+v, want accepts_transfers", a)
+	}
+	if b.GetAcceptsTransfers() {
+		t.Errorf("gateway-b = %+v, want transfers refused", b)
+	}
+}
+
 func TestBuildNamesTheNodeAServerAndAProxyRunOn(t *testing.T) {
 	srv := readyServer("ns", "lobby-a", "lobby", 0, 100)
 	srv.Status.PodName = "lobby-a"

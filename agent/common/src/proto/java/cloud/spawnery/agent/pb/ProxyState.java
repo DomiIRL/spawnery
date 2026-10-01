@@ -225,6 +225,22 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int ACCEPTS_TRANSFERS_FIELD_NUMBER = 7;
+  private boolean acceptsTransfers_ = false;
+  /**
+   * <pre>
+   * Whether the pod's Velocity accepts transfer handshakes. A proxy that
+   * does not disconnects a transferred player instead of taking them.
+   * </pre>
+   *
+   * <code>bool accepts_transfers = 7;</code>
+   * @return The acceptsTransfers.
+   */
+  @java.lang.Override
+  public boolean getAcceptsTransfers() {
+    return acceptsTransfers_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -257,6 +273,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 6, node_);
     }
+    if (acceptsTransfers_ != false) {
+      output.writeBool(7, acceptsTransfers_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -281,6 +300,10 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(node_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(6, node_);
+    }
+    if (acceptsTransfers_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(7, acceptsTransfers_);
     }
     return size;
   }
@@ -318,6 +341,8 @@ private static final long serialVersionUID = 0L;
         != other.getPlayers()) return false;
     if (!getNode()
         .equals(other.getNode())) return false;
+    if (getAcceptsTransfers()
+        != other.getAcceptsTransfers()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -343,6 +368,9 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getPlayers();
     hash = (37 * hash) + NODE_FIELD_NUMBER;
     hash = (53 * hash) + getNode().hashCode();
+    hash = (37 * hash) + ACCEPTS_TRANSFERS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getAcceptsTransfers());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -484,6 +512,7 @@ private static final long serialVersionUID = 0L;
       draining_ = false;
       players_ = 0;
       node_ = "";
+      acceptsTransfers_ = false;
       return this;
     }
 
@@ -535,6 +564,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000020) != 0)) {
         result.node_ = node_;
       }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.acceptsTransfers_ = acceptsTransfers_;
+      }
     }
 
     @java.lang.Override
@@ -572,6 +604,9 @@ private static final long serialVersionUID = 0L;
         node_ = other.node_;
         bitField0_ |= 0x00000020;
         onChanged();
+      }
+      if (other.getAcceptsTransfers() != false) {
+        setAcceptsTransfers(other.getAcceptsTransfers());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -629,6 +664,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000020;
               break;
             } // case 50
+            case 56: {
+              acceptsTransfers_ = input.readBool();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1006,6 +1046,53 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       node_ = value;
       bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+
+    private boolean acceptsTransfers_ ;
+    /**
+     * <pre>
+     * Whether the pod's Velocity accepts transfer handshakes. A proxy that
+     * does not disconnects a transferred player instead of taking them.
+     * </pre>
+     *
+     * <code>bool accepts_transfers = 7;</code>
+     * @return The acceptsTransfers.
+     */
+    @java.lang.Override
+    public boolean getAcceptsTransfers() {
+      return acceptsTransfers_;
+    }
+    /**
+     * <pre>
+     * Whether the pod's Velocity accepts transfer handshakes. A proxy that
+     * does not disconnects a transferred player instead of taking them.
+     * </pre>
+     *
+     * <code>bool accepts_transfers = 7;</code>
+     * @param value The acceptsTransfers to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAcceptsTransfers(boolean value) {
+
+      acceptsTransfers_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the pod's Velocity accepts transfer handshakes. A proxy that
+     * does not disconnects a transferred player instead of taking them.
+     * </pre>
+     *
+     * <code>bool accepts_transfers = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAcceptsTransfers() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      acceptsTransfers_ = false;
       onChanged();
       return this;
     }

@@ -939,6 +939,9 @@ message ProxyState {
   bool draining = 4;
   int32 players = 5;
   string node = 6;  // as ServerState.node
+  // Whether the pod's Velocity accepts transfer handshakes. A proxy that
+  // does not disconnects a transferred player instead of taking them.
+  bool accepts_transfers = 7;
 }
 
 message ProxyMessage {
