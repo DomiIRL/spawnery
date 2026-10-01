@@ -197,6 +197,37 @@ func TestARollingUpdateGroupReleasesItsPlaceOnceDeferred(t *testing.T) {
 	}
 }
 
+func TestAWhenEmptyGroupStaysDeferredThroughAReadinessLoss(t *testing.T) {
+	f := newFixture(t)
+	r := groupReconciler(f)
+	f.setUpdatePolicy(t, 2, &spawneryv1alpha1.UpdateSpec{
+		Strategy: spawneryv1alpha1.UpdateWhenEmpty, MaxUnavailable: 2,
+	})
+	f.reconcileNamedGroup(t, r, "lobby")
+	f.readyAllServersOf(t, "lobby")
+	f.reportPlayersOn(t, f.serverNamesOfGroup(t, "lobby")[0], 5)
+
+	f.setImage(t, "lobby", nextImage)
+	f.reconcileNamedGroup(t, r, "lobby")
+	f.bringUpCurrent(t, "lobby")
+	f.reconcileNamedGroup(t, r, "lobby")
+	if got := f.serverGroup(t, "lobby").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+		t.Fatalf("status.changeover = %q, want Deferred before the readiness loss", got)
+	}
+
+	g := f.serverGroup(t, "lobby")
+	for _, name := range f.serverNamesOfGroup(t, "lobby") {
+		if srv := f.server(name); srv.Spec.GroupGeneration == g.Generation {
+			f.setPhase(t, srv, phase.Starting)
+		}
+	}
+	f.reconcileNamedGroup(t, r, "lobby")
+
+	if got := f.serverGroup(t, "lobby").Status.Changeover; got != spawneryv1alpha1.ChangeoverDeferred {
+		t.Fatalf("status.changeover = %q, want Deferred", got)
+	}
+}
+
 func (f *fixture) setChangeoverBudget(t *testing.T, n int32) {
 	t.Helper()
 	net := &spawneryv1alpha1.Network{}
