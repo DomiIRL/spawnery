@@ -73,3 +73,27 @@ func TestTheReadyPortAgreesWithTheVelocityAgent(t *testing.T) {
 			"and nothing reports why.", source, got, ProxyReadyPort)
 	}
 }
+
+func TestTheTransferEnvNamesAgreeWithTheVelocityAgent(t *testing.T) {
+	const source = "agent/velocity/src/main/kotlin/cloud/spawnery/agent/velocity/ProxyEnvironment.kt"
+	raw, err := os.ReadFile(testenv.RepoPath(t, source))
+	if err != nil {
+		t.Fatalf("read the Velocity agent's source: %v", err)
+	}
+
+	for constant, want := range map[string]string{
+		"TRANSFER_FORCE_AFTER_SECONDS": EnvTransferForceAfterSeconds,
+		"FORWARDING_SECRET_FILE":       EnvForwardingSecretFile,
+	} {
+		re := regexp.MustCompile(`(?m)^\s*const val ` + constant + `\s*=\s*"([^"]*)"\s*$`)
+		m := re.FindSubmatch(raw)
+		if m == nil {
+			t.Errorf("no `const val %s = \"...\"` in %s", constant, source)
+			continue
+		}
+		if got := string(m[1]); got != want {
+			t.Errorf("%s declares %s = %q, podspec sets %q: the agent would never see the "+
+				"variable and the group would drain without transferring", source, constant, got, want)
+		}
+	}
+}

@@ -21,14 +21,19 @@ import cloud.spawnery.agent.pb.PlayerJoinedServer
 import cloud.spawnery.agent.pb.ProxyMessage
 import com.google.inject.Inject
 import com.velocitypowered.api.command.BrigadierCommand
+import com.velocitypowered.api.event.EventTask
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.DisconnectEvent
+import com.velocitypowered.api.event.connection.LoginEvent
+import com.velocitypowered.api.event.player.CookieReceiveEvent
 import com.velocitypowered.api.event.player.KickedFromServerEvent
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent
 import com.velocitypowered.api.event.player.ServerConnectedEvent
 import com.velocitypowered.api.event.player.ServerPostConnectEvent
+import com.velocitypowered.api.event.player.ServerPreConnectEvent
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent
+import com.velocitypowered.api.network.HandshakeIntent
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.proxy.ProxyServer
 import com.velocitypowered.api.scheduler.ScheduledTask
@@ -130,6 +135,8 @@ class AgentPlugin @Inject constructor(
     private var router: Router? = null
     private var rescue: Rescue? = null
     private var drain: Drain? = null
+    private var transfers: Transfers? = null
+    private var transferPass: ScheduledTask? = null
 
     /**
      * Who has turned the feed off. Built here rather than in start(), because
@@ -276,6 +283,7 @@ class AgentPlugin @Inject constructor(
             self.network(),
             self.group(),
         )
+        startTransfers(env, self)
         val drain = Drain(players, router, ::warn)
         this.drain = drain
         val role = ProxyRole(
@@ -381,6 +389,26 @@ class AgentPlugin @Inject constructor(
         logger.info("spawnery agent connecting to ${env.base.endpoint}")
     }
 
+    private fun startTransfers(env: ProxyEnvironment.Configured, self: ProxySelf) {
+        env.transferOff?.let { logger.warn("spawnery: transfers off, this proxy drains without them: $it") }
+        val transfer = env.transfer ?: return
+        val transfers = Transfers(
+            cookie = TransferCookie(transfer.secret) { System.currentTimeMillis() / 1000 },
+            policy = TransferPolicy(transfer.forceAfterSeconds * 1000, System::currentTimeMillis),
+            picture = { TransferPolicy.Picture(self.name(), self.group(), mirror.proxies(), mirror.closedDoors()) },
+            registered = { name ->
+                proxy.getServer(name).isPresent && mirror.servers().any { it.name() == name && it.registered() }
+            },
+            info = logger::info,
+            warn = ::warn,
+        )
+        this.transfers = transfers
+        transferPass = proxy.scheduler
+            .buildTask(this, Runnable { transfers.pass(proxy.allPlayers.map { VelocityTraveller(it, ::warn) }) })
+            .repeat(TRANSFER_PASS_SECONDS, TimeUnit.SECONDS)
+            .schedule()
+    }
+
     @Subscribe
     fun onShutdown(event: ProxyShutdownEvent) {
         // First: install refuses a second implementation, so a proxy that
@@ -389,6 +417,7 @@ class AgentPlugin @Inject constructor(
         loop?.stop()
         gate?.close()
         sampling?.cancel()
+        transferPass?.cancel()
         scheduler?.let {
             it.shutdownNow()
             it.awaitTermination(2, TimeUnit.SECONDS)
@@ -406,7 +435,9 @@ class AgentPlugin @Inject constructor(
      */
     @Subscribe
     fun onChooseInitialServer(event: PlayerChooseInitialServerEvent) {
-        val target = router?.choose(fallbackGroups) ?: run {
+        val arrival = transfers?.landing(event.player.uniqueId, event.player.username)
+            ?.let { proxy.getServer(it).orElse(null) }
+        val target = arrival ?: router?.choose(fallbackGroups) ?: run {
             if (router != null) {
                 logger.warn(
                     "spawnery: no server available in $fallbackGroups for " +
@@ -450,6 +481,53 @@ class AgentPlugin @Inject constructor(
     @Subscribe
     fun onDisconnect(event: DisconnectEvent) {
         rescue?.forget(event.player.uniqueId)
+        transfers?.forget(event.player.uniqueId)
+    }
+
+    /**
+     * LoginEvent, the earliest event with a player to ask: Velocity takes a
+     * cookie answer in the login phase and holds the login on this event's
+     * task, so PlayerChooseInitialServerEvent comes after the answer.
+     */
+    @Subscribe
+    fun onLogin(event: LoginEvent): EventTask? {
+        val transfers = transfers ?: return null
+        val scheduler = scheduler ?: return null
+        val player = event.player
+        if (!event.result.isAllowed || player.handshakeIntent != HandshakeIntent.TRANSFER) return null
+        return EventTask.withContinuation { continuation ->
+            transfers.expecting(player.uniqueId, continuation::resume)
+            scheduler.schedule(
+                { transfers.gaveUp(player.uniqueId, player.username, "no answer within $COOKIE_WAIT_MILLIS ms") },
+                COOKIE_WAIT_MILLIS,
+                TimeUnit.MILLISECONDS,
+            )
+            try {
+                player.requestCookie(TRANSFER_COOKIE_KEY)
+            } catch (e: Exception) {
+                warn("spawnery: could not ask '${player.username}' for a transfer cookie", e)
+                transfers.gaveUp(player.uniqueId, player.username, "not asked")
+            }
+        }
+    }
+
+    @Subscribe
+    fun onCookieReceive(event: CookieReceiveEvent) {
+        val transfers = transfers ?: return
+        if (event.originalKey != TRANSFER_COOKIE_KEY) return
+        if (transfers.received(event.player.uniqueId, event.player.username, event.originalData)) {
+            event.result = CookieReceiveEvent.ForwardResult.handled()
+        }
+    }
+
+    @Subscribe
+    fun onServerPreConnect(event: ServerPreConnectEvent) {
+        val transfers = transfers ?: return
+        if (!event.result.isAllowed || event.player.currentServer.isEmpty) return
+        val target = event.result.server.orElse(event.originalServer)
+        if (transfers.onSwitch(VelocityTraveller(event.player, ::warn), target.serverInfo.name)) {
+            event.result = ServerPreConnectEvent.ServerResult.denied()
+        }
     }
 
     /**
@@ -544,5 +622,8 @@ class AgentPlugin @Inject constructor(
         // resolution, cheap enough to be invisible next to anything else the
         // scheduler runs.
         const val SAMPLE_SECONDS = 1L
+
+        const val TRANSFER_PASS_SECONDS = 1L
+        const val COOKIE_WAIT_MILLIS = 2_000L
     }
 }
