@@ -56,9 +56,7 @@ const (
 	// refuses to connect rather than coming up unable to route.
 	EnvFallbackGroups = "SPAWNERY_FALLBACK_GROUPS"
 	// EnvProxy names the container env var carrying the pod's own name.
-	EnvProxy = "SPAWNERY_PROXY"
-	// EnvTransferForceAfterSeconds and EnvForwardingSecretFile are set only
-	// on a group with spec.update.transfer.
+	EnvProxy                     = "SPAWNERY_PROXY"
 	EnvTransferForceAfterSeconds = "SPAWNERY_TRANSFER_FORCE_AFTER_SECONDS"
 	EnvForwardingSecretFile      = "SPAWNERY_FORWARDING_SECRET_FILE"
 

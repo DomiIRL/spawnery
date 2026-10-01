@@ -1295,11 +1295,10 @@ func (r *ProxyGroupReconciler) drainDeparting(
 	// Kubernetes does not close. Deleting at NotReady would disconnect exactly
 	// the people the readiness contract exists to protect.
 	//
-	// Nobody is moved, and that is not an omission. A draining server can hand
-	// its players to another backend because the client's connection
-	// terminates at the proxy, which stays; a draining proxy has no such
-	// option, because the connection terminates at the proxy being removed.
-	// So the deadline below is the only path here that disconnects anyone.
+	// The operator moves nobody off a draining proxy: the connection ends at
+	// the proxy being removed. With spec.update.transfer its agent may move
+	// players itself, but the deadline below is still the only path here that
+	// disconnects anyone.
 	//
 	// Empty means the count is fresh, zero, and reported by a stream that is
 	// still up. A count we cannot trust is treated as occupied — proxyOccupied
