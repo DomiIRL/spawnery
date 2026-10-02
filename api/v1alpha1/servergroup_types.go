@@ -122,9 +122,16 @@ type DrainSpec struct {
 
 // StorageSpec describes the PVC of a persistent or on-demand group.
 type StorageSpec struct {
-	// Size of the volume. May grow, never shrink; actual expansion requires
-	// allowVolumeExpansion on the StorageClass.
+	// Size of each new claim. Raising it grows existing claims up to the new
+	// size (needs allowVolumeExpansion on the StorageClass); lowering it
+	// changes only claims created afterwards and never shrinks one. A claim
+	// larger than this, grown by hand or by an autoresizer, is left alone.
 	Size resource.Quantity `json:"size"`
+
+	// Annotations are copied onto each data claim when it is created, e.g. for
+	// a volume autoresizer's per-claim ceiling. Existing claims are not changed.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// StorageClassName is immutable once set.
 	// +optional
@@ -175,7 +182,6 @@ type StorageSpec struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.update) || !has(self.update.minAvailable) || !has(self.scaling) || self.update.minAvailable < self.scaling.maxReplicas",message="spec.update.minAvailable must be less than spec.scaling.maxReplicas: keeping the floor needs room for one extra server"
 // +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || (has(self.storage.storageClassName) == has(oldSelf.storage.storageClassName) && (!has(self.storage.storageClassName) || self.storage.storageClassName == oldSelf.storage.storageClassName))",message="storage.storageClassName is immutable"
 // +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || self.storage.accessModes == oldSelf.storage.accessModes",message="storage.accessModes is immutable"
-// +kubebuilder:validation:XValidation:rule="!has(self.storage) || !has(oldSelf.storage) || quantity(self.storage.size).compareTo(quantity(oldSelf.storage.size)) >= 0",message="storage.size must not shrink"
 // +kubebuilder:validation:XValidation:rule="!has(self.playableSlots) || (self.playableSlots >= 1 && self.playableSlots <= self.maxPlayers)",message="spec.playableSlots must be between 1 and spec.maxPlayers"
 type ServerGroupSpec struct {
 	// NetworkRef names the Network this group belongs to.

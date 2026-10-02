@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	spawneryv1alpha1 "github.com/spawnery/spawnery/api/v1alpha1"
 	"github.com/spawnery/spawnery/internal/testenv"
@@ -380,15 +381,44 @@ func TestServerGroupImmutableFields(t *testing.T) {
 		}
 	})
 
-	t.Run("storage size may not shrink", func(t *testing.T) {
+	t.Run("storage size may be lowered", func(t *testing.T) {
 		ns := testenv.Namespace(t, ctx, c)
 		g := persistentGroup(ns, "survival")
 		if err := c.Create(ctx, g); err != nil {
 			t.Fatalf("create: %v", err)
 		}
 		g.Spec.Storage.Size = resource.MustParse("10Gi")
-		if err := c.Update(ctx, g); err == nil {
-			t.Fatal("update shrank storage.size, want rejection")
+		if err := c.Update(ctx, g); err != nil {
+			t.Fatalf("lowering storage.size rejected: %v", err)
+		}
+	})
+
+	t.Run("an on-demand storage size may be lowered", func(t *testing.T) {
+		ns := testenv.Namespace(t, ctx, c)
+		g := onDemandGroup(ns, "private-servers")
+		if err := c.Create(ctx, g); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		g.Spec.Storage.Size = resource.MustParse("1Gi")
+		if err := c.Update(ctx, g); err != nil {
+			t.Fatalf("lowering storage.size rejected: %v", err)
+		}
+	})
+
+	t.Run("storage annotations round-trip", func(t *testing.T) {
+		ns := testenv.Namespace(t, ctx, c)
+		g := persistentGroup(ns, "survival")
+		g.Spec.Storage.StorageClassName = ptr.To("expandable")
+		g.Spec.Storage.Annotations = map[string]string{"resize.topolvm.io/storage_limit": "20Gi"}
+		if err := c.Create(ctx, g); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		var got spawneryv1alpha1.ServerGroup
+		if err := c.Get(ctx, client.ObjectKeyFromObject(g), &got); err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if v := got.Spec.Storage.Annotations["resize.topolvm.io/storage_limit"]; v != "20Gi" {
+			t.Fatalf("annotations = %v, want the limit kept", got.Spec.Storage.Annotations)
 		}
 	})
 
