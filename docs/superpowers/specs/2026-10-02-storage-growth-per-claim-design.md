@@ -21,8 +21,11 @@ it, but wants to start small and reads its ceiling from a PVC annotation
 
 - An optional `spec.storage.annotations`, copied onto each data claim when it
   is created. Shape and naming mirror
-  `ProxyGroup.spec.expose.loadBalancer.annotations`. No validation of the keys
-  and no labels field.
+  `ProxyGroup.spec.expose.loadBalancer.annotations`. At most 64 keys, each a valid
+  Kubernetes annotation key (checked by the CRD), and no labels field. The
+  reconcile also creates a claim only when none exists, so a claim the API
+  server would refuse on create can never keep an existing server from getting
+  a pod.
 - Only new claims get annotations. Existing claims are not patched, so
   `growClaim` stays the only write to an existing claim. Backfilling is one
   `kubectl annotate pvc -l spawnery.cloud/group=<group> ... --overwrite`, in the

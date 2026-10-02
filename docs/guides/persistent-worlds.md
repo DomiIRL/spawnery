@@ -226,12 +226,19 @@ ones that fill up. The operator's part is small:
 - Each new claim requests `spec.storage.size`. Lower it to start new claims
   smaller; existing claims are never shrunk.
 - `spec.storage.annotations` are copied onto each claim when it is created. Existing
-  claims are not changed.
+  claims are not changed. Keys must be valid Kubernetes annotation keys, and
+  at most 64 are allowed.
 - A claim larger than `spec.storage.size`, grown by hand or by an autoresizer,
   is left alone. Raising `size` above the annotated ceiling still grows claims;
   the autoresizer just stops at its ceiling.
-- A resize that is refused, whoever asked for it, shows on the server's
-  `status.storageResizeError` and on the group's `StorageResize` condition.
+- The server's `status.storageResizeError` and the group's `StorageResize`
+  condition report a patch of this operator's own that the API server refused,
+  or a resize from any requester that the storage driver failed. A patch the
+  autoresizer had refused, for example for a missing `allowVolumeExpansion` or
+  a quota, shows only in the autoresizer's own events and logs.
+- In a persistent group, a driver that expands offline sets
+  `FileSystemResizePending`; the operator then drains and restarts that server
+  at a time the autoresizer picks. Drivers that expand online are unaffected.
 
 ```yaml
   storage:
