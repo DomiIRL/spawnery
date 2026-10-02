@@ -17,6 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -449,6 +450,17 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 	}
 	update.Transfer = &spawneryv1alpha1.ProxyTransferSpec{ForceAfterSeconds: ptr.To[int32](0)}
 	gateway.Spec.Update = &update
+	// A blue/green roll of two replicas runs four proxies at once; at the
+	// tutorial's 500m each they do not fit beside the lobby on a 4-CPU runner.
+	resources := corev1.ResourceRequirements{}
+	if gateway.Spec.Resources != nil {
+		resources = *gateway.Spec.Resources.DeepCopy()
+	}
+	if resources.Requests == nil {
+		resources.Requests = corev1.ResourceList{}
+	}
+	resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+	gateway.Spec.Resources = &resources
 	if err := k8s.Patch(ctx, &gateway, gatewayPatch); err != nil {
 		t.Fatalf("patch ProxyGroup: %v", err)
 	}
@@ -461,6 +473,7 @@ func TestTutorialTransferOnDrain(t *testing.T) {
 		now.Spec.Replicas = gatewayBefore.Spec.Replicas
 		now.Spec.Update = gatewayBefore.Spec.Update
 		now.Spec.Env = gatewayBefore.Spec.Env
+		now.Spec.Resources = gatewayBefore.Spec.Resources
 		_ = k8s.Patch(ctx, &now, back)
 	})
 
