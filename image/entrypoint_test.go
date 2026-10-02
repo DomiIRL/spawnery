@@ -870,7 +870,7 @@ func TestEntrypointStopsIfSubstitutionRefuses(t *testing.T) {
 	}
 }
 
-func TestPruneRunsOnlyWithKeepEntriesAndFirst(t *testing.T) {
+func TestPruneRunsOnlyWithKeepEntriesAndBeforeTheRenderer(t *testing.T) {
 	out, err := runEntrypoint(t, t.TempDir(), 0, "SPAWNERY_KEEP=world\nplugins/ExampleGame/state")
 	if err != nil {
 		t.Fatalf("entrypoint: %v\n%s", err, out)
@@ -898,6 +898,50 @@ func TestPruneRunsBeforeTheEulaIsWritten(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "eula.txt")); err == nil {
 		t.Error("eula.txt was written before prune ran")
+	}
+}
+
+// The prune exempts what a source ships, so a source refused after it would
+// have its shipped worlds deleted and never copied back.
+func TestARefusedSourceNeverReachesThePrune(t *testing.T) {
+	tests := map[string]struct {
+		files, plugins []string
+		mounts         []string
+	}{
+		"extraFiles carrying plugins/":         {files: []string{"plugins/Map/level.dat"}},
+		"extraFiles carrying eula.txt":         {files: []string{"eula.txt"}},
+		"extraFiles carrying a rendered file":  {files: []string{"server.properties"}},
+		"extraFiles under a read-only mount":   {files: []string{"mods/pack.jar"}, mounts: []string{"mods"}},
+		"extraPlugins under a read-only mount": {plugins: []string{"Shop/data.yml"}, mounts: []string{"plugins/Shop"}},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTree(t, dir, "plugins/Map/level.dat")
+			files := filepath.Join(t.TempDir(), "files")
+			plugins := filepath.Join(t.TempDir(), "plugins")
+			writeTree(t, files, tc.files...)
+			writeTree(t, plugins, tc.plugins...)
+
+			out, err := runEntrypoint(t, dir, 0,
+				"SPAWNERY_KEEP=world",
+				"SPAWNERY_FILE_SOURCE="+files,
+				"SPAWNERY_PLUGIN_SOURCE="+plugins,
+				"SPAWNERY_MOUNTINFO="+fakeMountinfo(t, dir, tc.mounts...))
+
+			if err == nil {
+				t.Fatalf("the start was not refused:\n%s", out)
+			}
+			if !strings.Contains(out, "Refusing to start") {
+				t.Errorf("not refused by the source scan:\n%s", out)
+			}
+			if strings.Contains(out, "--prune") {
+				t.Errorf("the prune ran before the refusal:\n%s", out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "plugins", "Map", "level.dat")); err != nil {
+				t.Errorf("the claim changed: %v", err)
+			}
+		})
 	}
 }
 

@@ -145,7 +145,9 @@ operator, the chart and the images. Release is a separate PR.
   target stays; an empty directory is fine.
 - **spawnery-config:** usage exits 2, a refusal exits 1.
 - **entrypoint:** prune runs only with `SPAWNERY_KEEP`, before the renderer and
-  before `eula.txt`; a refusing prune stops the start before the JVM.
+  before `eula.txt`, after the scans that refuse a source; a refusing prune
+  stops the start before the JVM, and a refused source stops it before the
+  prune, which deletes what a source ships on the promise of the copy.
 - **API:** accepted on OnDemand and Persistent; `[]`, `/x`, `a/../b`, `a//b`
   and `a[b` refused.
 - **podspec:** the variable is present only when set; the golden is unchanged.

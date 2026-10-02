@@ -35,30 +35,6 @@ MOUNTINFO="${SPAWNERY_MOUNTINFO:-/proc/self/mountinfo}"
 FILE_SOURCE="${SPAWNERY_FILE_SOURCE:-/var/run/spawnery/files}"
 PLUGIN_SOURCE="${SPAWNERY_PLUGIN_SOURCE:-/var/run/spawnery/plugins}"
 
-# spec.storage.keep: delete what the claim holds beyond the keep list. First,
-# so that everything below writes into a claim that is already clean and a
-# refusal leaves it untouched. It cannot run at stop: the JVM is PID 1 and a
-# hard kill runs no hook.
-if [ -n "${SPAWNERY_KEEP:-}" ]; then
-	spawnery-config --prune "$SPAWNERY_KEEP" --mountinfo "$MOUNTINFO" \
-		--pair "$FILE_SOURCE=." --pair "$PLUGIN_SOURCE=plugins" || exit 1
-fi
-
-# Mojang's EULA. Running this image is accepting it, and the README says so
-# rather than leaving it buried here.
-printf 'eula=true\n' >eula.txt
-
-# The configuration Paper actually reads, written from the operator's
-# rendered ConfigMap, the user's overlay and the fields neither may move. It
-# replaces the three set_property calls this script used to make: a
-# .properties helper in shell could not reach paper-global.yml, which is
-# YAML, and it failed on a read-only file with a bare mv message that said
-# nothing about why. Invoked unqualified, the same way java is below —
-# /usr/local/bin is already ahead on this image's PATH, and going through
-# PATH rather than a hardcoded path is what lets a test double stand in for
-# it below.
-spawnery-config --flavor paper
-
 # A read-only spec.mounts entry under /data is a writer the scans below cannot
 # see: a copy onto it dies with a bare "Read-only file system". mountinfo writes
 # a space in a path as \040, which printf %b turns back.
@@ -98,17 +74,18 @@ refuse_mounted() {
 	done
 }
 
-# Files an administrator put on a volume, copied into the working directory.
+# The scans of both sources, before anything on the claim changes.
 #
 # **The scan runs before the copy, and that is the whole safety property.**
-# Three things write into /data on a start: spawnery-config above, this, and
-# the plugin copy below. Refusing a source that carries a path one of the
+# Three things write into /data on a start: spawnery-config, the file copy
+# and the plugin copy below. Refusing a source that carries a path one of the
 # others owns makes their paths disjoint, so the order between them cannot
 # decide the result -- rather than a rule about which runs first, which would
 # make these line numbers load-bearing.
 #
-# lost+found and the two globs are the plugin copy's reasoning exactly; see
-# the comment on PLUGIN_SOURCE below for the measurements behind both.
+# Before the prune as well: it deletes what a source ships without asking,
+# since the copy writes it back, and a source refused after it would never be
+# copied.
 if [ -d "$FILE_SOURCE" ]; then
 	# The renderer's own files, and the directory extraPlugins owns. A Paper
 	# server does not refuse velocity.toml or lang/: nothing writes them here,
@@ -140,7 +117,39 @@ if [ -d "$FILE_SOURCE" ]; then
 	done
 
 	refuse_mounted "$FILE_SOURCE" . extraFiles || exit 1
+fi
+if [ -d "$PLUGIN_SOURCE" ]; then
+	refuse_mounted "$PLUGIN_SOURCE" plugins extraPlugins || exit 1
+fi
 
+# spec.storage.keep: delete what the claim holds beyond the keep list, so
+# that everything below writes into a claim that is already clean and a
+# refusal leaves it untouched. It cannot run at stop: the JVM is PID 1 and a
+# hard kill runs no hook.
+if [ -n "${SPAWNERY_KEEP:-}" ]; then
+	spawnery-config --prune "$SPAWNERY_KEEP" --mountinfo "$MOUNTINFO" \
+		--pair "$FILE_SOURCE=." --pair "$PLUGIN_SOURCE=plugins" || exit 1
+fi
+
+# Mojang's EULA. Running this image is accepting it, and the README says so
+# rather than leaving it buried here.
+printf 'eula=true\n' >eula.txt
+
+# The configuration Paper actually reads, written from the operator's
+# rendered ConfigMap, the user's overlay and the fields neither may move. It
+# replaces the three set_property calls this script used to make: a
+# .properties helper in shell could not reach paper-global.yml, which is
+# YAML, and it failed on a read-only file with a bare mv message that said
+# nothing about why. Invoked unqualified, the same way java is below —
+# /usr/local/bin is already ahead on this image's PATH, and going through
+# PATH rather than a hardcoded path is what lets a test double stand in for
+# it below.
+spawnery-config --flavor paper
+
+# Files an administrator put on a volume, copied into the working directory.
+# lost+found and the two globs are the plugin copy's reasoning exactly; see
+# the comment on PLUGIN_SOURCE below for the measurements behind both.
+if [ -d "$FILE_SOURCE" ]; then
 	for entry in "$FILE_SOURCE"/* "$FILE_SOURCE"/.[!.]*; do
 		[ -e "$entry" ] || continue
 		name="${entry##*/}"
@@ -193,7 +202,6 @@ fi
 # older agent would leave the operator talking to a version it never published,
 # with every object in the cluster saying the right thing.
 if [ -d "$PLUGIN_SOURCE" ]; then
-	refuse_mounted "$PLUGIN_SOURCE" plugins extraPlugins || exit 1
 	mkdir -p plugins
 	# cp -R and not cp -a, and lost+found skipped by name. Both were measured
 	# on a live Longhorn claim on 2026-08-29, and either one alone kills the
