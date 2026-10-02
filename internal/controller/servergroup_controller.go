@@ -588,10 +588,11 @@ func (r *ServerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	// StorageResize is the persistent-only counterpart to ScalingLimited
-	// above: each condition belongs to the group type whose question it
-	// answers, and an ephemeral group has no claim for this one to be about
-	// -- group.Spec.Storage is a persistent group's field, and growClaim in
+	// StorageResize is the counterpart to ScalingLimited above for the group
+	// types that keep claims, persistent and on-demand: each condition
+	// belongs to the group type whose question it answers, and an ephemeral
+	// group has no claim for this one to be about -- group.Spec.Storage is
+	// not set on an ephemeral group, and growClaim in
 	// the Server controller is skipped outright for an ephemeral one, so
 	// every view's ResizeError here would read "" for an ephemeral group
 	// regardless.

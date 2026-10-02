@@ -425,9 +425,9 @@ func TestServerGroupImmutableFields(t *testing.T) {
 	t.Run("annotation keys must be valid annotation keys", func(t *testing.T) {
 		long := strings.Repeat("a", 64)
 		for name, key := range map[string]string{
-			"space":            "bad key",
-			"empty name":       "example.com/",
-			"name too long":    long,
+			"space":                "bad key",
+			"empty name":           "example.com/",
+			"name too long":        long,
 			"underscore in prefix": "ex_ample.com/key",
 		} {
 			ns := testenv.Namespace(t, ctx, c)

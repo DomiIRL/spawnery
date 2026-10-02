@@ -72,6 +72,10 @@ const ReasonPodNameTerminating = "PodNameTerminating"
 // quota, not at anything this operator can retry its way out of.
 const ReasonServerPodRejected = "ServerPodRejected"
 
+// ReasonServerClaimRejected marks a Server whose data claim the API server
+// refused. It is ReasonServerPodRejected for the claim that goes in first.
+const ReasonServerClaimRejected = "ServerClaimRejected"
+
 // These mirror the kubebuilder defaults on ServerGroupSpec. They are what a
 // Server falls back to when its group is gone, so drain and cleanup keep sane
 // timings. TestTheFallbackGroupCarriesEveryCrdDefault reads the markers out of
@@ -345,28 +349,42 @@ func (r *ServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	if createPod {
-		// The claim goes in before the pod that mounts it, and nothing here
-		// waits for it to reach Bound. Under volumeBindingMode:
-		// WaitForFirstConsumer — the default of most topology-aware storage
-		// classes, and of the node-local ones — a volume binds only once a pod
-		// demands it, so waiting
-		// for Bound would deadlock against the pod this block goes on to
-		// create.
-		//
-		// An ordinal recreated after its server was deleted is *supposed* to
-		// find the claim it had before, so an existing claim is never
-		// created again: anything the API server would refuse on create
-		// must not keep an existing server from getting a pod. growClaim
-		// above is what grows it. AlreadyExists still covers a claim that
-		// appeared since that read.
-		if !group.IsEphemeral() && !claimExists {
-			claim := podspec.BuildDataClaim(group, srv)
-			if err := r.Create(ctx, claim); err != nil && !apierrors.IsAlreadyExists(err) {
-				return ctrl.Result{}, err
-			}
+	// The claim goes in before the pod that mounts it, and nothing here
+	// waits for it to reach Bound. Under volumeBindingMode:
+	// WaitForFirstConsumer, the default of most topology-aware storage
+	// classes and of the node-local ones, a volume binds only once a pod
+	// demands it, so waiting
+	// for Bound would deadlock against the pod this block goes on to
+	// create.
+	//
+	// An ordinal recreated after its server was deleted is *supposed* to
+	// find the claim it had before, so an existing claim is never
+	// created again: anything the API server would refuse on create
+	// must not keep an existing server from getting a pod. growClaim
+	// above is what grows it. AlreadyExists still covers a claim that
+	// appeared since that read.
+	if createPod && !group.IsEphemeral() && !claimExists {
+		claim := podspec.BuildDataClaim(group, srv)
+		err := r.Create(ctx, claim)
+		switch {
+		case err == nil, apierrors.IsAlreadyExists(err):
+		case apierrors.IsForbidden(err), apierrors.IsInvalid(err):
+			// The same report the pod create below gives a refusal: a quota,
+			// a webhook, or storage.annotations over the API server's total
+			// annotation size. No pod is created without its claim.
+			r.Recorder.Eventf(srv, nil, corev1.EventTypeWarning, ReasonServerClaimRejected,
+				actionCreatePod, "%s",
+				eventNote("the API server refused this server's data claim: %v", err))
+			setAccepted(srv, false, ReasonServerClaimRejected,
+				fmt.Sprintf("the API server refused this server's data claim: %v; "+
+					"the remedy is the namespace's quota or the group's spec.storage, not a retry", err))
+			createPod = false
+		default:
+			return ctrl.Result{}, err
 		}
+	}
 
+	if createPod {
 		built, err := podspec.BuildServerPod(network, group, srv, r.AgentEndpoint)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -579,7 +597,7 @@ func (r *ServerReconciler) growClaim(
 // let a resize patch through: PersistentVolumeClaimControllerResizeError and
 // PersistentVolumeClaimNodeResizeError. This is the asynchronous half of what
 // growClaim's own doc comment describes; growClaim calls this both after a
-// patch it just made and on a pass where the claim already matched
+// patch it just made and on a pass where the claim was already at or above
 // spec.storage.size, since a driver can fail a resize well after the pass
 // that requested it.
 //

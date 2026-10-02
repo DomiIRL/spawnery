@@ -480,3 +480,35 @@ func TestAnExistingClaimIsNotCreatedAgain(t *testing.T) {
 		t.Fatal("no pod: the reconcile tried to create the existing claim")
 	}
 }
+
+// A claim the API server refuses leaves the Server without a pod and says why
+// on its status and in an event, instead of a bare reconcile error.
+func TestARefusedClaimCreateIsReported(t *testing.T) {
+	f := newFixture(t)
+	rec := newRecorder()
+	f.reconc.Recorder = rec
+	group := f.createOnDemandGroup(t, "private-servers", 50)
+	member := f.createOnDemandMember(t, group, "c0ffee")
+	f.reconc.Client = rejectClaimCreates{f.reconc.Client}
+
+	f.reconcile(member.Name)
+
+	if _, ok := f.pod(member.Name); ok {
+		t.Fatal("a pod exists although its claim was refused")
+	}
+	got := f.server(member.Name)
+	if !hasCondition(got.Status.Conditions, spawneryv1alpha1.ConditionAccepted,
+		metav1.ConditionFalse, ReasonServerClaimRejected) {
+		t.Errorf("conditions = %+v, want Accepted=False with reason %s",
+			got.Status.Conditions, ReasonServerClaimRejected)
+	}
+	found := false
+	for _, ev := range drainEvents(rec) {
+		if strings.Contains(ev, ReasonServerClaimRejected) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no event names %s", ReasonServerClaimRejected)
+	}
+}
