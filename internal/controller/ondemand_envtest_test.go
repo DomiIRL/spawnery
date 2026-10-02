@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -448,5 +449,34 @@ func TestALoweredSizeReachesOnlyNewClaims(t *testing.T) {
 	}
 	if got := claimB.Annotations["resize.topolvm.io/storage_limit"]; got != "20Gi" {
 		t.Errorf("claim of B annotations = %v, want the group's", claimB.Annotations)
+	}
+}
+
+// rejectClaimCreates makes every PVC create fail the way the API server does
+// for an invalid object.
+type rejectClaimCreates struct{ client.Client }
+
+func (r rejectClaimCreates) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if _, ok := obj.(*corev1.PersistentVolumeClaim); ok {
+		return apierrors.NewInvalid(corev1.SchemeGroupVersion.WithKind("PersistentVolumeClaim").GroupKind(), obj.GetName(), nil)
+	}
+	return r.Client.Create(ctx, obj, opts...)
+}
+
+// A claim that exists is not created again, so nothing the API server would
+// refuse on create can keep its server from getting a pod.
+func TestAnExistingClaimIsNotCreatedAgain(t *testing.T) {
+	f := newFixture(t)
+	group := f.createOnDemandGroup(t, "private-servers", 50)
+	member := f.createOnDemandMember(t, group, "c0ffee")
+	if err := f.c.Create(f.ctx, podspec.BuildDataClaim(group, member)); err != nil {
+		t.Fatalf("create the existing claim: %v", err)
+	}
+	f.reconc.Client = rejectClaimCreates{f.reconc.Client}
+
+	f.reconcile(member.Name)
+
+	if _, ok := f.pod(member.Name); !ok {
+		t.Fatal("no pod: the reconcile tried to create the existing claim")
 	}
 }

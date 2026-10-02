@@ -90,7 +90,6 @@ func TestBuildDataClaim(t *testing.T) {
 
 func TestBuildDataClaimCopiesStorageAnnotations(t *testing.T) {
 	group := persistentGroupFixture(t)
-	group.Spec.Storage.StorageClassName = ptr.To("expandable")
 	group.Spec.Storage.Annotations = map[string]string{"resize.topolvm.io/storage_limit": "20Gi"}
 	srv := serverFixture(t, "survival-0")
 	plain := BuildDataClaim(persistentGroupFixture(t), srv)
