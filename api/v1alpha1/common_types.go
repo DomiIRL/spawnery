@@ -116,8 +116,8 @@ const (
 	// are on their way out of service, and names them. It reports; the
 	// removals it describes are decided elsewhere.
 	ConditionNodeDraining = "NodeDraining"
-	// ConditionStorageResize reports on a persistent group's attempt to grow
-	// its claims. It is separate from Degraded on purpose: a storage class that
+	// ConditionStorageResize reports on resizes of a group's claims, whoever
+	// requested them, in persistent and on-demand groups alike. It is separate from Degraded on purpose: a storage class that
 	// refuses expansion and a group whose servers will not start are different
 	// problems with different remedies, and one field cannot carry both.
 	ConditionStorageResize = "StorageResize"

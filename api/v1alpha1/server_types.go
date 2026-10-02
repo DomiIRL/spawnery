@@ -231,9 +231,9 @@ type ServerStatus struct {
 	// +optional
 	StorageResizePending bool `json:"storageResizePending,omitempty"`
 
-	// StorageResizeError names why this server's claim has not grown to
-	// spec.storage.size, or is empty when it has (or there is nothing to
-	// grow). It covers both shapes a resize can fail in: a patch the API
+	// StorageResizeError names why the last resize of this server's claim
+	// failed, whether this operator or another controller asked for it, or is
+	// empty when none did. It covers both shapes a resize can fail in: a patch the API
 	// server's own admission refuses synchronously, ordinarily because the
 	// claim's storage class sets allowVolumeExpansion: false, and a resize
 	// admission accepted that a driver later fails, reported only on the
