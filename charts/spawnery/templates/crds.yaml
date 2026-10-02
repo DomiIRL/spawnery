@@ -5354,7 +5354,7 @@ spec:
                     - message: 'every key must be a valid Kubernetes annotation key:
                         an optional DNS subdomain prefix and ''/'', then a name of
                         at most 63 characters'
-                      rule: self.all(k, k.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$')
+                      rule: self.all(k, k.matches('^([A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$')
                         && k.split('/')[size(k.split('/')) - 1].size() <= 63 && (!k.contains('/')
                         || k.split('/')[0].size() <= 253))
                   keep:

@@ -129,8 +129,9 @@ type ServerView struct {
 	// the one that watches the claim; the group only reads its conclusion.
 	ResizePending bool
 	// ResizeError is status.storageResizeError: why the last resize of this
-	// server's claim failed, whether this operator or another controller asked
-	// for it, or empty when none did. Read from the status for the same reason
+	// server's claim failed (a patch of this operator's own that the API
+	// server refused, or a resize from any requester that the storage driver
+	// failed), or empty when none did. Read from the status for the same reason
 	// ResizePending is -- the Server controller is the one that watches the
 	// claim, growClaim and resizeConditionError are where the two ways a
 	// resize can fail are told apart, and the group only reads the verdict.

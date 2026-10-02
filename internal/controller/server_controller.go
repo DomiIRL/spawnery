@@ -356,10 +356,10 @@ func (r *ServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		//
 		// An ordinal recreated after its server was deleted is *supposed* to
 		// find the claim it had before, so an existing claim is never
-		// created again: a claim the API server would reject on create (a
-		// bad annotation key) must not keep an existing server from getting
-		// a pod. growClaim above is what grows it. AlreadyExists still
-		// covers a claim that appeared since that read.
+		// created again: anything the API server would refuse on create
+		// must not keep an existing server from getting a pod. growClaim
+		// above is what grows it. AlreadyExists still covers a claim that
+		// appeared since that read.
 		if !group.IsEphemeral() && !claimExists {
 			claim := podspec.BuildDataClaim(group, srv)
 			if err := r.Create(ctx, claim); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -486,8 +486,8 @@ func persistedServer(err error) error {
 	return client.IgnoreNotFound(err)
 }
 
-// growClaim reports whether the claim exists, and raises the claim's storage request to match spec.storage.size,
-// and never lowers it. It is the only write this operator makes to an
+// growClaim reports whether the claim exists, and raises the claim's
+// storage request to match spec.storage.size, and never lowers it. It is the only write this operator makes to an
 // *existing* claim — the reconcile above creates one alongside the pod, and
 // nothing anywhere deletes one — and the RBAC it needs is patch, not update,
 // which would replace the whole object for one field, and never delete, which
@@ -495,7 +495,7 @@ func persistedServer(err error) error {
 //
 // A claim already at or above the size asked for is left untouched, byte for
 // byte: that covers both the ordinary case (nothing to do) and the one a
-// controller has no business correcting — a claim grown by hand or by
+// controller has no business correcting: a claim grown by hand or by
 // another controller; the API server's refusal to shrink a PVC is the
 // backstop.
 //

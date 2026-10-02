@@ -1153,7 +1153,8 @@ func (r *ServerGroupReconciler) condemn(
 // storageResizeCondition reports whether any server's claim has a failed
 // resize: a patch of this operator's own that the API server refused, or a
 // resize from any requester that the storage driver failed. A patch another
-// controller had refused is not visible here. False carries the message the offending server's own status already worked out
+// controller had refused is not visible here. False carries the message
+// the offending server's own status already worked out
 // -- growClaim's synchronous rejection, or resizeConditionError's read of
 // the claim's ControllerResizeError/NodeResizeError condition -- taken from
 // the lowest-ordinal view that has one, deterministically rather than by

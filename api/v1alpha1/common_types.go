@@ -119,8 +119,8 @@ const (
 	// ConditionStorageResize reports on resizes of a group's claims, in
 	// persistent and on-demand groups alike: a patch of this operator's own
 	// that the API server refused, or a resize from any requester that the
-	// storage driver failed. It is separate from Degraded on purpose: a storage class that
-	// refuses expansion and a group whose servers will not start are different
+	// storage driver failed. It is separate from Degraded on purpose: a
+	// storage class that refuses expansion and a group whose servers will not start are different
 	// problems with different remedies, and one field cannot carry both.
 	ConditionStorageResize = "StorageResize"
 	// ConditionForwardingSecretResolved reports whether this network's

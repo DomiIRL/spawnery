@@ -428,7 +428,7 @@ func TestServerGroupImmutableFields(t *testing.T) {
 			"space":            "bad key",
 			"empty name":       "example.com/",
 			"name too long":    long,
-			"uppercase prefix": "Example.com/key",
+			"underscore in prefix": "ex_ample.com/key",
 		} {
 			ns := testenv.Namespace(t, ctx, c)
 			g := persistentGroup(ns, "survival")
