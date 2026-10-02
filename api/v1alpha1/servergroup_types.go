@@ -130,6 +130,8 @@ type StorageSpec struct {
 
 	// Annotations are copied onto each data claim when it is created, e.g. for
 	// a volume autoresizer's per-claim ceiling. Existing claims are not changed.
+	// +kubebuilder:validation:MaxProperties=64
+	// +kubebuilder:validation:XValidation:rule="self.all(k, k.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$') && k.split('/')[size(k.split('/')) - 1].size() <= 63 && (!k.contains('/') || k.split('/')[0].size() <= 253))",message="every key must be a valid Kubernetes annotation key: an optional DNS subdomain prefix and '/', then a name of at most 63 characters"
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 

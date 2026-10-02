@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -408,7 +409,6 @@ func TestServerGroupImmutableFields(t *testing.T) {
 	t.Run("storage annotations round-trip", func(t *testing.T) {
 		ns := testenv.Namespace(t, ctx, c)
 		g := persistentGroup(ns, "survival")
-		g.Spec.Storage.StorageClassName = ptr.To("expandable")
 		g.Spec.Storage.Annotations = map[string]string{"resize.topolvm.io/storage_limit": "20Gi"}
 		if err := c.Create(ctx, g); err != nil {
 			t.Fatalf("create: %v", err)
@@ -419,6 +419,35 @@ func TestServerGroupImmutableFields(t *testing.T) {
 		}
 		if v := got.Spec.Storage.Annotations["resize.topolvm.io/storage_limit"]; v != "20Gi" {
 			t.Fatalf("annotations = %v, want the limit kept", got.Spec.Storage.Annotations)
+		}
+	})
+
+	t.Run("annotation keys must be valid annotation keys", func(t *testing.T) {
+		long := strings.Repeat("a", 64)
+		for name, key := range map[string]string{
+			"space":            "bad key",
+			"empty name":       "example.com/",
+			"name too long":    long,
+			"uppercase prefix": "Example.com/key",
+		} {
+			ns := testenv.Namespace(t, ctx, c)
+			g := persistentGroup(ns, "survival")
+			g.Spec.Storage.Annotations = map[string]string{key: "x"}
+			if err := c.Create(ctx, g); err == nil {
+				t.Errorf("%s: key %q accepted, want rejection", name, key)
+			}
+		}
+	})
+
+	t.Run("annotations are capped", func(t *testing.T) {
+		ns := testenv.Namespace(t, ctx, c)
+		g := persistentGroup(ns, "survival")
+		g.Spec.Storage.Annotations = map[string]string{}
+		for i := range 65 {
+			g.Spec.Storage.Annotations[fmt.Sprintf("key-%d", i)] = "x"
+		}
+		if err := c.Create(ctx, g); err == nil {
+			t.Fatal("65 annotations accepted, want rejection")
 		}
 	})
 

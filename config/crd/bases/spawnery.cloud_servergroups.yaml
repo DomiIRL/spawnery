@@ -1835,7 +1835,15 @@ spec:
                     description: |-
                       Annotations are copied onto each data claim when it is created, e.g. for
                       a volume autoresizer's per-claim ceiling. Existing claims are not changed.
+                    maxProperties: 64
                     type: object
+                    x-kubernetes-validations:
+                    - message: 'every key must be a valid Kubernetes annotation key:
+                        an optional DNS subdomain prefix and ''/'', then a name of
+                        at most 63 characters'
+                      rule: self.all(k, k.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$')
+                        && k.split('/')[size(k.split('/')) - 1].size() <= 63 && (!k.contains('/')
+                        || k.split('/')[0].size() <= 253))
                   keep:
                     description: |-
                       Keep lists the paths on the data claim, relative to /data, that survive
