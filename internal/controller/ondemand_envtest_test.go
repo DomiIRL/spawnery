@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -403,5 +404,49 @@ func TestAnOnDemandMembersOldWorldIsNotRelabelled(t *testing.T) {
 	}
 	if got, ok := claim.Labels[podspec.LabelKey]; ok {
 		t.Fatalf("key label = %q: the operator relabelled a claim it did not create keyed", got)
+	}
+}
+
+// Lowering spec.storage.size changes what a new claim asks for and nothing
+// about a claim that exists: growClaim only ever raises.
+func TestALoweredSizeReachesOnlyNewClaims(t *testing.T) {
+	f := newFixture(t)
+	group := f.createOnDemandGroup(t, "private-servers", 50)
+	a := f.createOnDemandMember(t, group, "c0ffee")
+	f.reconcile(a.Name)
+	before := f.claim(podspec.DataClaimName(a.Name))
+	if before == nil {
+		t.Fatal("member A has no claim")
+	}
+
+	if err := f.c.Get(f.ctx, client.ObjectKeyFromObject(group), group); err != nil {
+		t.Fatalf("get group: %v", err)
+	}
+	group.Spec.Storage.Size = resource.MustParse("1Gi")
+	group.Spec.Storage.Annotations = map[string]string{"resize.topolvm.io/storage_limit": "20Gi"}
+	if err := f.c.Update(f.ctx, group); err != nil {
+		t.Fatalf("lower the size: %v", err)
+	}
+	f.reconcile(a.Name)
+
+	after := f.claim(podspec.DataClaimName(a.Name))
+	if after.ResourceVersion != before.ResourceVersion {
+		t.Errorf("claim of A was written: resourceVersion %s -> %s", before.ResourceVersion, after.ResourceVersion)
+	}
+	if got := f.server(a.Name).Status.StorageResizeError; got != "" {
+		t.Errorf("storageResizeError = %q, want empty", got)
+	}
+
+	b := f.createOnDemandMember(t, group, "decaf")
+	f.reconcile(b.Name)
+	claimB := f.claim(podspec.DataClaimName(b.Name))
+	if claimB == nil {
+		t.Fatal("member B has no claim")
+	}
+	if got := claimB.Spec.Resources.Requests[corev1.ResourceStorage]; got.Cmp(resource.MustParse("1Gi")) != 0 {
+		t.Errorf("claim of B requests %v, want 1Gi", got.String())
+	}
+	if got := claimB.Annotations["resize.topolvm.io/storage_limit"]; got != "20Gi" {
+		t.Errorf("claim of B annotations = %v, want the group's", claimB.Annotations)
 	}
 }

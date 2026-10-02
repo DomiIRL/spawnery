@@ -492,8 +492,8 @@ func persistedServer(err error) error {
 // A claim already at or above the size asked for is left untouched, byte for
 // byte: that covers both the ordinary case (nothing to do) and the one a
 // controller has no business correcting — a claim someone grew by hand, which
-// the CRD's own shrink guard on spec.storage.size means this function will
-// never be asked to shrink anyway.
+// is why want.Cmp(have) <= 0 is the whole guard against shrinking; the API
+// server's refusal to shrink a PVC is the backstop.
 //
 // A resize can fail two different ways, and this function is where the
 // choice was made to catch both rather than only the one Design §4 names.
