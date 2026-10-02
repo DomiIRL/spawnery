@@ -33,9 +33,10 @@ import (
 
 // Run deletes everything below dir that no keep entry matches, logging each
 // path to log first. It refuses, before deleting anything, when that would
-// delete a world or when a pair's source carries a path that keep holds
-// at its destination. mountinfo is read for the mount points below dir, which
-// are never entered.
+// delete a world that the pairs' sources do not ship whole, at the same
+// paths, or when a pair's source carries a path that keep holds at its
+// destination. mountinfo is read for the mount points below dir, which are
+// never entered.
 func Run(dir string, keep []string, mountinfo string, pairs []sourcetree.Pair, log io.Writer) error {
 	pats, err := parseKeep(keep)
 	if err != nil {
@@ -57,12 +58,23 @@ func Run(dir string, keep []string, mountinfo string, pairs []sourcetree.Pair, l
 	if err := plan(root, nil, pats, mounts, &doomed); err != nil {
 		return err
 	}
+	ship, err := shipped(pairs)
+	if err != nil {
+		return err
+	}
 	for _, rel := range doomed {
 		world, err := holdsWorld(filepath.Join(root, rel))
 		if err != nil {
 			return fmt.Errorf("cannot tell whether %s holds a world: %w", rel, err)
 		}
-		if world {
+		if !world {
+			continue
+		}
+		whole, err := allShipped(root, rel, ship)
+		if err != nil {
+			return fmt.Errorf("cannot tell whether a source ships %s: %w", rel, err)
+		}
+		if !whole {
 			return fmt.Errorf("spec.storage.keep does not keep %s, which holds a world", rel)
 		}
 	}
@@ -187,6 +199,47 @@ func holdsWorld(p string) (bool, error) {
 		return nil
 	})
 	return found, err
+}
+
+// allShipped reports whether every entry at and below root/rel is in ship,
+// at the same path and of the same type.
+func allShipped(root, rel string, ship map[string]fs.FileMode) (bool, error) {
+	all := true
+	err := filepath.WalkDir(filepath.Join(root, rel), func(q string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		r, err := filepath.Rel(root, q)
+		if err != nil {
+			return err
+		}
+		if t, ok := ship[filepath.ToSlash(r)]; !ok || t != d.Type() {
+			all = false
+			return fs.SkipAll
+		}
+		return nil
+	})
+	return all, err
+}
+
+// shipped maps the destination of every entry the pairs' sources carry,
+// relative to the data directory, to its type.
+func shipped(pairs []sourcetree.Pair) (map[string]fs.FileMode, error) {
+	out := map[string]fs.FileMode{}
+	for _, p := range pairs {
+		err := p.Walk(func(q string, d fs.DirEntry) error {
+			rel, err := filepath.Rel(p.From, q)
+			if err != nil {
+				return err
+			}
+			out[filepath.ToSlash(filepath.Join(p.Into, rel))] = d.Type()
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // refuseKept refuses when the source carries a path keep holds at its
