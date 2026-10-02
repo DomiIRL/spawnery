@@ -194,7 +194,9 @@ spec:
 Two refusals stop the start before anything is deleted, with a message naming
 the path. Something no entry keeps that is a `level.dat*` file, a `region`
 directory or an `.mca` file is one: the list is wrong rather than the world
-disposable. A source that carries a path the list keeps is the
+disposable. A source that ships the same path at the same place exempts it,
+because the copy writes it back; a world beside it that no source ships still
+refuses, including one an older version of the source shipped. A source that carries a path the list keeps is the
 other: the copy would replace saved state with the shipped file on every start,
 so keep one or ship the other.
 

@@ -1840,7 +1840,8 @@ spec:
                       segment). A matched directory is kept whole. Mount points, their parent
                       directories and the root lost+found are never deleted. The start is
                       refused when something no entry keeps is a level.dat* file, a region
-                      directory or an .mca file.
+                      directory or an .mca file that no extraFiles or extraPlugins source
+                      ships at the same path.
                     items:
                       maxLength: 256
                       type: string

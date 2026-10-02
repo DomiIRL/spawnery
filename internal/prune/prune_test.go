@@ -338,3 +338,52 @@ func TestAnUnreadableSubtreeRefusesAndDeletesNothing(t *testing.T) {
 		t.Errorf("junk was deleted before refusing: %v", err)
 	}
 }
+
+func TestAWorldASourceShipsIsDeletedWithoutRefusing(t *testing.T) {
+	dir := claim(t,
+		"worlds/world/level.dat", "worlds/world/region/r.0.0.mca",
+		"worlds/world_templates/lobby/region/r.0.0.mca", "worlds/world_templates/lobby/level.dat",
+		"plugins/X/internal/state", "logs/latest.log")
+	src := claim(t, "worlds/world_templates/lobby/region/r.0.0.mca", "worlds/world_templates/lobby/level.dat")
+	err := run(dir, []string{"worlds/world", "plugins/X/internal"}, noMounts(t), sourcetree.Pair{From: src, Into: "."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "[plugins/X/internal/state worlds/world/level.dat worlds/world/region/r.0.0.mca]"
+	if got := left(t, dir); fmt.Sprint(got) != want {
+		t.Errorf("left %v, want %s", got, want)
+	}
+}
+
+func TestAWorldBesideWhatASourceShipsStillRefuses(t *testing.T) {
+	tests := map[string]string{
+		"a stale world from an older source":       "worlds/world_templates/oldlobby/region/r.0.0.mca",
+		"an extra region file in a shipped one":    "worlds/world_templates/lobby/region/r.1.0.mca",
+		"a level.dat the source does not ship":     "worlds/world_templates/lobby/level.dat",
+		"an empty region the source does not ship": "worlds/world_templates/other/region/",
+	}
+	for name, extra := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := claim(t, "worlds/world/level.dat", "worlds/world_templates/lobby/region/r.0.0.mca", extra)
+			src := claim(t, "worlds/world_templates/lobby/region/r.0.0.mca")
+			err := run(dir, []string{"worlds/world"}, noMounts(t), sourcetree.Pair{From: src, Into: "."})
+			if err == nil || !strings.Contains(err.Error(), "worlds/world_templates") {
+				t.Fatalf("err = %v, want a refusal naming worlds/world_templates", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, extra)); err != nil {
+				t.Errorf("deleted before refusing: %v", err)
+			}
+		})
+	}
+}
+
+func TestAShippedPathCountsOnlyAtItsDestination(t *testing.T) {
+	dir := claim(t, "keep/a", "plugins/Map/region/r.0.0.mca")
+	src := claim(t, "Map/region/r.0.0.mca")
+	if err := run(dir, []string{"keep"}, noMounts(t), sourcetree.Pair{From: src, Into: "."}); err == nil {
+		t.Fatal("a world shipped to another destination was deleted without refusing")
+	}
+	if err := run(dir, []string{"keep"}, noMounts(t), sourcetree.Pair{From: src, Into: "plugins"}); err != nil {
+		t.Fatal(err)
+	}
+}

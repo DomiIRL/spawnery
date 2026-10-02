@@ -62,7 +62,16 @@ game's choice.
 - **A world guard.** Anything no entry keeps that is, or holds, a `level.dat*`
   file, a `region` directory or an `.mca` file refuses the start:
   the list forgot a world, and silently deleting one is the one mistake that
-  cannot be undone.
+  cannot be undone. Exempt is each such entry that a source ships at the same
+  path relative to `/data`, as the same kind of entry (file or directory): it
+  is still deleted, and the copy after the prune writes it back. The rule is
+  per entry, not per deleted path, so a deleted directory that a source ships
+  only in part still refuses for the world content the source does not ship.
+  That includes a world an older version of the source shipped and the
+  current one no longer does: prune cannot tell it from player state, and
+  removing it by hand once is cheaper than guessing wrong. Without the
+  exemption a source shipping world templates outside the list made every
+  second start refuse, and keeping the templates instead trips the next rule.
 - **No overlap between a source and the list.** A source (`extraFiles`,
   `extraPlugins`) that carries a path the list keeps would overwrite the saved
   file on every start, a shipped file silently winning over saved state. The

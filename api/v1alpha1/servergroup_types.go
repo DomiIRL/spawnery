@@ -144,7 +144,8 @@ type StorageSpec struct {
 	// segment). A matched directory is kept whole. Mount points, their parent
 	// directories and the root lost+found are never deleted. The start is
 	// refused when something no entry keeps is a level.dat* file, a region
-	// directory or an .mca file.
+	// directory or an .mca file that no extraFiles or extraPlugins source
+	// ships at the same path.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:items:MaxLength=256
