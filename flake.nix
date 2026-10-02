@@ -379,7 +379,11 @@
           # 0.16.0 moves it because the Paper entrypoint changed: with
           # spec.storage.keep set, spawnery-config --prune clears the claim
           # before rendering.
-          imageVersion = "0.16.0";
+          #
+          # 0.16.1 moves it alone: the Paper entrypoint refuses a source
+          # before the prune, and the prune no longer refuses what a source
+          # ships whole. The operator is untouched.
+          imageVersion = "0.16.1";
 
           # The operator's own version, deliberately not imageVersion.
           # imageVersion above is the *agent* version -- it reaches the
