@@ -387,3 +387,72 @@ func TestAShippedPathCountsOnlyAtItsDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAWorldWhoseMarkersAreShippedButNotItsPlayerStateRefuses(t *testing.T) {
+	shippedFiles := []string{"world/level.dat", "world/level.dat_old", "world/region/r.0.0.mca", "world/entities/r.0.0.mca"}
+	dir := claim(t, append([]string{"plugins/X/c", "world/playerdata/0000-uuid.dat", "world/stats/0000-uuid.json", "world/data/scoreboard.dat"}, shippedFiles...)...)
+	src := claim(t, shippedFiles...)
+	err := run(dir, []string{"plugins/X"}, noMounts(t), sourcetree.Pair{From: src, Into: "."})
+	if err == nil || !strings.Contains(err.Error(), "world") {
+		t.Fatalf("err = %v, want a refusal naming world", err)
+	}
+	if got := left(t, dir); len(got) != 8 {
+		t.Errorf("deleted before refusing: %v", got)
+	}
+}
+
+func TestATopLevelNameStartingWithTwoDotsIsNotShipped(t *testing.T) {
+	for _, files := range [][]string{{"..w/level.dat"}, {"..w/level.dat", "..w/playerdata/u.dat"}} {
+		dir := claim(t, append([]string{"keep/a"}, files...)...)
+		src := claim(t, "..w/level.dat")
+		if err := run(dir, []string{"keep"}, noMounts(t), sourcetree.Pair{From: src, Into: "."}); err == nil {
+			t.Fatalf("%v: a world the copy never writes was deleted without refusing", files)
+		}
+	}
+}
+
+func TestATopLevelLostAndFoundFileIsNotShipped(t *testing.T) {
+	dir := claim(t, "plugins/lost+found/x")
+	src := claim(t, "lost+found")
+	if err := run(dir, []string{"plugins/lost+found"}, noMounts(t), sourcetree.Pair{From: src, Into: "plugins"}); err != nil {
+		t.Fatalf("a file the copy skips counted as shipping a kept path: %v", err)
+	}
+}
+
+func TestADanglingSymlinkASourceCarriesIsNotShipped(t *testing.T) {
+	dir := claim(t, "plugins/S/db.json")
+	src := claim(t)
+	if err := os.Symlink(filepath.Join(src, "absent"), filepath.Join(src, "S")); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(dir, []string{"plugins/S"}, noMounts(t), sourcetree.Pair{From: src, Into: "plugins"}); err != nil {
+		t.Fatalf("a link the copy skips counted as shipping a kept path: %v", err)
+	}
+	dir = claim(t, "keep/a", "w/level.dat")
+	src = claim(t)
+	if err := os.Symlink(filepath.Join(src, "absent"), filepath.Join(src, "w")); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(dir, []string{"keep"}, noMounts(t), sourcetree.Pair{From: src, Into: "."}); err == nil {
+		t.Fatal("a world behind a link the copy skips was deleted without refusing")
+	}
+}
+
+func TestAShippedEntryOfAnotherKindDoesNotExempt(t *testing.T) {
+	tests := map[string]struct{ claim, source string }{
+		"the claim has a file where the source ships a directory": {"w/x.mca", "w/x.mca/"},
+		"the claim has a directory where the source ships a file": {"w/region/", "w/region"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := claim(t, "keep/a", tc.claim)
+			src := claim(t, tc.source)
+			if err := run(dir, []string{"keep"}, noMounts(t), sourcetree.Pair{From: src, Into: "."}); err == nil {
+				t.Fatal("deleted without refusing")
+			}
+			if _, err := os.Stat(filepath.Join(dir, tc.claim)); err != nil {
+				t.Errorf("deleted before refusing: %v", err)
+			}
+		})
+	}
+}

@@ -192,13 +192,16 @@ spec:
 - Unset, nothing is deleted.
 
 Two refusals stop the start before anything is deleted, with a message naming
-the path. Something no entry keeps that is a `level.dat*` file, a `region`
-directory or an `.mca` file is one: the list is wrong rather than the world
-disposable. A source that ships the same path at the same place exempts it,
-because the copy writes it back; a world beside it that no source ships still
-refuses, including one an older version of the source shipped. A source that carries a path the list keeps is the
-other: the copy would replace saved state with the shipped file on every start,
-so keep one or ship the other.
+the path. A path no entry keeps that is, or holds, a `level.dat*` file, a
+`region` directory or an `.mca` file is one: the list is wrong rather than the
+world disposable. It is exempt only when `extraFiles` or `extraPlugins` ships
+all of it: every file and directory below it exists in a source at the same
+place, as the same kind of entry. The copy writes such a path back, so world
+templates the server never loads can stay out of the list. One extra file
+refuses, be it player data, a file from an older version of the source, or the
+`level.dat_old` a world the server loads gains. A source that carries a path
+the list keeps is the other: the copy would replace saved state with the
+shipped file on every start, so keep one or ship the other.
 
 There is no dry-run field. Every path the start removes is logged as
 `spawnery: keep: removing <path>`, so the first start after a change shows what

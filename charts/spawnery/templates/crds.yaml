@@ -5352,9 +5352,10 @@ spec:
                       An entry is a path whose segments may use * and ? (path.Match per
                       segment). A matched directory is kept whole. Mount points, their parent
                       directories and the root lost+found are never deleted. The start is
-                      refused when something no entry keeps is a level.dat* file, a region
-                      directory or an .mca file that no extraFiles or extraPlugins source
-                      ships at the same path.
+                      refused when a path no entry keeps is, or holds, a level.dat* file, a
+                      region directory or an .mca file, unless extraFiles and extraPlugins
+                      ship every file and directory at and below it at the same path, which
+                      the copy then writes back.
                     items:
                       maxLength: 256
                       type: string
